@@ -1,6 +1,5 @@
 import { Outlet } from 'react-router-dom'
 import DemoModeModal from '../modals/DemoModeModal'
-import DemoControlBar from '../navigation/DemoControlBar'
 import Sidebar from '../navigation/Sidebar'
 import SystemActivityDrawer from '../navigation/SystemActivityDrawer'
 import Topbar from '../navigation/Topbar'
@@ -12,7 +11,6 @@ export default function AppLayout() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <DemoControlBar />
         <main className="qs-scrollbar-thin flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1600px] px-6 py-6">
             <Outlet />
