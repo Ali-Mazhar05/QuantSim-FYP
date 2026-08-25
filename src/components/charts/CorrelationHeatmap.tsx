@@ -38,7 +38,7 @@ export default function CorrelationHeatmap({
     <div className="overflow-x-auto">
       <svg
         viewBox={`0 0 ${cell * (assets.length + 1) + 10} ${cell * (assets.length + 1) + 10}`}
-        style={{ width: cell * (assets.length + 1) + 10, height: cell * (assets.length + 1) + 10 }}
+        style={{ width: cell * (assets.length + 1) + 10, height: cell * (assets.length + 1) + 10, display: 'block', margin: '0 auto' }}
       >
         {assets.map((a, i) => (
           <text key={`ch-${a}`} x={cell * (i + 1) + cell / 2} y={16} fontSize={10} textAnchor="middle" fill="var(--color-text-muted)" className="mono">

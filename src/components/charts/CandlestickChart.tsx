@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { generateCandles } from '../../services/mock/generators'
+import { useElementWidth } from '../../hooks/useElementWidth'
 
 export default function CandlestickChart({
   seed = 1,
@@ -15,7 +16,12 @@ export default function CandlestickChart({
   height?: number
 }) {
   const candles = useMemo(() => generateCandles({ seed, count, start, vol }), [seed, count, start, vol])
-  const width = Math.max(600, count * 7)
+  const [wrapRef, available] = useElementWidth<HTMLDivElement>()
+  // Draw at the panel's real width so the candles widen to fill it. Below
+  // MIN_WIDTH the chart keeps its own size and the wrapper scrolls instead,
+  // which is the only case where the candles would otherwise be unreadable.
+  const MIN_WIDTH = Math.max(360, count * 4)
+  const width = Math.max(MIN_WIDTH, available || MIN_WIDTH)
   const cw = width / count
   const highs = candles.map((c) => c.high)
   const lows = candles.map((c) => c.low)
@@ -24,8 +30,13 @@ export default function CandlestickChart({
   const y = (v: number) => height - ((v - minV) / (maxV - minV)) * height
 
   return (
-    <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${width} ${height + 20}`} style={{ minWidth: width, height: height + 20 }}>
+    <div ref={wrapRef} className="w-full overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${width} ${height + 20}`}
+        width={width}
+        height={height + 20}
+        style={{ display: 'block' }}
+      >
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
           <line key={f} x1={0} x2={width} y1={height * f} y2={height * f} stroke="var(--color-border)" strokeWidth={1} />
         ))}

@@ -30,7 +30,7 @@ export default function NetworkGraph({
   }
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full" style={{ maxWidth: size }}>
+    <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto block w-full" style={{ maxWidth: size }}>
       {edges.map((e, i) => (
         <line
           key={i}

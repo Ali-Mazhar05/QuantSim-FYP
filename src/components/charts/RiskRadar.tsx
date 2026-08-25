@@ -20,7 +20,7 @@ export default function RiskRadar({
   const polyStr = poly.map((p) => `${p.x},${p.y}`).join(' ')
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full" style={{ maxWidth: size }}>
+    <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto block w-full" style={{ maxWidth: size }}>
       {rings.map((ring) => (
         <polygon
           key={ring}

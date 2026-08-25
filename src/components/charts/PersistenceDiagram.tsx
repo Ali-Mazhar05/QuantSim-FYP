@@ -10,7 +10,7 @@ export default function PersistenceDiagram({
   const scale = (v: number) => pad + (v / max) * (size - pad * 1.5)
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full" style={{ maxWidth: size }}>
+    <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto block w-full" style={{ maxWidth: size }}>
       <line x1={pad} y1={size - pad} x2={size - 10} y2={size - pad} stroke="var(--color-border-strong)" />
       <line x1={pad} y1={size - pad} x2={pad} y2={10} stroke="var(--color-border-strong)" />
       {/* diagonal birth = death reference line */}
