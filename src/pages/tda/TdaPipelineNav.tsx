@@ -27,9 +27,9 @@ export default function TdaPipelineNav({
             className={clsx(
               'rounded px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35',
               i === activeIndex
-                ? 'bg-[var(--color-accent)] text-white'
+                ? 'bg-[var(--color-accent)] text-black'
                 : i <= unlockedIndex
-                  ? 'text-[var(--color-text-secondary)] hover:bg-white/5 hover:text-[var(--color-text-primary)]'
+                  ? 'text-[var(--color-text-secondary)] hover:bg-black/5 hover:text-[var(--color-text-primary)]'
                   : 'text-[var(--color-text-muted)]',
             )}
           >

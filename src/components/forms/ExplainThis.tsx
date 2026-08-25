@@ -24,7 +24,7 @@ export default function ExplainThis({ children }: { children: ReactNode }) {
           <div className="pr-4 text-xs leading-relaxed text-[var(--color-text-secondary)]">{children}</div>
           <button
             onClick={() => setOpen(false)}
-            className="mt-3 rounded bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-white hover:bg-[var(--color-accent-strong)]"
+            className="mt-3 rounded bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-black hover:bg-[var(--color-accent-strong)]"
           >
             Got it
           </button>

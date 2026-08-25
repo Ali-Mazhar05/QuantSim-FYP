@@ -12,7 +12,7 @@ export default function DemoModeModal() {
       <div className="mt-5 flex justify-end">
         <button
           onClick={hide}
-          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-strong)]"
+          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-black hover:bg-[var(--color-accent-strong)]"
         >
           Close
         </button>

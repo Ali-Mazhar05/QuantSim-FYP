@@ -59,7 +59,7 @@ export default function Topbar() {
         <div className="relative">
           <button
             onClick={() => setNotifOpen((v) => !v)}
-            className="relative rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-white/5 hover:text-[var(--color-text-primary)]"
+            className="relative rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-black/5 hover:text-[var(--color-text-primary)]"
           >
             <Bell size={16} />
             {alertActive && (
@@ -79,7 +79,7 @@ export default function Topbar() {
                     setNotifOpen(false)
                     navigate('/alerts')
                   }}
-                  className="flex w-full flex-col gap-1 border-b border-[var(--color-border)] px-3.5 py-3 text-left hover:bg-white/[0.03]"
+                  className="flex w-full flex-col gap-1 border-b border-[var(--color-border)] px-3.5 py-3 text-left hover:bg-black/[0.03]"
                 >
                   <span className="text-xs font-semibold text-[var(--color-risk-high)]">{ALERT.title}</span>
                   <span className="text-xs text-[var(--color-text-secondary)]">{ALERT.message}</span>
@@ -95,7 +95,7 @@ export default function Topbar() {
                   setNotifOpen(false)
                   navigate('/alerts')
                 }}
-                className="w-full px-3.5 py-2.5 text-center text-xs font-medium text-[var(--color-accent-strong)] hover:bg-white/[0.03]"
+                className="w-full px-3.5 py-2.5 text-center text-xs font-medium text-[var(--color-accent-strong)] hover:bg-black/[0.03]"
               >
                 View all alerts
               </button>
@@ -121,7 +121,7 @@ export default function Topbar() {
                     setRoleOpen(false)
                   }}
                   className={`block w-full rounded px-2.5 py-1.5 text-left text-xs ${
-                    r === role ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]' : 'text-[var(--color-text-secondary)] hover:bg-white/5'
+                    r === role ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]' : 'text-[var(--color-text-secondary)] hover:bg-black/5'
                   }`}
                 >
                   Demo as {r}
@@ -149,13 +149,13 @@ export default function Topbar() {
                   setProfileOpen(false)
                   navigate('/settings')
                 }}
-                className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-[var(--color-text-secondary)] hover:bg-white/5"
+                className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-[var(--color-text-secondary)] hover:bg-black/5"
               >
                 <Settings size={13} /> Settings
               </button>
               <button
                 onClick={logout}
-                className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-[var(--color-text-secondary)] hover:bg-white/5"
+                className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-[var(--color-text-secondary)] hover:bg-black/5"
               >
                 <LogOut size={13} /> Sign out
               </button>

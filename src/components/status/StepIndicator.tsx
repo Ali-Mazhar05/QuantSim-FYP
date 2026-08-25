@@ -18,7 +18,7 @@ export default function StepIndicator({
             <div
               className={clsx(
                 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold',
-                done && 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white',
+                done && 'border-[var(--color-accent)] bg-[var(--color-accent)] text-black',
                 active && 'border-[var(--color-accent-strong)] text-[var(--color-accent-strong)]',
                 !done && !active && 'border-[var(--color-border-strong)] text-[var(--color-text-muted)]',
               )}

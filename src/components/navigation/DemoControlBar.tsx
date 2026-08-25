@@ -70,7 +70,7 @@ export default function DemoControlBar() {
         ) : (
           <button
             onClick={() => runFullDemo(navigate)}
-            className="flex items-center gap-1.5 rounded bg-[var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[var(--color-accent-strong)]"
+            className="flex items-center gap-1.5 rounded bg-[var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-black hover:bg-[var(--color-accent-strong)]"
           >
             <Play size={12} />
             Run Full Demo

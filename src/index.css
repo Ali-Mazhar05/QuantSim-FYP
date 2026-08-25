@@ -4,19 +4,19 @@
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 
-  --color-bg-0: #060607;
-  --color-bg-1: #0d0d0e;
-  --color-bg-2: #131314;
-  --color-bg-3: #1a1a1c;
-  --color-border: #262627;
-  --color-border-strong: #343436;
+  --color-bg-0: #ffffff;
+  --color-bg-1: #ffffff;
+  --color-bg-2: #f6f6f6;
+  --color-bg-3: #ececec;
+  --color-border: #e2e2e2;
+  --color-border-strong: #cfcfcf;
 
-  --color-text-primary: #f2f2f0;
-  --color-text-secondary: #a8a8ac;
-  --color-text-muted: #6e6e72;
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #52525a;
+  --color-text-muted: #8a8a90;
 
   --color-accent: #67caaf;
-  --color-accent-strong: #82d6bf;
+  --color-accent-strong: #4bb599;
 
   --color-risk-low: #3fae6a;
   --color-risk-moderate: #c7a93b;

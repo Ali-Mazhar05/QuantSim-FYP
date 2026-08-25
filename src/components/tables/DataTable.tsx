@@ -46,7 +46,7 @@ export default function DataTable<T>({
               onClick={() => onRowClick?.(row)}
               className={clsx(
                 'border-b border-[var(--color-border)]/60 last:border-0',
-                onRowClick && 'cursor-pointer hover:bg-white/[0.03]',
+                onRowClick && 'cursor-pointer hover:bg-black/[0.03]',
               )}
             >
               {columns.map((c) => (

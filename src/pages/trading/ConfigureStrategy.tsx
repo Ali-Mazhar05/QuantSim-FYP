@@ -98,7 +98,7 @@ export default function ConfigureStrategy() {
               />
               <button
                 onClick={() => removeRule(i)}
-                className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-risk-severe)]"
+                className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-black/5 hover:text-[var(--color-risk-severe)]"
                 aria-label="Remove rule"
               >
                 <Trash2 size={14} />

@@ -39,7 +39,7 @@ export default function Modal({
           <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
           <button
             onClick={onClose}
-            className="rounded p-1 text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text-primary)]"
+            className="rounded p-1 text-[var(--color-text-muted)] hover:bg-black/5 hover:text-[var(--color-text-primary)]"
             aria-label="Close"
           >
             <X size={16} />
