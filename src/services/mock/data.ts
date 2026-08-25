@@ -84,17 +84,43 @@ export const CALIBRATIONS: Calibration[] = [
   { id: 'cal-amzn-2024', instrument: 'AMZN', label: 'AMZN — 2024 Historical', drift: 0.071, volatility: 0.264, windowDays: 180, status: 'Stale' },
 ]
 
-export const STRATEGY: Strategy = {
-  id: 'strat-momentum-1',
-  name: 'Momentum Strategy',
-  description: [
-    'Buy assets with positive 20-day momentum.',
-    'Rebalance weekly.',
-    'Maximum position: 25%.',
-  ],
-  rebalance: 'Weekly',
-  maxPosition: 25,
-}
+export const STRATEGIES: Strategy[] = [
+  {
+    id: 'strat-momentum-1',
+    name: 'Momentum Strategy',
+    description: [
+      'Buy assets with positive 20-day momentum.',
+      'Rebalance weekly.',
+      'Maximum position: 25%.',
+    ],
+    rebalance: 'Weekly',
+    maxPosition: 25,
+  },
+  {
+    id: 'strat-value-1',
+    name: 'Value Strategy',
+    description: [
+      'Buy assets trading below their trailing 200-day average valuation.',
+      'Rebalance monthly.',
+      'Maximum position: 20%.',
+    ],
+    rebalance: 'Monthly',
+    maxPosition: 20,
+  },
+  {
+    id: 'strat-pairs-1',
+    name: 'Pairs Strategy',
+    description: [
+      'Trade the spread between two historically correlated instruments.',
+      'Rebalance daily.',
+      'Maximum position: 15%.',
+    ],
+    rebalance: 'Daily',
+    maxPosition: 15,
+  },
+]
+
+export const STRATEGY: Strategy = STRATEGIES[0]
 
 export const PORTFOLIO: Portfolio = {
   id: 'pf-1042',

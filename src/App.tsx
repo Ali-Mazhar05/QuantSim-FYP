@@ -18,6 +18,7 @@ import Calibrations from './pages/simulation/Calibrations'
 import Models from './pages/simulation/Models'
 
 import Strategies from './pages/trading/Strategies'
+import ConfigureStrategy from './pages/trading/ConfigureStrategy'
 import Portfolios from './pages/trading/Portfolios'
 import CreatePortfolio from './pages/trading/CreatePortfolio'
 import TradeReplay from './pages/trading/TradeReplay'
@@ -78,6 +79,8 @@ export default function App() {
         <Route path="/simulation/models" element={<Models />} />
 
         <Route path="/trading/strategies" element={<Strategies />} />
+        <Route path="/trading/strategies/new" element={<ConfigureStrategy />} />
+        <Route path="/trading/strategies/:id" element={<ConfigureStrategy />} />
         <Route path="/trading/portfolios" element={<Portfolios />} />
         <Route path="/trading/portfolios/new" element={<CreatePortfolio />} />
         <Route path="/trading/replay/:id" element={<TradeReplay />} />
