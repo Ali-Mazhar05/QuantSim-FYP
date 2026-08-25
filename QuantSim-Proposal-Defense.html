@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuantSim — Proposal Defense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0B1020; --bg2:#0E1428; --panel:#131A2E; --panel2:#1A2340;
+  --border:rgba(148,163,184,0.14); --border2:rgba(148,163,184,0.24);
+  --text:#E6EBF5; --muted:#98A4BC; --faint:#67748E;
+  --cyan:#38BDF8; --violet:#A78BFA; --amber:#F59E0B; --emerald:#34D399; --rose:#FB7185;
+  --grad:linear-gradient(135deg,#38BDF8 0%,#A78BFA 100%);
+  --grad-soft:linear-gradient(135deg,rgba(56,189,248,0.16),rgba(167,139,250,0.16));
+  --sans:"Inter","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --disp:"Space Grotesk","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:
+  radial-gradient(1200px 700px at 15% -10%,rgba(56,189,248,0.10),transparent 60%),
+  radial-gradient(1000px 800px at 110% 120%,rgba(167,139,250,0.12),transparent 55%),
+  var(--bg);
+  font-family:var(--sans);color:var(--text)}
+
+/* ---------- stage / scaler ---------- */
+#deck{position:fixed;inset:0}
+#stage{position:fixed;left:50%;top:50%;width:1280px;height:720px;
+  transform-origin:center center;transform:translate(-50%,-50%) scale(1);
+  background:linear-gradient(160deg,var(--bg2) 0%,#0B1020 55%,#0A0E1C 100%);
+  border:1px solid var(--border);border-radius:20px;overflow:hidden;
+  box-shadow:0 40px 120px -30px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.02) inset}
+
+/* ---------- slides ---------- */
+.slide{position:absolute;inset:0;padding:60px 72px 74px;display:flex;flex-direction:column;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateY(14px) scale(0.995);
+  transition:opacity .5s ease,transform .5s ease}
+.slide.active{opacity:1;visibility:visible;pointer-events:auto;transform:none;
+  transition:opacity .55s ease .06s,transform .55s ease .06s}
+@media (prefers-reduced-motion:reduce){.slide,.slide.active{transition:none;transform:none}}
+
+/* ---------- slide chrome ---------- */
+.eyebrow{font-family:var(--mono);font-size:13px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--cyan);display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.eyebrow .ix{color:var(--faint)}
+.eyebrow .bar{height:1px;width:44px;background:linear-gradient(90deg,var(--cyan),transparent)}
+.s-title{font-family:var(--disp);font-weight:700;font-size:44px;line-height:1.05;letter-spacing:-0.02em}
+.s-title .accent{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.s-sub{color:var(--muted);font-size:18px;margin-top:12px;max-width:900px;line-height:1.5}
+.s-body{margin-top:26px;flex:1;min-height:0}
+
+/* ---------- deck furniture ---------- */
+#progress{position:absolute;top:0;left:0;height:3px;width:0;z-index:20;
+  background:var(--grad);box-shadow:0 0 16px rgba(56,189,248,0.6);transition:width .5s ease}
+.mark{position:absolute;left:34px;bottom:22px;z-index:20;font-family:var(--mono);font-size:12px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:9px}
+.mark .dot{width:8px;height:8px;border-radius:50%;background:var(--grad);box-shadow:0 0 10px var(--cyan)}
+.nav{position:absolute;right:30px;bottom:18px;z-index:20;display:flex;align-items:center;gap:14px}
+.counter{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.08em}
+.counter b{color:var(--text);font-weight:600}
+.arrows{display:flex;gap:8px}
+.arrows button{width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);
+  background:rgba(255,255,255,0.03);color:var(--text);cursor:pointer;font-size:15px;
+  display:grid;place-items:center;transition:.18s}
+.arrows button:hover{background:var(--grad-soft);border-color:var(--cyan);transform:translateY(-1px)}
+.arrows button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.hint{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:20;
+  font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.14em;opacity:.8}
+
+/* ---------- reusable content bits ---------- */
+.grid{display:grid;gap:16px;height:100%}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:linear-gradient(160deg,var(--panel),rgba(19,26,46,0.55));border:1px solid var(--border);
+  border-radius:16px;padding:22px 22px;position:relative;overflow:hidden}
+.card.pad-lg{padding:26px 26px}
+.card h3{font-family:var(--disp);font-size:19px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.card p{color:var(--muted);font-size:15px;line-height:1.5}
+.chiplabel{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan)}
+.tag{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;
+  letter-spacing:.06em;padding:5px 11px;border-radius:999px;border:1px solid var(--border2);
+  background:rgba(255,255,255,0.03);color:var(--muted)}
+.num{font-family:var(--disp);font-weight:700;background:var(--grad);-webkit-background-clip:text;
+  background-clip:text;color:transparent;font-size:34px;line-height:1}
+.kick{width:34px;height:34px;border-radius:10px;background:var(--grad-soft);border:1px solid var(--border2);
+  display:grid;place-items:center;font-size:16px;flex:none}
+ul.clean{list-style:none;display:flex;flex-direction:column;gap:11px}
+ul.clean li{display:flex;gap:12px;font-size:15.5px;line-height:1.45;color:var(--text)}
+ul.clean li .b{color:var(--cyan);flex:none;font-family:var(--mono);font-size:13px;margin-top:2px}
+ul.clean li span.m{color:var(--muted)}
+.lead{color:var(--muted)}
+
+/* corner motif */
+.motif{position:absolute;pointer-events:none;opacity:.5}
+.motif.tr{top:-30px;right:-30px}
+.motif.bl{bottom:-30px;left:-30px}
+
+/* ---------- title slide ---------- */
+.title-wrap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 78px}
+.title-net{position:absolute;inset:0;z-index:0;opacity:.9}
+.title-inner{position:relative;z-index:2;max-width:820px}
+.brand{font-family:var(--disp);font-weight:700;font-size:112px;line-height:.92;letter-spacing:-0.03em;
+  background:linear-gradient(120deg,#EAF2FF 0%,#38BDF8 45%,#A78BFA 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.brand-sub{font-size:23px;color:var(--text);margin-top:18px;font-weight:500;letter-spacing:.01em}
+.brand-tag{color:var(--muted);font-size:16.5px;margin-top:14px;max-width:640px;line-height:1.5}
+.title-eyebrow{font-family:var(--mono);font-size:14px;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:26px}
+.title-meta{display:flex;gap:34px;margin-top:40px;flex-wrap:wrap}
+.title-meta .blk .l{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+.title-meta .blk .v{font-size:15px;color:var(--text);margin-top:5px;font-weight:500}
+.ph{color:var(--amber)}
+
+/* agenda */
+.agenda{display:grid;grid-template-columns:1fr 1fr;gap:12px 40px;height:100%;align-content:center}
+.ag-item{display:flex;align-items:center;gap:16px;padding:13px 16px;border-radius:12px;
+  border:1px solid var(--border);background:rgba(255,255,255,0.02);transition:.2s}
+.ag-item .agn{font-family:var(--mono);font-size:15px;color:var(--cyan);font-weight:600;width:26px;flex:none}
+.ag-item .agt{font-size:16px;font-weight:500}
+.ag-item .ags{font-size:12.5px;color:var(--faint);margin-top:2px}
+
+/* three lens diagram */
+.lens-base{margin-top:8px;text-align:center;background:var(--grad-soft);border:1px solid var(--border2);
+  border-radius:12px;padding:12px;font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--text)}
+.lens-flow{display:flex;justify-content:center;margin:10px 0 6px;color:var(--faint)}
+
+/* pipeline */
+.pipe{display:flex;align-items:stretch;gap:0;margin-top:10px}
+.pstep{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px;
+  text-align:center;position:relative;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.pstep .pn{font-family:var(--mono);font-size:11px;color:var(--cyan)}
+.pstep .pt{font-size:13px;line-height:1.25;font-weight:500}
+.parrow{align-self:center;color:var(--violet);font-size:18px;padding:0 4px;flex:none}
+
+/* architecture */
+.arch{display:flex;flex-direction:column;gap:11px;height:100%;justify-content:center}
+.arow{display:flex;gap:11px;align-items:stretch;justify-content:center}
+.abox{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:11px 14px;
+  font-size:13.5px;display:flex;align-items:center;gap:9px;justify-content:center;flex:1}
+.abox .mm{font-family:var(--mono);font-size:11px;color:var(--cyan);flex:none}
+.abox.gw{background:var(--grad-soft);border-color:var(--border2)}
+.abox.kafka{background:linear-gradient(90deg,rgba(245,158,11,0.12),rgba(245,158,11,0.05));border-color:rgba(245,158,11,0.3)}
+.aflow{text-align:center;color:var(--faint);font-size:15px;line-height:.8}
+.adata{display:flex;gap:11px}
+.adata .abox{font-size:12.5px}
+
+/* timeline iterations */
+.iters{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;height:100%;align-content:stretch}
+.iter{background:linear-gradient(180deg,var(--panel),rgba(19,26,46,0.4));border:1px solid var(--border);
+  border-radius:14px;padding:18px 16px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.iter::before{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:var(--grad);opacity:.8}
+.iter .itn{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase}
+.iter .itd{font-size:12px;color:var(--faint);margin:5px 0 10px;font-family:var(--mono)}
+.iter h4{font-family:var(--disp);font-size:16px;font-weight:600;margin-bottom:10px}
+.iter ul{list-style:none;display:flex;flex-direction:column;gap:7px}
+.iter li{font-size:12.8px;color:var(--muted);line-height:1.35;display:flex;gap:7px}
+.iter li::before{content:"▸";color:var(--violet);flex:none}
+.iter .gate{margin-top:auto;padding-top:12px;font-family:var(--mono);font-size:11px;color:var(--amber);
+  letter-spacing:.06em;border-top:1px solid var(--border)}
+
+/* member table */
+.mtable{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.mtable th,.mtable td{border:1px solid var(--border);padding:11px 13px;text-align:left;vertical-align:top}
+.mtable th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--cyan);background:rgba(255,255,255,0.02);font-weight:500}
+.mtable td.mem{font-family:var(--disp);font-weight:600;color:var(--text);white-space:nowrap;background:rgba(255,255,255,0.02)}
+.mtable td .ph2{color:var(--muted);font-size:12.5px;line-height:1.4}
+.mtable td .own{color:var(--violet);font-family:var(--mono);font-size:11px}
+
+/* stack */
+.stack-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;height:100%;align-content:center}
+.st-cat{background:var(--panel);border:1px solid var(--border);border-radius:13px;padding:16px 16px}
+.st-cat .stl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.st-cat ul{list-style:none;display:flex;flex-direction:column;gap:7px}
+.st-cat li{font-size:13.5px;color:var(--text);display:flex;gap:8px;line-height:1.3}
+.st-cat li b{font-weight:600}
+.st-cat li span{color:var(--faint);font-size:12px}
+
+/* references */
+.refs{columns:2;column-gap:40px;font-size:12.4px;line-height:1.5;height:100%}
+.refs .ref{break-inside:avoid;margin-bottom:11px;padding-left:24px;text-indent:-24px;color:var(--muted)}
+.refs .ref b{color:var(--text);font-weight:500}
+.refs .ref .rn{font-family:var(--mono);color:var(--cyan);font-size:11px}
+.refnote{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px}
+
+/* scope */
+.scope-in .card{border-color:rgba(52,211,153,0.28)}
+.scope-out .card{border-color:rgba(251,113,133,0.26)}
+.pill{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+  padding:6px 12px;border-radius:999px;margin:3px 5px 3px 0}
+.pill.in{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);color:#8AF0C8}
+.pill.out{background:rgba(251,113,133,0.1);border:1px solid rgba(251,113,133,0.3);color:#FBB6C0}
+.statline{display:flex;gap:26px;margin-top:2px}
+.statline .stt{display:flex;flex-direction:column;gap:3px}
+.statline .stt .v{font-family:var(--disp);font-weight:700;font-size:26px;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.statline .stt .k{font-size:11.5px;color:var(--faint);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+
+/* closing */
+.close-wrap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:0 80px}
+.close-wrap .ct{font-family:var(--disp);font-weight:700;font-size:70px;letter-spacing:-0.02em;
+  background:linear-gradient(120deg,#EAF2FF,#38BDF8 50%,#A78BFA);-webkit-background-clip:text;background-clip:text;color:transparent}
+.close-wrap p{color:var(--muted);font-size:19px;margin-top:16px}
+.close-meta{margin-top:34px;display:flex;gap:30px;font-family:var(--mono);font-size:13px;color:var(--faint)}
+
+/* misc helpers */
+.two-col-list{columns:2;column-gap:34px}
+.two-col-list li{break-inside:avoid}
+.m0{margin-top:0}.mt6{margin-top:6px}.mt10{margin-top:10px}.mt14{margin-top:14px}
+.center-y{display:flex;flex-direction:column;justify-content:center;height:100%}
+
+/* print → export to PDF, one slide per page */
+@media print{
+  html,body{overflow:visible;height:auto;background:#0B1020}
+  #stage{position:relative;left:0;top:0;transform:none;margin:0 auto 14px;page-break-after:always;
+    border-radius:0;box-shadow:none}
+  .slide{opacity:1!important;visibility:visible!important;position:relative;transform:none!important}
+  #progress,.nav,.hint,.mark{display:none!important}
+  .slide:not(.active){display:flex}
+}
+</style>
+</head>
+<body>
+<div id="deck">
+  <div id="stage">
+    <div id="progress"></div>
+
+    <!-- ============ 1 · TITLE ============ -->
+    <section class="slide active" data-title="Title">
+      <svg class="title-net" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <radialGradient id="gnode" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#7DD3FC"/><stop offset="100%" stop-color="#38BDF8"/>
+          </radialGradient>
+        </defs>
+        <g stroke="rgba(56,189,248,0.22)" stroke-width="1.1" fill="none">
+          <path d="M980 150 L1080 250 L1150 180 M1080 250 L1120 360 L1010 420 M1120 360 L1210 400 M1010 420 L1080 520 L1180 500 M1080 520 L980 560 M1010 420 L920 470 L980 560 M920 470 L860 380 L980 150 M860 380 L1080 250"/>
+        </g>
+        <g fill="url(#gnode)">
+          <circle cx="980" cy="150" r="5"/><circle cx="1080" cy="250" r="6"/><circle cx="1150" cy="180" r="4"/>
+          <circle cx="1120" cy="360" r="5"/><circle cx="1010" cy="420" r="7" fill="#A78BFA"/><circle cx="1210" cy="400" r="4"/>
+          <circle cx="1080" cy="520" r="5"/><circle cx="1180" cy="500" r="4"/><circle cx="980" cy="560" r="6"/>
+          <circle cx="920" cy="470" r="5"/><circle cx="860" cy="380" r="6" fill="#A78BFA"/>
+        </g>
+      </svg>
+      <div class="title-wrap">
+        <div class="title-inner">
+          <div class="title-eyebrow">FAST School of Computing · Final Year Project · Proposal Defense</div>
+          <div class="brand">QuantSim</div>
+          <div class="brand-sub">AI-Assisted Market Simulation &amp; Portfolio Risk Analytics Platform</div>
+          <div class="brand-tag">A simulation-driven, event-sourced platform delivering explainable, topology-aware portfolio risk analytics — end to end.</div>
+          <div class="title-meta">
+            <div class="blk"><div class="l">Team</div><div class="v"><span class="ph">Member A · Member B · Member C</span></div></div>
+            <div class="blk"><div class="l">Supervisor</div><div class="v"><span class="ph">[ Supervisor Name ]</span></div></div>
+            <div class="blk"><div class="l">Session</div><div class="v"><span class="ph">2026 – 2027</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 2 · AGENDA ============ -->
+    <section class="slide" data-title="Agenda">
+      <div class="eyebrow"><span class="ix">00</span><span class="bar"></span>Contents</div>
+      <div class="s-title">What we'll <span class="accent">cover</span></div>
+      <div class="s-body">
+        <div class="agenda">
+          <div class="ag-item"><div class="agn">01</div><div><div class="agt">Project Overview</div><div class="ags">What QuantSim is, in one picture</div></div></div>
+          <div class="ag-item"><div class="agn">02</div><div><div class="agt">Motivation</div><div class="ags">Why current risk tools fall short</div></div></div>
+          <div class="ag-item"><div class="agn">03</div><div><div class="agt">Literature Review &amp; Research Analysis</div><div class="ags">What the research says — and the gap</div></div></div>
+          <div class="ag-item"><div class="agn">04</div><div><div class="agt">High-Level Goals</div><div class="ags">Key objectives &amp; outcomes</div></div></div>
+          <div class="ag-item"><div class="agn">05</div><div><div class="agt">Project Scope</div><div class="ags">What's in, what's deliberately out</div></div></div>
+          <div class="ag-item"><div class="agn">06</div><div><div class="agt">Proposed Solution</div><div class="ags">The approach &amp; the TDA engine</div></div></div>
+          <div class="ag-item"><div class="agn">07</div><div><div class="agt">Timeline — Four Iterations</div><div class="ags">Iteration-wise &amp; member-wise</div></div></div>
+          <div class="ag-item"><div class="agn">08</div><div><div class="agt">Tools &amp; Technology</div><div class="ags">The stack, and why</div></div></div>
+          <div class="ag-item"><div class="agn">09</div><div><div class="agt">References</div><div class="ags">Papers, books &amp; sources</div></div></div>
+          <div class="ag-item" style="border-color:rgba(56,189,248,0.3);background:var(--grad-soft)"><div class="agn">Q&amp;A</div><div><div class="agt">Questions</div><div class="ags">Discussion with the panel</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 3 · PROJECT OVERVIEW ============ -->
+    <section class="slide" data-title="Project Overview">
+      <div class="eyebrow"><span class="ix">01</span><span class="bar"></span>Project Overview</div>
+      <div class="s-title">Simulation is the core; everything else is <span class="accent">instrumentation around it</span></div>
+      <div class="s-sub">Principle P1. The market environment — replayed-historical <i>or</i> synthetic — is the substrate the trading engine, ML, stress testing, and TDA all consume through one common interface. Three analytical approaches quantify portfolio risk over that shared environment.</div>
+      <div class="s-body">
+        <div class="lens-base">MARKET ENVIRONMENT · replayed-historical or synthetic — bound through one common interface (FR-MKT-009)</div>
+        <div class="lens-flow">▲ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ▲ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ▲</div>
+        <div class="grid g3" style="height:auto">
+          <div class="card pad-lg"><h3><span class="kick">🛡️</span>Stress Testing</h3><p>Inject designed catastrophes — flash-crash and volatility-spike (Core) — and report maximum drawdown, VaR, recovery days, and each instrument's contribution to the loss.</p></div>
+          <div class="card pad-lg" style="border-color:rgba(167,139,250,0.34)"><h3><span class="kick">🔗</span>Topological Data Analysis</h3><p><b style="color:var(--violet)">The principal novelty.</b> Studies the <i>shape</i> of the market's correlation structure to detect regime transitions that conventional indicators miss.</p></div>
+          <div class="card pad-lg"><h3><span class="kick">🤖</span>Machine Learning</h3><p>Volatility forecasts, sentiment, and strategy metrics — every prediction tied to a registered model version and built on look-ahead-safe features.</p></div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <span class="tag">🔎 Explainable — SHAP attributions + plain-language narration (M6)</span>
+          <span class="tag">⚙️ Eight services on an Apache Kafka event backbone</span>
+          <span class="tag">💻 Demonstrable end-to-end on the local Docker Compose stack</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 4 · MOTIVATION ============ -->
+    <section class="slide" data-title="Motivation">
+      <div class="eyebrow"><span class="ix">02</span><span class="bar"></span>Motivation</div>
+      <div class="s-title">The failures that happen <span class="accent">silently</span></div>
+      <div class="s-body">
+        <div class="grid g2" style="align-content:start;gap:16px">
+          <div class="card"><h3><span class="kick">🕳️</span>Look-ahead bias</h3><p>Financial ML <b>fails silently</b> under look-ahead bias — a model trained on data it could not have known at prediction time. QuantSim's point-in-time feature store makes this <b>structurally impossible</b>, not a discipline the modeller must remember.</p></div>
+          <div class="card"><h3><span class="kick">📦</span>Black-box outputs</h3><p>Most platforms emit a risk number with no reasoning. The premise here is that <b>no analytical output is a black box</b>: SHAP attributions plus a plain-language narration accompany every prediction, alert, and stress result.</p></div>
+          <div class="card"><h3><span class="kick">📈</span>Backtests that overstate returns</h3><p>A backtest that ignores <b>transaction costs and slippage</b> overstates returns. Realistic execution is required, not optional — configurable cost and slippage models apply to every fill.</p></div>
+          <div class="card" style="border-color:rgba(167,139,250,0.34);background:var(--grad-soft)"><h3><span class="kick">🔗</span>Transitions the indicators miss</h3><p>Volatility and correlation spike <i>during</i> a crash, not before it. <b style="color:var(--violet)">Topological Data Analysis</b> studies the shape of the market's correlation structure to detect regime transitions those indicators miss — the platform's <b>principal novelty</b>.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 5 · LITERATURE REVIEW ============ -->
+    <section class="slide" data-title="Literature Review">
+      <div class="eyebrow"><span class="ix">03</span><span class="bar"></span>Literature Review &amp; Research Analysis</div>
+      <div class="s-title">Built on <span class="accent">established research</span>, aimed at an open gap</div>
+      <div class="s-body">
+        <div class="grid g2" style="align-content:start;gap:14px 18px">
+          <div class="card" style="padding:16px 18px"><h3 style="font-size:16px"><span class="chiplabel">A · TDA in Finance</span></h3><p style="font-size:13.5px">Gidea &amp; Katz (2018) show persistent-homology landscapes gave <b>early-warning signals before the 2000 &amp; 2008 crashes</b>; Gidea (2017) studies topology of critical transitions in financial networks.</p></div>
+          <div class="card" style="padding:16px 18px"><h3 style="font-size:16px"><span class="chiplabel">B · Topology Foundations</span></h3><p style="font-size:13.5px">Carlsson (2009) "Topology and Data"; Edelsbrunner et al. (2002) topological persistence; Bubenik (2015) persistence landscapes; Bauer (2021) the Ripser algorithm.</p></div>
+          <div class="card" style="padding:16px 18px"><h3 style="font-size:16px"><span class="chiplabel">C · Stochastic Modeling</span></h3><p style="font-size:13.5px">Black–Scholes (1973) &amp; Merton (1976, jumps); Uhlenbeck–Ornstein (1930, mean reversion); Hamilton (1989, regime-switching); Glasserman (2003, Monte Carlo).</p></div>
+          <div class="card" style="padding:16px 18px"><h3 style="font-size:16px"><span class="chiplabel">D · Risk, ML &amp; Explainability</span></h3><p style="font-size:13.5px">Artzner et al. (1999) coherent risk; Rockafellar–Uryasev (2000) CVaR; Bao et al. (2017) LSTM forecasting; Lundberg–Lee (2017) SHAP; Bailey et al. (2014) / López de Prado (2018) on backtest overfitting.</p></div>
+        </div>
+        <div class="card" style="margin-top:14px;padding:15px 20px;border-color:rgba(245,158,11,0.3);background:linear-gradient(90deg,rgba(245,158,11,0.08),transparent)">
+          <p style="font-size:14.5px"><b style="color:var(--amber)">The gap →</b> TDA early-warning is promising but lives mostly in <i>offline academic studies</i>; risk platforms remain late &amp; opaque; and backtests routinely leak look-ahead bias. <b style="color:var(--text)">No system operationalizes topology-aware, explainable, look-ahead-safe risk analytics end-to-end.</b> That is where QuantSim sits.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 6 · HIGH-LEVEL GOALS ============ -->
+    <section class="slide" data-title="High-Level Goals">
+      <div class="eyebrow"><span class="ix">04</span><span class="bar"></span>High-Level Goals</div>
+      <div class="s-title">Key <span class="accent">objectives &amp; outcomes</span></div>
+      <div class="s-body">
+        <div class="grid g2" style="align-content:center;gap:15px 20px">
+          <div class="card" style="padding:18px 20px"><h3><span class="num" style="font-size:22px">01</span>&nbsp;Grounded simulated markets</h3><p>Calibrate <b>four stochastic models</b> — GBM, mean-reversion, jump-diffusion, regime-switching — to real data and generate Monte Carlo path ensembles.</p></div>
+          <div class="card" style="padding:18px 20px"><h3><span class="num" style="font-size:22px">02</span>&nbsp;Three analytical approaches</h3><p>Stress testing, Topological Data Analysis, and machine learning — all over <b>one shared market environment</b>.</p></div>
+          <div class="card" style="padding:18px 20px;border-color:rgba(167,139,250,0.32)"><h3><span class="num" style="font-size:22px">03</span>&nbsp;Operational TDA</h3><p>A <b>composite topological-risk score</b> per analysis window, plus flagged regime transitions between consecutive windows.</p></div>
+          <div class="card" style="padding:18px 20px"><h3><span class="num" style="font-size:22px">04</span>&nbsp;Explainable by default</h3><p>SHAP attributions and a <b>plain-language narration</b> for every prediction, alert, and stress result — with a cached or templated fallback.</p></div>
+          <div class="card" style="padding:18px 20px"><h3><span class="num" style="font-size:22px">05</span>&nbsp;Correctness at the data layer</h3><p>Look-ahead bias structurally prevented, <b>exact portfolio replay</b> via event sourcing, and alert-once-per-condition semantics.</p></div>
+          <div class="card" style="padding:18px 20px"><h3><span class="num" style="font-size:22px">06</span>&nbsp;Demonstrable end-to-end</h3><p>Every Core requirement demonstrable on the local Docker Compose stack — <b>cloud-ready by design, demonstrated locally</b>.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 7 · SCOPE ============ -->
+    <section class="slide" data-title="Project Scope">
+      <div class="eyebrow"><span class="ix">05</span><span class="bar"></span>Project Scope</div>
+      <div class="s-title">A disciplined boundary — <span class="accent">deep, not sprawling</span></div>
+      <div class="s-body">
+        <div class="grid g2" style="align-content:start">
+          <div class="card scope-in pad-lg" style="border-color:rgba(52,211,153,0.28)">
+            <h3><span class="kick">✅</span>In scope — the Core tier</h3>
+            <p style="margin-bottom:12px">Everything the central premise needs, demonstrable end-to-end on the local stack:</p>
+            <div>
+              <span class="pill in">Ingestion + cleaning (publication gate)</span><span class="pill in">4 stochastic models + Monte Carlo</span>
+              <span class="pill in">Event-sourced trading engine</span><span class="pill in">7-stage TDA pipeline</span>
+              <span class="pill in">Stress testing</span><span class="pill in">ML + point-in-time feature store</span>
+              <span class="pill in">SHAP + plain-language narration</span><span class="pill in">Dashboard + alerting</span>
+            </div>
+          </div>
+          <div class="card scope-out pad-lg" style="border-color:rgba(251,113,133,0.26)">
+            <h3><span class="kick">⛔</span>Deferred &amp; out of scope</h3>
+            <div style="margin-top:6px">
+              <span class="pill out">No paid live-tick feed — pseudo-real-time only</span>
+              <span class="pill out">Corporate actions → Extended</span>
+              <span class="pill out">Sector / geography &amp; factor breakdowns → Extended</span>
+              <span class="pill out">Replica failover, PITR → Extended</span>
+            </div>
+            <p style="margin-top:14px;font-size:13.5px">Extended items are genuinely in scope and designed-for — built as time allows; they deepen a capability or realize production-grade operational qualities not required for the core demonstration. Only the paid live feed is a hard boundary (§5).</p>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;padding:16px 22px">
+          <div class="statline">
+            <div class="stt"><span class="v">64 / 81</span><span class="k">Core functional reqs</span></div>
+            <div class="stt"><span class="v">50</span><span class="k">Active non-functional reqs</span></div>
+            <div class="stt"><span class="v">8</span><span class="k">Microservices</span></div>
+            <div class="stt"><span class="v">4</span><span class="k">Access roles</span></div>
+            <div class="stt"><span class="v">7</span><span class="k">TDA pipeline stages</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 8 · PROPOSED SOLUTION — ARCHITECTURE ============ -->
+    <section class="slide" data-title="Proposed Solution">
+      <div class="eyebrow"><span class="ix">06</span><span class="bar"></span>Proposed Solution</div>
+      <div class="s-title">An <span class="accent">event-driven microservices</span> platform</div>
+      <div class="s-sub">Eight independently deployable services behind an API gateway, integrated by an Apache Kafka event backbone — each owns one bounded context, one database, one pipeline. Nine deployable units; the three compute-heavy services (Simulation, ML, Risk &amp; TDA) scale and fail independently.</div>
+      <div class="s-body">
+        <div class="arch">
+          <div class="arow"><div class="abox gw" style="max-width:520px"><span class="mm">SPA</span> React + TypeScript dashboard &nbsp;→&nbsp; <span class="mm">API GATEWAY</span> TLS · routing · auth</div></div>
+          <div class="aflow">▼</div>
+          <div class="arow">
+            <div class="abox"><span class="mm">M0</span> Platform &amp; Identity</div>
+            <div class="abox"><span class="mm">M1</span> Market Data</div>
+            <div class="abox"><span class="mm">M2</span> Simulation</div>
+            <div class="abox"><span class="mm">M3</span> Trading</div>
+          </div>
+          <div class="arow">
+            <div class="abox"><span class="mm">M4</span> Machine Learning</div>
+            <div class="abox" style="border-color:rgba(167,139,250,0.4)"><span class="mm">M5</span> Risk &amp; TDA</div>
+            <div class="abox"><span class="mm">M6</span> Explainability</div>
+            <div class="abox"><span class="mm">M7</span> Dashboard &amp; Alerting</div>
+          </div>
+          <div class="aflow">▼&nbsp;&nbsp;&nbsp;events&nbsp;&nbsp;&nbsp;▲</div>
+          <div class="arow"><div class="abox kafka" style="max-width:640px"><span class="mm" style="color:var(--amber)">APACHE KAFKA</span> durable, ordered event backbone — outbox · idempotent consumers · sagas</div></div>
+          <div class="aflow">▼</div>
+          <div class="arow adata">
+            <div class="abox">🔥 <b>Hot</b> · PostgreSQL 16 + TimescaleDB</div>
+            <div class="abox">♨️ <b>Warm</b> · Redis</div>
+            <div class="abox">🧊 <b>Cold</b> · Parquet on S3 / MinIO</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 9 · PROPOSED SOLUTION — TDA PIPELINE ============ -->
+    <section class="slide" data-title="TDA Engine">
+      <div class="eyebrow"><span class="ix">06</span><span class="bar"></span>Proposed Solution · The Differentiator</div>
+      <div class="s-title">Reading the <span class="accent">shape</span> of market structure</div>
+      <div class="s-sub">TDA studies the shape of the market's correlation structure to detect regime transitions that conventional indicators miss (§2.5). Each stage's artifact is persisted per analysis window — so a moved risk score can be explained, and consecutive windows compared.</div>
+      <div class="s-body center-y">
+        <div class="pipe">
+          <div class="pstep"><div class="pn">01</div><div class="pt">Rolling correlation matrices</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep"><div class="pn">02</div><div class="pt">Distance matrix</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep"><div class="pn">03</div><div class="pt">Vietoris–Rips complex</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep"><div class="pn">04</div><div class="pt">Persistent homology</div></div>
+        </div>
+        <div class="pipe" style="margin-top:12px">
+          <div class="pstep"><div class="pn">05</div><div class="pt">Betti numbers</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep"><div class="pn">06</div><div class="pt">Persistence landscape</div></div>
+          <div class="parrow">→</div>
+          <div class="pstep" style="border-color:rgba(56,189,248,0.45);background:var(--grad-soft)"><div class="pn">07</div><div class="pt">Composite topological-risk score</div></div>
+          <div class="parrow">⟳</div>
+          <div class="pstep" style="border-color:rgba(245,158,11,0.4)"><div class="pn" style="color:var(--amber)">Δ</div><div class="pt">Regime-transition detection</div></div>
+        </div>
+        <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+          <span class="tag">Persistence separates real structure from noise</span>
+          <span class="tag" style="border-color:rgba(245,158,11,0.3)">Consecutive windows compared to flag a regime transition</span>
+          <span class="tag">Score, trend &amp; transitions surface to dashboard and alert rules (FR-RSK-017)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 10 · TIMELINE — ITERATIONS ============ -->
+    <section class="slide" data-title="Timeline · Iterations">
+      <div class="eyebrow"><span class="ix">07</span><span class="bar"></span>Timeline · Four Iterations</div>
+      <div class="s-title">Iteration-wise <span class="accent">delivery plan</span></div>
+      <div class="s-body">
+        <div class="iters">
+          <div class="iter">
+            <div class="itn">Iteration 1</div><div class="itd ph">Sep – Oct 2026</div>
+            <h4>Foundations</h4>
+            <ul><li>Platform &amp; identity, roles</li><li>Market-data ingestion + cleaning</li><li>Market-environment interface</li><li>Kafka backbone · CI/CD</li></ul>
+            <div class="gate">◆ Gate: Mid-I</div>
+          </div>
+          <div class="iter">
+            <div class="itn">Iteration 2</div><div class="itd ph">Nov – Dec 2026</div>
+            <h4>Simulate &amp; Trade</h4>
+            <ul><li>4 stochastic models + calibration</li><li>Monte Carlo engine</li><li>Event-sourced trading engine</li><li>Exact portfolio replay</li></ul>
+            <div class="gate">◆ Gate: Final-I (FYP-I)</div>
+          </div>
+          <div class="iter">
+            <div class="itn">Iteration 3</div><div class="itd ph">Feb – Mar 2027</div>
+            <h4>Analytics Core</h4>
+            <ul><li>TDA pipeline (7 stages)</li><li>Stress-test scenarios</li><li>ML + point-in-time feature store</li><li>Model registry</li></ul>
+            <div class="gate">◆ Gate: Mid-II</div>
+          </div>
+          <div class="iter">
+            <div class="itn">Iteration 4</div><div class="itd ph">Apr – May 2027</div>
+            <h4>Explain &amp; Ship</h4>
+            <ul><li>SHAP + LLM narration</li><li>Dashboard + alerting</li><li>Integration &amp; hardening</li><li>Evaluation &amp; write-up</li></ul>
+            <div class="gate">◆ Gate: Final-II (FYP-II)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 11 · TIMELINE — MEMBER-WISE ============ -->
+    <section class="slide" data-title="Timeline · Members">
+      <div class="eyebrow"><span class="ix">07</span><span class="bar"></span>Timeline · Member-wise Ownership</div>
+      <div class="s-title">Who owns <span class="accent">what</span>, across the iterations</div>
+      <div class="s-body">
+        <table class="mtable">
+          <thead><tr><th style="width:120px">Member</th><th>Iteration 1</th><th>Iteration 2</th><th>Iteration 3</th><th>Iteration 4</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="mem">Member A<div class="own">Platform / Infra</div></td>
+              <td><div class="ph2">Identity, roles, API gateway; Kafka + CI/CD setup</div></td>
+              <td><div class="ph2">Trading engine &amp; event log</div></td>
+              <td><div class="ph2">Integration harness; cross-service consistency</div></td>
+              <td><div class="ph2">Deployment, K8s, hardening</div></td>
+            </tr>
+            <tr>
+              <td class="mem">Member B<div class="own">Simulation / Risk</div></td>
+              <td><div class="ph2">Market-data ingestion &amp; cleaning</div></td>
+              <td><div class="ph2">Stochastic models + Monte Carlo</div></td>
+              <td><div class="ph2">TDA pipeline &amp; stress testing</div></td>
+              <td><div class="ph2">Regime detection; evaluation</div></td>
+            </tr>
+            <tr>
+              <td class="mem">Member C<div class="own">ML / Frontend</div></td>
+              <td><div class="ph2">Data schema; React shell</div></td>
+              <td><div class="ph2">Feature store foundations</div></td>
+              <td><div class="ph2">ML models + registry</div></td>
+              <td><div class="ph2">SHAP + LLM explanations; dashboard &amp; alerts</div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="refnote">◆ Member names, module split, and dates are <span class="ph">placeholders</span> — to be finalized with the team before submission.</div>
+      </div>
+    </section>
+
+    <!-- ============ 12 · TOOLS & TECHNOLOGY ============ -->
+    <section class="slide" data-title="Tools & Technology">
+      <div class="eyebrow"><span class="ix">08</span><span class="bar"></span>Tools &amp; Technology</div>
+      <div class="s-title">The <span class="accent">stack</span>, chosen for the job</div>
+      <div class="s-body">
+        <div class="stack-grid">
+          <div class="st-cat"><div class="stl">⚙️ Backend</div><ul><li><b>Python 3.12</b></li><li><b>FastAPI</b> <span>async APIs</span></li><li><b>SQLAlchemy</b> + asyncpg</li><li><b>Arq / Celery</b> <span>job queues</span></li></ul></div>
+          <div class="st-cat"><div class="stl">🖥️ Frontend</div><ul><li><b>React</b></li><li><b>TypeScript</b></li><li><b>ECharts / Plotly</b> <span>charts</span></li></ul></div>
+          <div class="st-cat"><div class="stl">🗄️ Data</div><ul><li><b>PostgreSQL 16</b></li><li><b>TimescaleDB</b> <span>time-series</span></li><li><b>Redis</b> <span>warm cache</span></li><li><b>Parquet · MinIO</b> <span>cold</span></li></ul></div>
+          <div class="st-cat"><div class="stl">📨 Messaging</div><ul><li><b>Apache Kafka</b> <span>+ schema registry</span></li><li><span>outbox · sagas</span></li><li><span>idempotent consumers</span></li></ul></div>
+          <div class="st-cat" style="border-color:rgba(167,139,250,0.3)"><div class="stl">🔗 Topology (TDA)</div><ul><li><b>Ripser</b></li><li><b>GUDHI</b></li><li><b>persim</b> <span>landscapes</span></li></ul></div>
+          <div class="st-cat"><div class="stl">🤖 Machine Learning</div><ul><li><b>scikit-learn</b></li><li><b>XGBoost</b></li><li><b>PyTorch</b></li><li><b>Hugging Face</b> <span>NLP</span></li></ul></div>
+          <div class="st-cat"><div class="stl">☁️ Infra &amp; DevOps</div><ul><li><b>Docker</b> · Compose</li><li><b>Kubernetes</b></li><li><b>Terraform</b></li><li><b>Vault</b> <span>secrets</span></li></ul></div>
+          <div class="st-cat"><div class="stl">🔭 Observability</div><ul><li><b>OpenTelemetry</b></li><li><span>traces · logs · metrics</span></li></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 13 · REFERENCES ============ -->
+    <section class="slide" data-title="References">
+      <div class="eyebrow"><span class="ix">09</span><span class="bar"></span>References</div>
+      <div class="s-title">Papers, books &amp; <span class="accent">sources</span></div>
+      <div class="s-body">
+        <div class="refs">
+          <div class="ref"><span class="rn">[1]</span> Gidea, M. &amp; Katz, Y. (2018). <b>Topological data analysis of financial time series: Landscapes of crashes.</b> <i>Physica A</i>, 491, 820–834.</div>
+          <div class="ref"><span class="rn">[2]</span> Gidea, M. (2017). <b>Topological data analysis of critical transitions in financial networks.</b> In <i>Network Science</i> proceedings (Springer).</div>
+          <div class="ref"><span class="rn">[3]</span> Carlsson, G. (2009). <b>Topology and data.</b> <i>Bulletin of the AMS</i>, 46(2), 255–308.</div>
+          <div class="ref"><span class="rn">[4]</span> Edelsbrunner, H., Letscher, D. &amp; Zomorodian, A. (2002). <b>Topological persistence and simplification.</b> <i>Discrete &amp; Comput. Geometry</i>, 28, 511–533.</div>
+          <div class="ref"><span class="rn">[5]</span> Bubenik, P. (2015). <b>Statistical topological data analysis using persistence landscapes.</b> <i>JMLR</i>, 16, 77–102.</div>
+          <div class="ref"><span class="rn">[6]</span> Bauer, U. (2021). <b>Ripser: efficient computation of Vietoris–Rips persistence barcodes.</b> <i>J. Applied &amp; Comput. Topology</i>, 5, 391–423.</div>
+          <div class="ref"><span class="rn">[7]</span> Black, F. &amp; Scholes, M. (1973). <b>The pricing of options and corporate liabilities.</b> <i>J. Political Economy</i>, 81(3), 637–654.</div>
+          <div class="ref"><span class="rn">[8]</span> Merton, R. C. (1976). <b>Option pricing when underlying stock returns are discontinuous.</b> <i>J. Financial Economics</i>, 3(1–2), 125–144.</div>
+          <div class="ref"><span class="rn">[9]</span> Uhlenbeck, G. E. &amp; Ornstein, L. S. (1930). <b>On the theory of the Brownian motion.</b> <i>Physical Review</i>, 36(5), 823–841.</div>
+          <div class="ref"><span class="rn">[10]</span> Hamilton, J. D. (1989). <b>A new approach to the economic analysis of nonstationary time series and the business cycle.</b> <i>Econometrica</i>, 57(2), 357–384.</div>
+          <div class="ref"><span class="rn">[11]</span> Glasserman, P. (2003). <b>Monte Carlo Methods in Financial Engineering.</b> Springer.</div>
+          <div class="ref"><span class="rn">[12]</span> Artzner, P., Delbaen, F., Eber, J.-M. &amp; Heath, D. (1999). <b>Coherent measures of risk.</b> <i>Mathematical Finance</i>, 9(3), 203–228.</div>
+          <div class="ref"><span class="rn">[13]</span> Rockafellar, R. T. &amp; Uryasev, S. (2000). <b>Optimization of conditional value-at-risk.</b> <i>J. of Risk</i>, 2(3), 21–41.</div>
+          <div class="ref"><span class="rn">[14]</span> Lundberg, S. M. &amp; Lee, S.-I. (2017). <b>A unified approach to interpreting model predictions (SHAP).</b> <i>NeurIPS</i>, 30.</div>
+          <div class="ref"><span class="rn">[15]</span> Bao, W., Yue, J. &amp; Rao, Y. (2017). <b>A deep learning framework for financial time series using stacked autoencoders and LSTM.</b> <i>PLOS ONE</i>, 12(7).</div>
+          <div class="ref"><span class="rn">[16]</span> Bailey, D. H., Borwein, J., López de Prado, M. &amp; Zhu, Q. (2014). <b>Pseudo-mathematics and financial charlatanism.</b> <i>Notices of the AMS</i>, 61(5), 458–471.</div>
+          <div class="ref"><span class="rn">[17]</span> López de Prado, M. (2018). <b>Advances in Financial Machine Learning.</b> Wiley.</div>
+        </div>
+        <div class="refnote">◆ Verify exact volume / page numbers against the original sources before final submission.</div>
+      </div>
+    </section>
+
+    <!-- ============ 14 · CLOSING ============ -->
+    <section class="slide" data-title="Thank You">
+      <svg class="motif tr" width="260" height="260" viewBox="0 0 260 260" aria-hidden="true">
+        <g stroke="rgba(167,139,250,0.28)" fill="none" stroke-width="1"><circle cx="130" cy="130" r="40"/><circle cx="130" cy="130" r="70"/><circle cx="130" cy="130" r="100"/></g>
+        <g fill="#38BDF8"><circle cx="170" cy="130" r="4"/><circle cx="130" cy="60" r="4"/><circle cx="70" cy="150" r="4" fill="#A78BFA"/><circle cx="200" cy="100" r="3"/></g>
+      </svg>
+      <div class="close-wrap">
+        <div class="title-eyebrow" style="margin-bottom:18px">Proposal Defense · QuantSim</div>
+        <div class="ct">Thank you</div>
+        <p>Questions &amp; discussion welcome.</p>
+        <div class="close-meta">
+          <span>Simulation-driven</span><span>·</span><span>Topology-aware</span><span>·</span><span>Explainable</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ furniture ============ -->
+    <div class="mark"><span class="dot"></span>QuantSim</div>
+    <div class="hint">← / → &nbsp; or &nbsp; Space &nbsp; to navigate</div>
+    <div class="nav">
+      <div class="counter"><b id="cur">1</b> / <span id="tot">14</span></div>
+      <div class="arrows">
+        <button id="prev" aria-label="Previous slide">‹</button>
+        <button id="next" aria-label="Next slide">›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var stage = document.getElementById('stage');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var progress = document.getElementById('progress');
+  var cur = document.getElementById('cur');
+  var tot = document.getElementById('tot');
+  var i = 0;
+  tot.textContent = slides.length;
+
+  function show(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function(s, k){ s.classList.toggle('active', k === i); });
+    progress.style.width = ((i)/(slides.length - 1) * 100) + '%';
+    cur.textContent = i + 1;
+  }
+  function next(){ show(i + 1); }
+  function prev(){ show(i - 1); }
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key === 'ArrowDown'){ e.preventDefault(); next(); }
+    else if(e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'ArrowUp'){ e.preventDefault(); prev(); }
+    else if(e.key === 'Home'){ e.preventDefault(); show(0); }
+    else if(e.key === 'End'){ e.preventDefault(); show(slides.length - 1); }
+  });
+
+  // click right / left halves to advance (ignore clicks on buttons)
+  stage.addEventListener('click', function(e){
+    if(e.target.closest('button') || e.target.closest('.nav')) return;
+    var r = stage.getBoundingClientRect();
+    if((e.clientX - r.left) > r.width * 0.5) next(); else prev();
+  });
+
+  // touch swipe
+  var tx = 0;
+  stage.addEventListener('touchstart', function(e){ tx = e.changedTouches[0].clientX; }, {passive:true});
+  stage.addEventListener('touchend', function(e){
+    var dx = e.changedTouches[0].clientX - tx;
+    if(Math.abs(dx) > 45){ dx < 0 ? next() : prev(); }
+  }, {passive:true});
+
+  // scale-to-fit 16:9 stage
+  function fit(){
+    var pad = 24;
+    var s = Math.min((window.innerWidth - pad) / 1280, (window.innerHeight - pad) / 720);
+    stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+  show(0);
+})();
+</script>
+</body>
+</html>
