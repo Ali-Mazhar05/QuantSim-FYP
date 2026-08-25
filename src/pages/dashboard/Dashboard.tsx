@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowUpRight, Play, TrendingDown, TrendingUp } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
+import DrawdownChart from '../../components/charts/DrawdownChart'
 import EquityCurve from '../../components/charts/EquityCurve'
 import Panel from '../../components/layout/Panel'
 import KpiCard from '../../components/status/KpiCard'
@@ -8,7 +9,7 @@ import RiskBadge from '../../components/status/RiskBadge'
 import StatusPill from '../../components/status/StatusPill'
 import { useDemoStore } from '../../demo/demoState'
 import { ALERT, COMPOSITE_RISK, ML_PREDICTION, PORTFOLIO, STRESS_RESULT, TDA_ANALYSIS } from '../../services/mock/data'
-import RiskEngineCard from './RiskEngineCard'
+import { LATEST_PORTFOLIO_VALUE, MAX_DRAWDOWN_PCT } from '../../services/mock/portfolioSeries'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -20,6 +21,9 @@ export default function Dashboard() {
   const analysisComplete = hasReached('COMPOSITE_RISK_READY')
   const hour = 16
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+
+  const netProfit = PORTFOLIO.currentValue - PORTFOLIO.startingCapital
+  const netProfitPositive = netProfit >= 0
 
   return (
     <div className="qs-fade-in flex flex-col gap-6">
@@ -62,31 +66,48 @@ export default function Dashboard() {
         </button>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-        <KpiCard label="Portfolio Value" value={`$${PORTFOLIO.currentValue.toLocaleString()}`} delta={`+${PORTFOLIO.returnPct}%`} deltaTone="positive" icon={TrendingUp} />
-        <KpiCard label="Daily P&L" value="+$4,218" delta="+0.39%" deltaTone="positive" icon={TrendingUp} />
-        <KpiCard label="Volatility" value={`${PORTFOLIO.volatilityPct}%`} hint="annualized" icon={TrendingDown} />
-        <KpiCard label="VaR (95%)" value={`${STRESS_RESULT.var}%`} deltaTone="negative" icon={TrendingDown} />
-        <KpiCard label="CVaR (95%)" value={`${STRESS_RESULT.cvar}%`} deltaTone="negative" icon={TrendingDown} />
-        <KpiCard label="Max Drawdown" value={`${PORTFOLIO.maxDrawdownPct}%`} deltaTone="negative" icon={TrendingDown} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard
-          label="Composite Risk"
-          value={analysisComplete ? COMPOSITE_RISK.compositeScore : '—'}
-          hint={analysisComplete ? COMPOSITE_RISK.level : 'Not yet run'}
+          label="Net Profit"
+          value={`${netProfitPositive ? '+' : '-'}$${Math.abs(netProfit).toLocaleString()}`}
+          delta={`${netProfitPositive ? '+' : ''}${PORTFOLIO.returnPct}% since inception`}
+          deltaTone={netProfitPositive ? 'positive' : 'negative'}
+          valueTone={netProfitPositive ? 'positive' : 'negative'}
+          icon={netProfitPositive ? TrendingUp : TrendingDown}
         />
+        <KpiCard label="Total Returns" value={`+${PORTFOLIO.returnPct}%`} deltaTone="positive" valueTone="positive" icon={TrendingUp} />
+        <KpiCard label="Variance" value={`${PORTFOLIO.variancePct}%`} hint="of returns" />
+        <KpiCard label="Volatility" value={`${PORTFOLIO.volatilityPct}%`} hint="annualized" />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <Panel title="Portfolio Equity Curve" subtitle="Momentum Strategy — Run #1042 · last 60 sessions">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <Panel
+          title="Portfolio Equity Curve"
+          subtitle="Momentum Strategy — Run #1042 · last 60 sessions"
+          action={
+            <div className="text-right">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Portfolio Value</div>
+              <div className="mono text-base font-semibold text-[var(--color-text-primary)]">
+                ${LATEST_PORTFOLIO_VALUE.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+            </div>
+          }
+        >
           <EquityCurve />
         </Panel>
-        <RiskEngineCard
-          stress={analysisComplete ? STRESS_RESULT.score : 0}
-          tda={analysisComplete ? TDA_ANALYSIS.score : 0}
-          ml={analysisComplete ? ML_PREDICTION.score : 0}
-          composite={analysisComplete ? COMPOSITE_RISK.compositeScore : 0}
-          ready={analysisComplete}
-        />
+
+        <Panel
+          title="Drawdown"
+          subtitle="Peak-to-trough decline · last 60 sessions"
+          action={
+            <div className="text-right">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Max Drawdown</div>
+              <div className="mono text-base font-semibold text-[var(--color-risk-severe)]">{MAX_DRAWDOWN_PCT.toFixed(2)}%</div>
+            </div>
+          }
+        >
+          <DrawdownChart />
+        </Panel>
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

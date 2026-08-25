@@ -7,6 +7,7 @@ export default function KpiCard({
   value,
   delta,
   deltaTone = 'neutral',
+  valueTone = 'neutral',
   icon: Icon,
   hint,
 }: {
@@ -14,6 +15,7 @@ export default function KpiCard({
   value: ReactNode
   delta?: string
   deltaTone?: 'positive' | 'negative' | 'neutral'
+  valueTone?: 'positive' | 'negative' | 'neutral'
   icon?: LucideIcon
   hint?: string
 }) {
@@ -23,7 +25,16 @@ export default function KpiCard({
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{label}</span>
         {Icon && <Icon size={15} className="text-[var(--color-text-muted)]" />}
       </div>
-      <div className="mono mt-2 text-2xl font-semibold text-[var(--color-text-primary)]">{value}</div>
+      <div
+        className={clsx(
+          'mono mt-2 text-2xl font-semibold',
+          valueTone === 'positive' && 'text-[var(--color-risk-low)]',
+          valueTone === 'negative' && 'text-[var(--color-risk-severe)]',
+          valueTone === 'neutral' && 'text-[var(--color-text-primary)]',
+        )}
+      >
+        {value}
+      </div>
       <div className="mt-1 flex items-center gap-2">
         {delta && (
           <span

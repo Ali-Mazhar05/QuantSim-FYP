@@ -115,6 +115,7 @@ export const PORTFOLIO: Portfolio = {
   currentValue: 1_083_421,
   returnPct: 8.34,
   volatilityPct: 18.2,
+  variancePct: 3.31,
   maxDrawdownPct: -11.7,
 }
 

@@ -89,6 +89,7 @@ export interface Portfolio {
   currentValue: number
   returnPct: number
   volatilityPct: number
+  variancePct: number
   maxDrawdownPct: number
 }
 
