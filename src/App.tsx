@@ -33,6 +33,7 @@ import Attribution from './pages/risk/Attribution'
 import MLModelsPage from './pages/ml/MLModelsPage'
 import Predictions from './pages/ml/Predictions'
 import Features from './pages/ml/Features'
+import NewsExtraction from './pages/ml/NewsExtraction'
 
 import AlertsPage from './pages/alerts/AlertsPage'
 import Reports from './pages/other/Reports'
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="/ml/models" element={<MLModelsPage />} />
         <Route path="/ml/predictions" element={<Predictions />} />
         <Route path="/ml/features" element={<Features />} />
+        <Route path="/ml/news-extraction" element={<NewsExtraction />} />
 
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/reports" element={<Reports />} />

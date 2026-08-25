@@ -4,6 +4,7 @@ import ContributionBars from '../../components/charts/ContributionBars'
 import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import ExtendedScopeBanner from '../../components/status/ExtendedScopeBanner'
 import { useDemoStore } from '../../demo/demoState'
 import { COMPOSITE_RISK } from '../../services/mock/data'
 
@@ -43,6 +44,11 @@ export default function Explanations() {
         description="QuantSim explains the composite risk score by tracing it back to each underlying signal."
         breadcrumbs={[{ label: 'Risk', to: '/risk/overview' }, { label: 'Explainability' }]}
       />
+
+      <ExtendedScopeBanner>
+        This walkthrough is illustrative narrative text generated from the demo scenario. The production XAI
+        service that generates these explanations from live model internals is planned beyond the current build.
+      </ExtendedScopeBanner>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {SECTIONS.map((s) => (

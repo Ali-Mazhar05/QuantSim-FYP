@@ -5,14 +5,15 @@ import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import ExtendedScopeBadge from '../../components/status/ExtendedScopeBadge'
 import StatusPill from '../../components/status/StatusPill'
 import { useDemoStore } from '../../demo/demoState'
 import { CALIBRATIONS } from '../../services/mock/data'
 import type { StochasticModel } from '../../types'
 
-const MODELS: { id: StochasticModel; description: string }[] = [
+const MODELS: { id: StochasticModel; description: string; extended?: boolean }[] = [
   { id: 'GBM', description: 'Geometric Brownian Motion' },
-  { id: 'Jump Diffusion', description: 'Diffusion with discrete jump events' },
+  { id: 'Jump Diffusion', description: 'Diffusion with discrete jump events', extended: true },
   { id: 'Ornstein-Uhlenbeck', description: 'Mean-reverting stochastic process' },
   { id: 'Regime Switching', description: 'Markov-modulated volatility regimes' },
 ]
@@ -43,7 +44,10 @@ export default function ConfigureSimulation() {
                 model === m.id ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
               )}
             >
-              <div className={clsx('text-sm font-semibold', model === m.id ? 'text-[var(--color-accent-strong)]' : 'text-[var(--color-text-primary)]')}>{m.id}</div>
+              <div className="flex items-center gap-1.5">
+                <span className={clsx('text-sm font-semibold', model === m.id ? 'text-[var(--color-accent-strong)]' : 'text-[var(--color-text-primary)]')}>{m.id}</span>
+                {m.extended && <ExtendedScopeBadge compact />}
+              </div>
               <div className="mt-1 text-xs text-[var(--color-text-muted)]">{m.description}</div>
             </button>
           ))}
