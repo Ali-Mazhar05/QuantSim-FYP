@@ -37,7 +37,7 @@ export default function CreateMarketEnvironment() {
               onClick={() => setType(t)}
               className={clsx(
                 'rounded border p-4 text-left transition-colors',
-                type === t ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
+                type === t ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
               )}
             >
               <div className={clsx('text-sm font-semibold', type === t ? 'text-[var(--color-accent-strong)]' : 'text-[var(--color-text-primary)]')}>{t}</div>
@@ -60,7 +60,7 @@ export default function CreateMarketEnvironment() {
               className={clsx(
                 'mono rounded border px-3 py-1.5 text-xs font-semibold transition-colors',
                 selected.includes(inst.symbol)
-                  ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
+                  ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
                   : 'border-[var(--color-border-strong)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]/80',
               )}
             >

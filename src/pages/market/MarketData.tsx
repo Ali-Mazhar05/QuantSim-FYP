@@ -19,7 +19,7 @@ export default function MarketData() {
             onClick={() => setSymbol(i.symbol)}
             className={`mono rounded border px-3 py-1.5 text-xs font-semibold ${
               symbol === i.symbol
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
+                ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
                 : 'border-[var(--color-border-strong)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]/80'
             }`}
           >

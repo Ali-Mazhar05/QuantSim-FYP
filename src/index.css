@@ -10,19 +10,36 @@
   --color-bg-3: #ececec;
   --color-border: #e2e2e2;
   --color-border-strong: #cfcfcf;
+  /* Boundary for interactive chips/controls; >=3:1 on white so the outline
+     itself identifies the control (WCAG 1.4.11), unlike the hairline above. */
+  --color-border-control: #909097;
 
   --color-text-primary: #0a0a0a;
   --color-text-secondary: #52525a;
-  --color-text-muted: #8a8a90;
+  --color-text-muted: #6b6b73;
 
+  /* Accent is split by job: -accent is a FILL (dark text sits on it),
+     -accent-hover is its pressed/hover fill, and -accent-strong is the INK
+     used whenever the brand teal has to be read as text, an icon, or a
+     stroke. Never swap the two - the fill fails contrast as text, and the
+     ink fails as a background for black text. */
   --color-accent: #67caaf;
-  --color-accent-strong: #4bb599;
+  --color-accent-hover: #4bb599;
+  --color-accent-strong: #0b6f5b;
 
-  --color-risk-low: #3fae6a;
-  --color-risk-moderate: #c7a93b;
-  --color-risk-elevated: #d98a3d;
-  --color-risk-high: #d1553f;
-  --color-risk-severe: #c23a4b;
+  /* Informational/in-progress states. Deliberately blue, not teal: the old
+     teal "info" tone was indistinguishable from the green "success" tone. */
+  --color-info: #1a56c4;
+
+  /* Risk ramp. Every step is >=4.5:1 on white and on its own 10% tint, and
+     each pair is >=20 deltaE apart so the steps stay separable. "moderate"
+     is amber-orange rather than yellow - yellow cannot reach 4.5:1 without
+     turning brown. */
+  --color-risk-low: #137536;
+  --color-risk-moderate: #8a6100;
+  --color-risk-elevated: #a85205;
+  --color-risk-high: #b81f1a;
+  --color-risk-severe: #a10f3d;
 }
 
 html, body, #root {

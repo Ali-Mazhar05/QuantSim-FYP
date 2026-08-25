@@ -8,7 +8,7 @@ export default function ExplainThis({ children }: { children: ReactNode }) {
     <div className="relative inline-block">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded border border-[var(--color-border-strong)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
+        className="inline-flex items-center gap-1 rounded border border-[var(--color-border-strong)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
       >
         <HelpCircle size={12} />
         What is this?
@@ -24,7 +24,7 @@ export default function ExplainThis({ children }: { children: ReactNode }) {
           <div className="pr-4 text-xs leading-relaxed text-[var(--color-text-secondary)]">{children}</div>
           <button
             onClick={() => setOpen(false)}
-            className="mt-3 rounded bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-black hover:bg-[var(--color-accent-strong)]"
+            className="mt-3 rounded bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-black hover:bg-[var(--color-accent-hover)]"
           >
             Got it
           </button>

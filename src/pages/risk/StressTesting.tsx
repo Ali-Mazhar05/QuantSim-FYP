@@ -56,7 +56,7 @@ export default function StressTesting() {
               onClick={() => setScenario(s.id)}
               className={clsx(
                 'rounded border p-3.5 text-left transition-colors disabled:opacity-60',
-                scenario === s.id ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
+                scenario === s.id ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
               )}
             >
               <div className={clsx('text-sm font-semibold', scenario === s.id ? 'text-[var(--color-accent-strong)]' : 'text-[var(--color-text-primary)]')}>{s.name}</div>

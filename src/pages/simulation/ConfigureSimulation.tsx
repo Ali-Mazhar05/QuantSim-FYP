@@ -41,7 +41,7 @@ export default function ConfigureSimulation() {
               onClick={() => setModel(m.id)}
               className={clsx(
                 'rounded border p-4 text-left transition-colors',
-                model === m.id ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
+                model === m.id ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/8' : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
               )}
             >
               <div className="flex items-center gap-1.5">

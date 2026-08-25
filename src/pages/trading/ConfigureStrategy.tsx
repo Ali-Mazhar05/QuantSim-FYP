@@ -51,7 +51,7 @@ export default function ConfigureStrategy() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Low Volatility Rotation"
-              className="rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
             />
           </label>
           <label className="flex flex-col gap-1.5">
@@ -59,7 +59,7 @@ export default function ConfigureStrategy() {
             <select
               value={rebalance}
               onChange={(e) => setRebalance(e.target.value as (typeof REBALANCE_OPTIONS)[number])}
-              className="rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
             >
               {REBALANCE_OPTIONS.map((o) => (
                 <option key={o} value={o}>
@@ -94,7 +94,7 @@ export default function ConfigureStrategy() {
                 value={r}
                 onChange={(e) => updateRule(i, e.target.value)}
                 placeholder="Describe a rule…"
-                className="flex-1 rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                className="flex-1 rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
               />
               <button
                 onClick={() => removeRule(i)}

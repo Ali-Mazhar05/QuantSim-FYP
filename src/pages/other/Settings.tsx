@@ -21,7 +21,7 @@ export default function Settings() {
             onClick={() => setTab(t)}
             className={clsx(
               'border-b-2 px-3 py-2 text-sm font-medium',
-              tab === t ? 'border-[var(--color-accent)] text-[var(--color-accent-strong)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]',
+              tab === t ? 'border-[var(--color-accent-strong)] text-[var(--color-accent-strong)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]',
             )}
           >
             {t}
@@ -94,7 +94,7 @@ function Field({ label, value }: { label: string; value: string }) {
       <span className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</span>
       <input
         defaultValue={value}
-        className="max-w-sm rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+        className="max-w-sm rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
       />
     </label>
   )

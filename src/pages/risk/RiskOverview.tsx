@@ -44,7 +44,7 @@ export default function RiskOverview() {
               <button
                 key={c.key}
                 onClick={() => navigate(c.to)}
-                className="qs-panel group flex flex-col items-start gap-3 rounded p-5 text-left transition-colors hover:border-[var(--color-accent)]"
+                className="qs-panel group flex flex-col items-start gap-3 rounded p-5 text-left transition-colors hover:border-[var(--color-accent-strong)]"
               >
                 <div className="flex w-full items-center justify-between">
                   <c.icon size={20} className="text-[var(--color-accent-strong)]" />

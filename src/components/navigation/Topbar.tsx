@@ -38,7 +38,7 @@ export default function Topbar() {
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             placeholder="Search simulations, portfolios, instruments…"
-            className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] py-1.5 pl-8 pr-3 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+            className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] py-1.5 pl-8 pr-3 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent-strong)] focus:outline-none"
           />
         </div>
       </div>
@@ -46,7 +46,7 @@ export default function Topbar() {
       <div className="flex items-center gap-3">
         <button
           onClick={toggleSystemActivity}
-          className="hidden items-center gap-1.5 rounded border border-[var(--color-border-strong)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-strong)] lg:flex"
+          className="hidden items-center gap-1.5 rounded border border-[var(--color-border-strong)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)] lg:flex"
         >
           <Radio size={13} />
           Activity
@@ -106,7 +106,7 @@ export default function Topbar() {
         <div className="relative">
           <button
             onClick={() => setRoleOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded border border-[var(--color-border-strong)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]"
+            className="flex items-center gap-1.5 rounded border border-[var(--color-border-strong)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent-strong)]"
           >
             {role}
             <ChevronDown size={13} />

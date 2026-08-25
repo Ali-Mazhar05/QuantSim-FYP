@@ -20,7 +20,7 @@ export default function Reports() {
           <button
             key={r.id}
             onClick={() => setActive(r)}
-            className="qs-panel flex flex-col items-start gap-2 rounded p-4 text-left transition-colors hover:border-[var(--color-accent)]"
+            className="qs-panel flex flex-col items-start gap-2 rounded p-4 text-left transition-colors hover:border-[var(--color-accent-strong)]"
           >
             <FileBarChart size={18} className="text-[var(--color-accent-strong)]" />
             <div className="text-sm font-semibold text-[var(--color-text-primary)]">{r.name}</div>

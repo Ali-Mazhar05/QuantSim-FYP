@@ -51,7 +51,7 @@ export default function Login() {
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
             />
           </label>
           <label className="mb-4 block">
@@ -60,7 +60,7 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
             />
           </label>
 
@@ -75,7 +75,7 @@ export default function Login() {
                   className={clsx(
                     'rounded border px-3 py-2 text-left transition-colors',
                     role === r.role
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10'
+                      ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/10'
                       : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
                   )}
                 >

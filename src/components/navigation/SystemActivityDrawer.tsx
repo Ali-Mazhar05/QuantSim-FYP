@@ -50,7 +50,7 @@ export default function SystemActivityDrawer() {
                     className={clsx(
                       'z-10 mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2',
                       reached
-                        ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/30'
+                        ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/30'
                         : 'border-[var(--color-border-strong)] bg-[var(--color-bg-2)]',
                     )}
                   />

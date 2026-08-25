@@ -37,7 +37,7 @@ export default function AuditLog() {
             onClick={() => setSeverity(s)}
             className={`rounded border px-2.5 py-1 text-xs font-medium ${
               severity === s
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
+                ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
                 : 'border-[var(--color-border-strong)] text-[var(--color-text-secondary)]'
             }`}
           >

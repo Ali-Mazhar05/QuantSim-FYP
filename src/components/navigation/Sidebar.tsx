@@ -32,7 +32,7 @@ export default function Sidebar() {
         )}
       >
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]">
             <Radar size={16} />
           </div>
           {hovered && (
@@ -55,7 +55,7 @@ export default function Sidebar() {
                     clsx(
                       'flex h-9 w-9 items-center justify-center rounded transition-colors',
                       isActive
-                        ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+                        ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]'
                         : 'text-[var(--color-text-secondary)] hover:bg-black/[0.04] hover:text-[var(--color-text-primary)]',
                     )
                   }
@@ -91,7 +91,7 @@ export default function Sidebar() {
                             clsx(
                               'flex items-center gap-2.5 whitespace-nowrap rounded px-2.5 py-1.5 text-[13px] font-medium transition-colors',
                               isActive
-                                ? 'bg-[var(--color-accent)]/12 text-[var(--color-accent)]'
+                                ? 'bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
                                 : 'text-[var(--color-text-secondary)] hover:bg-black/[0.04] hover:text-[var(--color-text-primary)]',
                             )
                           }

@@ -109,11 +109,14 @@ export default function TdaAnalysis() {
           <CorrelationHeatmap
             assets={TDA_ANALYSIS.assets}
             matrix={TDA_ANALYSIS.distanceMatrix}
+            // Same single-hue sequential ramp as the correlation heatmap, just
+            // inverted: distance 0 (assets sitting on top of each other) is the
+            // hot end, and far apart fades to near-white.
             colorFor={(v) => {
-              const t = Math.max(0, Math.min(1, v / 1.4))
-              const r = Math.round(209 - t * (209 - 59))
-              const g = Math.round(85 + t * (130 - 85))
-              const b = Math.round(63 + t * (196 - 63))
+              const t = 1 - Math.max(0, Math.min(1, v / 1.4))
+              const r = Math.round(242 + t * (161 - 242))
+              const g = Math.round(245 + t * (15 - 245))
+              const b = Math.round(248 + t * (61 - 248))
               return `rgb(${r},${g},${b})`
             }}
           />

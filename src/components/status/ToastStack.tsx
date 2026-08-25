@@ -21,7 +21,7 @@ export default function ToastStack() {
               size={16}
               className={clsx(
                 'mt-0.5 shrink-0',
-                t.tone === 'info' && 'text-[var(--color-accent-strong)]',
+                t.tone === 'info' && 'text-[var(--color-info)]',
                 t.tone === 'success' && 'text-[var(--color-risk-low)]',
                 t.tone === 'warning' && 'text-[var(--color-risk-elevated)]',
               )}

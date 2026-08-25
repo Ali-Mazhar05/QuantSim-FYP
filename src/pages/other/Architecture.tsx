@@ -34,7 +34,7 @@ export default function Architecture() {
       <button
         onClick={() => setActive(s)}
         className={clsx(
-          'rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent-strong)]',
+          'rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]',
         )}
       >
         {s.label}
