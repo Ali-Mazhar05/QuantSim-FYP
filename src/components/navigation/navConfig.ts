@@ -27,6 +27,7 @@ export interface NavItem {
   label: string
   path: string
   icon: LucideIcon
+  extended?: boolean
 }
 
 export interface NavSection {
