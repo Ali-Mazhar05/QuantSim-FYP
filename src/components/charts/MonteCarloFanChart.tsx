@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { generateMonteCarloPaths, pathPercentiles } from '../../services/mock/generators'
+import { seriesOutcomeColor } from '../../utils/outcomeColor'
 
 export default function MonteCarloFanChart({
   start = 214.32,
@@ -62,6 +63,7 @@ export default function MonteCarloFanChart({
   }
 
   const gridLines = 5
+  const meanColor = useMemo(() => seriesOutcomeColor(mean.slice(0, revealSteps + 1)), [mean, revealSteps])
 
   return (
     <div className="w-full overflow-x-auto">
@@ -95,7 +97,7 @@ export default function MonteCarloFanChart({
 
         <path d={toPath(p5, revealSteps)} fill="none" stroke="var(--color-risk-elevated)" strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
         <path d={toPath(p95, revealSteps)} fill="none" stroke="var(--color-risk-elevated)" strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
-        <path d={toPath(mean, revealSteps)} fill="none" stroke="var(--color-accent-strong)" strokeWidth={2} />
+        <path d={toPath(mean, revealSteps)} fill="none" stroke={meanColor} strokeWidth={2} />
 
         <line x1={0} x2={width} y1={height} y2={height} stroke="var(--color-border)" />
         <text x={0} y={height + 18} fontSize={9} fill="var(--color-text-muted)" className="mono">Day 0</text>
@@ -104,7 +106,7 @@ export default function MonteCarloFanChart({
         </text>
       </svg>
       <div className="mt-2 flex flex-wrap gap-4 text-[11px] text-[var(--color-text-muted)]">
-        <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-[var(--color-accent-strong)]" /> Mean path</span>
+        <span className="flex items-center gap-1.5"><span className="h-0.5 w-3" style={{ background: meanColor }} /> Mean path</span>
         <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 border-t border-dashed border-[var(--color-risk-elevated)]" /> 5th / 95th percentile</span>
         <span className="flex items-center gap-1.5"><span className="h-2 w-3 bg-[var(--color-accent)] opacity-30" /> Confidence band</span>
         <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 bg-[var(--color-accent)] opacity-40" /> Simulated paths</span>

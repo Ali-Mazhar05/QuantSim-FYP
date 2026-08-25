@@ -1,19 +1,22 @@
 import { useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { generateDrawdownSeries, generateEquityCurve } from '../../services/mock/generators'
+import { seriesOutcomeColor } from '../../utils/outcomeColor'
 
 export default function DrawdownChart({ height = 180 }: { height?: number }) {
   const data = useMemo(() => {
     const equity = generateEquityCurve({ seed: 909, days: 60, start: 1_000_000, drift: 0.0834, vol: 0.182 })
     return generateDrawdownSeries(equity)
   }, [])
+  const color = useMemo(() => seriesOutcomeColor(data.map((d) => d.drawdown)), [data])
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="ddFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-risk-severe)" stopOpacity={0} />
-            <stop offset="100%" stopColor="var(--color-risk-severe)" stopOpacity={0.35} />
+            <stop offset="0%" stopColor={color} stopOpacity={0} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.35} />
           </linearGradient>
         </defs>
         <CartesianGrid stroke="var(--color-border)" vertical={false} />
@@ -24,7 +27,7 @@ export default function DrawdownChart({ height = 180 }: { height?: number }) {
           formatter={(v) => [`${Number(v).toFixed(2)}%`, 'Drawdown']}
           labelFormatter={(v) => `Day ${v}`}
         />
-        <Area type="monotone" dataKey="drawdown" stroke="var(--color-risk-high)" strokeWidth={1.75} fill="url(#ddFill)" />
+        <Area type="monotone" dataKey="drawdown" stroke={color} strokeWidth={1.75} fill="url(#ddFill)" />
       </AreaChart>
     </ResponsiveContainer>
   )
