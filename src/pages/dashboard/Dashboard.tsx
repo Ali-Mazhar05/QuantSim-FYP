@@ -8,17 +8,21 @@ import KpiCard from '../../components/status/KpiCard'
 import RiskBadge from '../../components/status/RiskBadge'
 import StatusPill from '../../components/status/StatusPill'
 import { useDemoStore } from '../../demo/demoState'
-import { ALERT, COMPOSITE_RISK, ML_PREDICTION, PORTFOLIO, STRESS_RESULT, TDA_ANALYSIS } from '../../services/mock/data'
+import { useRiskAnalysis } from '../../demo/useRiskAnalysis'
+import { useRiskAlerts } from '../../demo/useRiskAlerts'
+import { PORTFOLIO } from '../../services/mock/data'
 import { LATEST_PORTFOLIO_VALUE, MAX_DRAWDOWN_PCT } from '../../services/mock/portfolioSeries'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const role = useDemoStore((s) => s.role)
   const flowStep = useDemoStore((s) => s.flowStep)
-  const hasReached = useDemoStore((s) => s.hasReached)
-  const alertActive = useDemoStore((s) => s.alertActive)
+  const { completedModules, composite } = useRiskAnalysis()
+  const { active: activeAlerts } = useRiskAlerts()
 
-  const analysisComplete = hasReached('COMPOSITE_RISK_READY')
+  // "Complete" now means at least one risk lens has produced a result, since a
+  // user may deliberately run only one or two of them.
+  const analysisComplete = composite !== null
   const hour = 16
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
@@ -43,7 +47,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[var(--color-text-muted)]">Risk status:</span>
-              <RiskBadge level={analysisComplete ? COMPOSITE_RISK.level : 'MODERATE'} size="sm" />
+              <RiskBadge level={composite ? composite.level : 'MODERATE'} size="sm" />
             </div>
           </div>
         </div>
@@ -52,15 +56,19 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      {alertActive && (
+      {activeAlerts.length > 0 && (
         <button
           onClick={() => navigate('/alerts')}
           className="qs-fade-in flex items-center gap-3 rounded border border-[var(--color-risk-high)]/40 bg-[var(--color-risk-high)]/10 px-4 py-3 text-left hover:bg-[var(--color-risk-high)]/15"
         >
           <AlertTriangle size={18} className="shrink-0 text-[var(--color-risk-high)]" />
           <div className="flex-1">
-            <div className="text-sm font-semibold text-[var(--color-risk-high)]">1 active high-risk alert</div>
-            <div className="text-xs text-[var(--color-text-secondary)]">{ALERT.message} — {ALERT.detail}</div>
+            <div className="text-sm font-semibold text-[var(--color-risk-high)]">
+              {activeAlerts.length} active risk {activeAlerts.length === 1 ? 'alert' : 'alerts'}
+            </div>
+            <div className="text-xs text-[var(--color-text-secondary)]">
+              {activeAlerts.map((a) => a.message).join(' | ')}
+            </div>
           </div>
           <ArrowUpRight size={15} className="text-[var(--color-risk-high)]" />
         </button>
@@ -139,26 +147,33 @@ export default function Dashboard() {
             </dl>
           )}
         </Panel>
-        <Panel title="Risk Breakdown" subtitle={analysisComplete ? undefined : 'Available once risk analysis completes'}>
-          {analysisComplete ? (
+        <Panel title="Risk Breakdown" subtitle={composite ? composite.coverageNote : 'Available once a risk lens has run'}>
+          {composite ? (
             <div className="flex flex-col gap-3">
-              {[
-                { label: 'Stress Testing', score: STRESS_RESULT.score, level: STRESS_RESULT.level },
-                { label: 'TDA', score: TDA_ANALYSIS.score, level: TDA_ANALYSIS.level },
-                { label: 'ML', score: ML_PREDICTION.score, level: ML_PREDICTION.level },
-              ].map((r) => (
-                <div key={r.label} className="flex items-center justify-between">
-                  <span className="text-sm text-[var(--color-text-secondary)]">{r.label}</span>
+              {completedModules.map((m) => (
+                <div key={m.key} className="flex items-center justify-between">
+                  <span className="text-sm text-[var(--color-text-secondary)]">{m.title}</span>
                   <div className="flex items-center gap-2">
-                    <span className="mono text-sm text-[var(--color-text-primary)]">{r.score}</span>
-                    <RiskBadge level={r.level} size="sm" />
+                    <span className="mono text-sm text-[var(--color-text-primary)]">{m.score}</span>
+                    <RiskBadge level={m.level} size="sm" />
                   </div>
                 </div>
               ))}
+              <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-3">
+                <span className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  {composite.modules.length === 1 ? 'Risk Score' : 'Composite'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="mono text-sm font-semibold text-[var(--color-text-primary)]">
+                    {composite.compositeScore}
+                  </span>
+                  <RiskBadge level={composite.level} size="sm" />
+                </div>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-[var(--color-text-muted)]">
-              Run stress testing, TDA, and ML prediction to populate the composite risk breakdown.
+              Run any of stress testing, TDA, or ML prediction to populate the risk breakdown.
             </p>
           )}
         </Panel>

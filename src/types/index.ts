@@ -186,14 +186,53 @@ export interface RiskDriver {
   pct: number
 }
 
+// A risk module is one of the three independent lenses a user can run.
+// Any subset may be run, so every downstream view is derived from the set
+// that actually completed rather than assuming all three are present.
+export type RiskModuleKey = 'stress' | 'tda' | 'ml'
+
+export type RiskModuleStatus = 'idle' | 'running' | 'complete'
+
+export interface RiskModuleMetric {
+  label: string
+  value: string
+  tone?: 'negative' | 'neutral'
+}
+
+export interface RiskModuleDefinition {
+  key: RiskModuleKey
+  title: string
+  short: string
+  question: string
+  route: string
+  /** Relative share of the composite score, renormalized over the modules that ran. */
+  weight: number
+  score: number
+  level: RiskLevel
+  completedAt: string
+  metrics: RiskModuleMetric[]
+  driverLabel: string
+  explanation: string[]
+}
+
+export interface CompositeBreakdownRow {
+  key: RiskModuleKey
+  title: string
+  short: string
+  score: number
+  level: RiskLevel
+  weightPct: number
+  contributionPct: number
+}
+
 export interface CompositeRisk {
   id: string
   portfolioId: string
-  stressScore: number
-  tdaScore: number
-  mlScore: number
+  modules: RiskModuleKey[]
+  breakdown: CompositeBreakdownRow[]
   compositeScore: number
   level: RiskLevel
+  coverageNote: string
   interpretation: string[]
   drivers: RiskDriver[]
   completedAt: string
@@ -209,6 +248,10 @@ export interface Alert {
   portfolioId?: string
   status: 'Active' | 'Investigating' | 'Dismissed'
   createdAt: string
+  /** Set when the alert was raised by a specific risk lens. */
+  moduleKey?: RiskModuleKey
+  /** Page that answers "why was this raised". */
+  investigateRoute?: string
 }
 
 export interface AuditEvent {

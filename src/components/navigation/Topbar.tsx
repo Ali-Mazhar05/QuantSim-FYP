@@ -2,8 +2,9 @@ import { Bell, ChevronDown, LogOut, Radio, Search, Settings } from 'lucide-react
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDemoStore } from '../../demo/demoState'
+import { useRiskAlerts } from '../../demo/useRiskAlerts'
 import type { Role } from '../../types'
-import { ALERT, MARKET_ENVIRONMENTS } from '../../services/mock/data'
+import { MARKET_ENVIRONMENTS } from '../../services/mock/data'
 import StatusPill from '../status/StatusPill'
 
 const ROLES: Role[] = ['Viewer', 'Analyst', 'Quant', 'Admin']
@@ -13,8 +14,8 @@ export default function Topbar() {
   const role = useDemoStore((s) => s.role)
   const setRole = useDemoStore((s) => s.setRole)
   const logout = useDemoStore((s) => s.logout)
-  const alertActive = useDemoStore((s) => s.alertActive)
   const flowStep = useDemoStore((s) => s.flowStep)
+  const { active: activeAlerts } = useRiskAlerts()
   const toggleSystemActivity = useDemoStore((s) => s.toggleSystemActivity)
 
   const [roleOpen, setRoleOpen] = useState(false)
@@ -62,9 +63,9 @@ export default function Topbar() {
             className="relative rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-black/5 hover:text-[var(--color-text-primary)]"
           >
             <Bell size={16} />
-            {alertActive && (
+            {activeAlerts.length > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-risk-severe)] px-1 text-[9px] font-bold text-white">
-                1
+                {activeAlerts.length}
               </span>
             )}
           </button>
@@ -73,18 +74,25 @@ export default function Topbar() {
               <div className="border-b border-[var(--color-border)] px-3.5 py-2.5 text-xs font-semibold text-[var(--color-text-primary)]">
                 Notifications
               </div>
-              {alertActive ? (
-                <button
-                  onClick={() => {
-                    setNotifOpen(false)
-                    navigate('/alerts')
-                  }}
-                  className="flex w-full flex-col gap-1 border-b border-[var(--color-border)] px-3.5 py-3 text-left hover:bg-black/[0.03]"
-                >
-                  <span className="text-xs font-semibold text-[var(--color-risk-high)]">{ALERT.title}</span>
-                  <span className="text-xs text-[var(--color-text-secondary)]">{ALERT.message}</span>
-                  <span className="mono text-[10px] text-[var(--color-text-muted)]">{ALERT.createdAt}</span>
-                </button>
+              {activeAlerts.length > 0 ? (
+                <div className="max-h-80 overflow-y-auto">
+                  {activeAlerts.map((a) => (
+                    <button
+                      key={a.id}
+                      onClick={() => {
+                        setNotifOpen(false)
+                        navigate('/alerts')
+                      }}
+                      className="flex w-full flex-col gap-1 border-b border-[var(--color-border)] px-3.5 py-3 text-left hover:bg-black/[0.03]"
+                    >
+                      <span className="text-xs font-semibold text-[var(--color-risk-high)]">{a.title}</span>
+                      <span className="text-xs text-[var(--color-text-secondary)]">{a.message}</span>
+                      <span className="mono text-[10px] text-[var(--color-text-muted)]">
+                        {a.source} · {a.createdAt}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <div className="px-3.5 py-6 text-center text-xs text-[var(--color-text-muted)]">
                   No active notifications.

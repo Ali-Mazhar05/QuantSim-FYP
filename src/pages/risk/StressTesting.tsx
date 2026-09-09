@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ContributionBars from '../../components/charts/ContributionBars'
@@ -9,18 +9,21 @@ import PageHeader from '../../components/layout/PageHeader'
 import RiskBadge from '../../components/status/RiskBadge'
 import StatusPill from '../../components/status/StatusPill'
 import { useDemoStore } from '../../demo/demoState'
+import { useRiskAnalysis } from '../../demo/useRiskAnalysis'
 import { STRESS_RESULT, STRESS_SCENARIOS } from '../../services/mock/data'
+import { RISK_MODULES } from '../../services/mock/riskModules'
 import type { StressScenarioId } from '../../types'
 
 const PROCESSING_STEPS = ['Applying scenario…', 'Revaluing portfolio…', 'Calculating losses…', 'Generating recovery profile…']
 
 export default function StressTesting() {
   const navigate = useNavigate()
-  const advanceTo = useDemoStore((s) => s.advanceTo)
-  const hasReached = useDemoStore((s) => s.hasReached)
+  const startRiskModule = useDemoStore((s) => s.startRiskModule)
+  const completeRiskModule = useDemoStore((s) => s.completeRiskModule)
+  const { status, nextPending } = useRiskAnalysis()
 
   const [scenario, setScenario] = useState<StressScenarioId>('correlated-failure')
-  const [phase, setPhase] = useState<'select' | 'processing' | 'complete'>(hasReached('STRESS_COMPLETE') ? 'complete' : 'select')
+  const [phase, setPhase] = useState<'select' | 'processing' | 'complete'>(status.stress === 'complete' ? 'complete' : 'select')
   const [step, setStep] = useState(0)
 
   useEffect(() => {
@@ -28,13 +31,13 @@ export default function StressTesting() {
     if (step >= PROCESSING_STEPS.length) {
       const t = setTimeout(() => {
         setPhase('complete')
-        advanceTo('STRESS_COMPLETE')
+        completeRiskModule('stress')
       }, 350)
       return () => clearTimeout(t)
     }
     const t = setTimeout(() => setStep((s) => s + 1), 500)
     return () => clearTimeout(t)
-  }, [phase, step, advanceTo])
+  }, [phase, step, completeRiskModule])
 
   const selected = STRESS_SCENARIOS.find((s) => s.id === scenario)!
 
@@ -69,6 +72,7 @@ export default function StressTesting() {
           <div className="mt-4">
             <Button
               onClick={() => {
+                startRiskModule('stress')
                 setPhase('processing')
                 setStep(0)
               }}
@@ -115,9 +119,14 @@ export default function StressTesting() {
             />
           </Panel>
 
-          <div className="flex justify-end">
-            <Button icon={ArrowRight} onClick={() => navigate('/risk/explanations')}>
-              View Explanation
+          <div className="flex flex-wrap justify-end gap-3">
+            {nextPending && (
+              <Button variant="secondary" icon={ArrowRight} onClick={() => navigate(RISK_MODULES[nextPending].route)}>
+                Next: {RISK_MODULES[nextPending].title}
+              </Button>
+            )}
+            <Button icon={ArrowLeft} onClick={() => navigate('/risk/overview')}>
+              Back to Risk Analysis
             </Button>
           </div>
         </>

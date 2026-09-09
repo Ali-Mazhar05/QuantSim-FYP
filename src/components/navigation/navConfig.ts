@@ -7,6 +7,7 @@ import {
   FileBarChart,
   Fingerprint,
   Gauge,
+  Layers,
   LayoutDashboard,
   LineChart,
   ListTree,
@@ -78,10 +79,12 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Risk',
     items: [
-      { label: 'Risk Overview', path: '/risk/overview', icon: ShieldHalf },
+      { label: 'Risk Analysis', path: '/risk/overview', icon: ShieldHalf },
       { label: 'Stress Testing', path: '/risk/stress-testing', icon: ShieldAlert },
       { label: 'TDA Analysis', path: '/risk/tda-analysis', icon: Network },
+      { label: 'ML Prediction', path: '/ml/predictions', icon: Sparkles },
       { label: 'Explainability', path: '/risk/explanations', icon: FileBarChart, extended: true },
+      { label: 'Risk Hub', path: '/risk/composite', icon: Layers },
       { label: 'Attribution', path: '/risk/attribution', icon: Sigma },
     ],
   },

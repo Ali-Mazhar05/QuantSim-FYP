@@ -4,7 +4,7 @@
 // after a short simulated processing delay.
 
 import { create } from 'zustand'
-import type { Role } from '../types'
+import type { RiskModuleKey, RiskModuleStatus, Role } from '../types'
 
 export const FLOW_STEPS = [
   'IDLE',
@@ -41,22 +41,44 @@ function stepIndex(step: FlowStep) {
   return FLOW_STEPS.indexOf(step)
 }
 
+// Risk modules are tracked independently of the linear flow above: a user may
+// run one, two, or all three of them in any order, and every risk view derives
+// from the set that actually completed.
+export type RiskModuleState = Record<RiskModuleKey, RiskModuleStatus>
+
+const IDLE_RISK_MODULES: RiskModuleState = { stress: 'idle', tda: 'idle', ml: 'idle' }
+
+const MODULE_STEP: Record<RiskModuleKey, FlowStep> = {
+  stress: 'STRESS_COMPLETE',
+  tda: 'TDA_COMPLETE',
+  ml: 'ML_COMPLETE',
+}
+
 interface DemoState {
   authenticated: boolean
   role: Role
   flowStep: FlowStep
   runningFullDemo: boolean
-  alertActive: boolean
   systemActivityOpen: boolean
+  riskModules: RiskModuleState
+  riskQueue: RiskModuleKey[]
+  /** Modules whose alerts have been raised into the notification tray. */
+  alertModules: RiskModuleKey[]
+  dismissedAlertIds: string[]
   login: (role: Role) => void
   logout: () => void
   setRole: (role: Role) => void
   advanceTo: (step: FlowStep) => void
   hasReached: (step: FlowStep) => boolean
   resetDemo: () => void
-  dismissAlert: () => void
+  raiseRiskAlerts: (keys: RiskModuleKey[]) => void
+  dismissAlert: (id: string) => void
   setRunningFullDemo: (v: boolean) => void
   toggleSystemActivity: () => void
+  queueRiskModules: (keys: RiskModuleKey[]) => void
+  startRiskModule: (key: RiskModuleKey) => void
+  completeRiskModule: (key: RiskModuleKey) => void
+  resetRiskAnalysis: () => void
 }
 
 export const useDemoStore = create<DemoState>((set, get) => ({
@@ -64,19 +86,59 @@ export const useDemoStore = create<DemoState>((set, get) => ({
   role: 'Quant',
   flowStep: 'IDLE',
   runningFullDemo: false,
-  alertActive: false,
   systemActivityOpen: false,
+  riskModules: IDLE_RISK_MODULES,
+  riskQueue: [],
+  alertModules: [],
+  dismissedAlertIds: [],
   login: (role) => set({ authenticated: true, role }),
   logout: () => set({ authenticated: false }),
   setRole: (role) => set({ role }),
+  // Progress only ever moves forward. Revisiting an earlier page must not rewind
+  // the flow and wipe out work the user already completed.
   advanceTo: (step) =>
     set((s) => {
-      if (stepIndex(step) <= stepIndex(s.flowStep)) return { flowStep: step }
-      return { flowStep: step, alertActive: step === 'ALERT_TRIGGERED' ? true : s.alertActive }
+      if (stepIndex(step) <= stepIndex(s.flowStep)) return s
+      return { ...s, flowStep: step }
     }),
   hasReached: (step) => stepIndex(get().flowStep) >= stepIndex(step),
-  resetDemo: () => set({ flowStep: 'IDLE', runningFullDemo: false, alertActive: false }),
-  dismissAlert: () => set({ alertActive: false }),
+  resetDemo: () =>
+    set({
+      flowStep: 'IDLE',
+      runningFullDemo: false,
+      riskModules: IDLE_RISK_MODULES,
+      riskQueue: [],
+      alertModules: [],
+      dismissedAlertIds: [],
+    }),
+  raiseRiskAlerts: (keys) => set({ alertModules: keys }),
+  dismissAlert: (id) =>
+    set((s) => (s.dismissedAlertIds.includes(id) ? s : { ...s, dismissedAlertIds: [...s.dismissedAlertIds, id] })),
   setRunningFullDemo: (v) => set({ runningFullDemo: v }),
   toggleSystemActivity: () => set((s) => ({ systemActivityOpen: !s.systemActivityOpen })),
+  queueRiskModules: (keys) => set((s) => ({ riskQueue: keys.filter((k) => s.riskModules[k] !== 'complete') })),
+  startRiskModule: (key) =>
+    set((s) =>
+      s.riskModules[key] === 'complete'
+        ? s
+        : { ...s, riskModules: { ...s.riskModules, [key]: 'running' } },
+    ),
+  completeRiskModule: (key) =>
+    set((s) => {
+      const flowStep = stepIndex(MODULE_STEP[key]) > stepIndex(s.flowStep) ? MODULE_STEP[key] : s.flowStep
+      return {
+        ...s,
+        flowStep,
+        riskModules: { ...s.riskModules, [key]: 'complete' },
+        riskQueue: s.riskQueue.filter((k) => k !== key),
+      }
+    }),
+  resetRiskAnalysis: () =>
+    set({
+      riskModules: IDLE_RISK_MODULES,
+      riskQueue: [],
+      flowStep: 'TRADING_COMPLETE',
+      alertModules: [],
+      dismissedAlertIds: [],
+    }),
 }))

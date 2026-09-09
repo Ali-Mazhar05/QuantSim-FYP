@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CorrelationHeatmap from '../../components/charts/CorrelationHeatmap'
@@ -12,7 +12,9 @@ import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import RiskBadge from '../../components/status/RiskBadge'
 import { useDemoStore } from '../../demo/demoState'
+import { useRiskAnalysis } from '../../demo/useRiskAnalysis'
 import { TDA_ANALYSIS } from '../../services/mock/data'
+import { RISK_MODULES } from '../../services/mock/riskModules'
 import TdaPipelineNav from './TdaPipelineNav'
 
 const STAGES = [
@@ -27,17 +29,20 @@ const STAGES = [
 
 export default function TdaAnalysis() {
   const navigate = useNavigate()
-  const advanceTo = useDemoStore((s) => s.advanceTo)
-  const hasReached = useDemoStore((s) => s.hasReached)
+  const startRiskModule = useDemoStore((s) => s.startRiskModule)
+  const completeRiskModule = useDemoStore((s) => s.completeRiskModule)
+  const { status, nextPending } = useRiskAnalysis()
 
+  const complete = status.tda === 'complete'
   const [active, setActive] = useState(0)
-  const [unlocked, setUnlocked] = useState(hasReached('TDA_COMPLETE') ? STAGES.length - 1 : 0)
+  const [unlocked, setUnlocked] = useState(complete ? STAGES.length - 1 : 0)
 
   const next = () => {
     const n = Math.min(STAGES.length - 1, active + 1)
     setActive(n)
     setUnlocked((u) => Math.max(u, n))
-    if (n === STAGES.length - 1) advanceTo('TDA_COMPLETE')
+    if (n === STAGES.length - 1) completeRiskModule('tda')
+    else startRiskModule('tda')
   }
 
   return (
@@ -210,9 +215,14 @@ export default function TdaAnalysis() {
               computation. The persistence landscape values above are controlled demo data.
             </p>
           </Panel>
-          <div className="flex justify-end">
-            <Button icon={ArrowRight} onClick={() => navigate('/ml/predictions')}>
-              Continue to ML Prediction
+          <div className="flex flex-wrap justify-end gap-3">
+            {nextPending && (
+              <Button variant="secondary" icon={ArrowRight} onClick={() => navigate(RISK_MODULES[nextPending].route)}>
+                Next: {RISK_MODULES[nextPending].title}
+              </Button>
+            )}
+            <Button icon={ArrowLeft} onClick={() => navigate('/risk/overview')}>
+              Back to Risk Analysis
             </Button>
           </div>
         </>

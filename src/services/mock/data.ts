@@ -4,10 +4,8 @@
 // for the real architecture this POC represents.
 
 import type {
-  Alert,
   AuditEvent,
   Calibration,
-  CompositeRisk,
   Instrument,
   MLModelDef,
   MLPrediction,
@@ -229,41 +227,6 @@ export const ML_PREDICTION: MLPrediction = {
   score: 68,
   level: 'ELEVATED',
   completedAt: '16:22:16',
-}
-
-export const COMPOSITE_RISK: CompositeRisk = {
-  id: 'composite-1042',
-  portfolioId: PORTFOLIO.id,
-  stressScore: STRESS_RESULT.score,
-  tdaScore: TDA_ANALYSIS.score,
-  mlScore: ML_PREDICTION.score,
-  compositeScore: 76,
-  level: 'HIGH',
-  interpretation: [
-    'The portfolio is currently exposed to elevated systemic risk.',
-    'The strongest contributor is the structural change detected by the topology analysis.',
-    'Stress testing confirms that diversification benefits deteriorate significantly under correlation convergence.',
-    'ML independently identifies an elevated drawdown probability.',
-  ],
-  drivers: [
-    { label: 'Structural Change (TDA)', pct: 38 },
-    { label: 'Correlation Convergence (Stress)', pct: 31 },
-    { label: 'Drawdown Probability (ML)', pct: 22 },
-    { label: 'Volatility Trend', pct: 9 },
-  ],
-  completedAt: '16:22:21',
-}
-
-export const ALERT: Alert = {
-  id: 'alert-1042-1',
-  title: 'RISK ALERT',
-  message: 'Structural market change detected',
-  detail: 'Topology risk crossed threshold: 75 → 82',
-  severity: 'HIGH',
-  source: 'TDA Analysis',
-  portfolioId: PORTFOLIO.id,
-  status: 'Active',
-  createdAt: '16:22:21',
 }
 
 export const AUDIT_EVENTS: AuditEvent[] = [
