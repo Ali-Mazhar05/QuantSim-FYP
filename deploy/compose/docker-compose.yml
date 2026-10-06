@@ -1,0 +1,121 @@
+# One stack definition for every environment. deploy.sh runs it with:
+#   -p <QS_PROJECT>                      a separate project per environment (qs-dev, qs-test, ...)
+#   --env-file deploy/env/<env>.env      ports, targets and other settings
+#   --env-file <release file>            the exact image of every component
+#   --env-file <decrypted secrets>       SOPS secrets, when the environment has any
+#
+# Nothing here mounts files from the repository: compose runs inside the Jenkins
+# container, whose workspace paths do not exist on the Docker host.
+
+x-defaults: &defaults
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # Read-only, filtered access to the Docker API so the gateway never holds the raw socket
+  socket-proxy:
+    <<: *defaults
+    image: tecnativa/docker-socket-proxy:v0.4.1@sha256:3400c429c5f9e1b21d62130fb93b16e2e772d4fb7695bd52fc2b743800b9fe9e
+    environment:
+      CONTAINERS: "1"
+      EVENTS: "1"
+      POST: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-api
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # Single front door of the environment
+  gateway:
+    <<: *defaults
+    image: traefik:v3.6@sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d
+    command:
+      - --entrypoints.web.address=:8000
+      - --entrypoints.ping.address=:8082
+      - --ping.entrypoint=ping
+      - --providers.docker.endpoint=tcp://socket-proxy:2375
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${QS_PROJECT:?}_default
+      # Every environment shares one Docker host; route only this project's containers
+      - --providers.docker.constraints=Label(`com.docker.compose.project`,`${QS_PROJECT:?}`)
+      - --api.dashboard=false
+      - --accesslog=true
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+    ports:
+      - "${QS_HTTP_PORT:?}:8000"
+    read_only: true
+    depends_on:
+      - socket-proxy
+    networks:
+      - default
+      - docker-api
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping", "--ping.entrypoint=ping", "--entrypoints.ping.address=:8082"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Static frontend served by nginx; on ACC and PROD it is published to Cloudflare Pages instead
+  frontend:
+    <<: *defaults
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE comes from the release file}
+    profiles: ["frontend"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.frontend.rule: PathPrefix(`/`)
+      traefik.http.routers.frontend.entrypoints: web
+      traefik.http.routers.frontend.priority: "1"
+      traefik.http.services.frontend.loadbalancer.server.port: "8080"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Backend services follow this pattern. Add one block per service in
+  # ci/components.conf; the gateway routes /api/<name> to it and the smoke test
+  # calls /api/<name>/health.
+  #
+  # market:
+  #   <<: *defaults
+  #   image: ${MARKET_IMAGE:?MARKET_IMAGE comes from the release file}
+  #   environment:
+  #     DATABASE_URL: ${MARKET_DATABASE_URL:?}
+  #     TIINGO_API_KEY: ${TIINGO_API_KEY:?}
+  #   labels:
+  #     traefik.enable: "true"
+  #     traefik.http.routers.market.rule: PathPrefix(`/api/market`)
+  #     traefik.http.routers.market.entrypoints: web
+  #     traefik.http.services.market.loadbalancer.server.port: "8000"
+  #
+  # market-migrate:
+  #   image: ${MARKET_IMAGE:?}
+  #   profiles: ["migrate"]
+  #   restart: "no"
+  #   environment:
+  #     DATABASE_URL: ${MARKET_DATABASE_URL:?}
+  #   command: ["alembic", "upgrade", "head"]
+
+networks:
+  default:
+  docker-api:
+    internal: true
