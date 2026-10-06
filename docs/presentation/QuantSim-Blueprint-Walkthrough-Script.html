@@ -1,0 +1,490 @@
+<title>QuantSim Blueprint Walkthrough</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<style>
+  :root{
+    --ink:#12171c; --ink-2:#3f4a55; --ink-3:#717d89; --rule:#e3e8ec; --rule-2:#cbd3da;
+    --paper:#ffffff; --paper-2:#f6f8f9;
+    --c1-bg:#e9eff8; --c1-ln:#4a6fa5; --c1-tx:#23405f;
+    --c2-bg:#e2f1ed; --c2-ln:#0b6f5b; --c2-tx:#0a4c3f;
+    --c3-bg:#f8f0e2; --c3-ln:#b07d2a; --c3-tx:#6d4a12;
+    --c4-bg:#f1eaf5; --c4-ln:#7a5290; --c4-tx:#4d3161;
+    --c5-bg:#e9eef0; --c5-ln:#5a7182; --c5-tx:#2e4351;
+    --flag:#b03a2e; --flag-bg:#fbeeec;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+    --read:"Newsreader",Georgia,"Iowan Old Style",serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e7edf2; --ink-2:#b4c0ca; --ink-3:#7f8b97; --rule:#242b32; --rule-2:#39434d;
+      --paper:#11151a; --paper-2:#0c1013;
+      --c1-bg:#161f2c; --c1-ln:#6d92c9; --c1-tx:#b6cdea;
+      --c2-bg:#0f2320; --c2-ln:#4fc0a3; --c2-tx:#8fdcc7;
+      --c3-bg:#241d10; --c3-ln:#d09a45; --c3-tx:#e8c68a;
+      --c4-bg:#1f172a; --c4-ln:#a882c0; --c4-tx:#cdb4de;
+      --c5-bg:#181d21; --c5-ln:#8ba3b4; --c5-tx:#bdcdd8;
+      --flag:#e08277; --flag-bg:#2a1613;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e7edf2; --ink-2:#b4c0ca; --ink-3:#7f8b97; --rule:#242b32; --rule-2:#39434d;
+    --paper:#11151a; --paper-2:#0c1013;
+    --c1-bg:#161f2c; --c1-ln:#6d92c9; --c1-tx:#b6cdea;
+    --c2-bg:#0f2320; --c2-ln:#4fc0a3; --c2-tx:#8fdcc7;
+    --c3-bg:#241d10; --c3-ln:#d09a45; --c3-tx:#e8c68a;
+    --c4-bg:#1f172a; --c4-ln:#a882c0; --c4-tx:#cdb4de;
+    --c5-bg:#181d21; --c5-ln:#8ba3b4; --c5-tx:#bdcdd8;
+    --flag:#e08277; --flag-bg:#2a1613;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper-2);color:var(--ink);font:15.5px/1.6 var(--sans);margin:0}
+  .page{max-width:1000px;margin:0 auto;padding:0 34px 96px;background:var(--paper)}
+
+  header.mast{padding:52px 0 30px;border-bottom:3px solid var(--ink)}
+  .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--c2-ln)}
+  h1{font:700 37px/1.1 var(--sans);margin:13px 0 11px;letter-spacing:-.022em;text-wrap:balance}
+  .sub{font-size:16.5px;color:var(--ink-2);max-width:64ch}
+  .meta{display:flex;flex-wrap:wrap;gap:0 40px;margin-top:24px;font:13px/1.7 var(--mono);color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:600}
+
+  .which{border:1px solid var(--rule-2);border-left:4px solid var(--c1-ln);background:var(--c1-bg);
+    padding:14px 18px;border-radius:0 5px 5px 0;margin:26px 0 0;font-size:14.5px;line-height:1.62;color:var(--c1-tx)}
+  .which b{font-weight:700}
+  .which ul{margin:9px 0 0;padding-left:19px}
+  .which li{margin-bottom:4px}
+
+  .part{margin-top:58px;padding-top:28px;border-top:3px solid var(--ink)}
+  .part .pn{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--c2-ln)}
+  .part h2{font:700 29px/1.15 var(--sans);margin:12px 0 8px;letter-spacing:-.018em}
+  .part .plede{font-size:15.5px;color:var(--ink-2);max-width:66ch;margin:0}
+
+  .strip{display:flex;margin:26px 0 0;border:1px solid var(--rule-2);border-radius:5px;overflow:hidden;font:11px/1 var(--mono)}
+  .strip a{flex:1;text-align:center;padding:11px 4px;color:var(--ink-2);text-decoration:none;border-right:1px solid var(--rule);background:var(--paper-2)}
+  .strip a:last-child{border-right:none}
+  .strip a b{display:block;color:var(--ink);font-size:12px;margin-bottom:4px}
+  .strip a:hover,.strip a:focus-visible{background:var(--c2-bg);color:var(--c2-tx);outline:none}
+
+  .cut{border:1px solid var(--rule-2);border-left:4px solid var(--c3-ln);background:var(--c3-bg);
+    padding:13px 18px;border-radius:0 5px 5px 0;margin:24px 0 0;font-size:14px;line-height:1.6;color:var(--c3-tx)}
+  .cut b{font-weight:700}
+
+  .timeline{margin-top:34px}
+  .stop{display:grid;grid-template-columns:82px 1fr;gap:0 22px;padding:28px 0;border-top:1px solid var(--rule);scroll-margin-top:16px}
+  .stop:first-child{border-top:1px solid var(--rule-2)}
+  .clock{font:600 13px/1.3 var(--mono);color:var(--c2-ln);padding-top:3px}
+  .clock .dur{display:block;margin-top:5px;font:11px/1 var(--mono);color:var(--ink-3);font-weight:400}
+  .bd{min-width:0}
+  .bd h3{font:600 21px/1.22 var(--read);margin:0 0 4px;letter-spacing:-.005em}
+  .eyebrow{font:600 10px/1 var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);margin-bottom:13px}
+
+  .look{display:flex;gap:9px;align-items:flex-start;font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 15px;
+    border:1px solid var(--rule);border-radius:5px;padding:9px 12px;background:var(--paper-2)}
+  .look .tagw{flex:none;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:9.5px;padding-top:2px}
+  .look b{color:var(--ink-2);font-weight:600}
+  .look.d1 .tagw{color:var(--c3-ln)} .look.d2 .tagw{color:var(--c4-ln)}
+
+  .vo{border-left:4px solid var(--c2-ln);background:var(--c2-bg);padding:15px 19px;border-radius:0 5px 5px 0;margin:0 0 15px}
+  .vo .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--c2-ln);display:block;margin-bottom:9px}
+  .vo p{font:400 17px/1.66 var(--read);color:var(--ink);margin:0 0 11px}
+  .vo p:last-child{margin-bottom:0}
+
+  .point{display:block;font:12.5px/1.55 var(--mono);color:var(--ink-3);margin:0 0 11px}
+  .point::before{content:"\25B8 ";color:var(--c2-ln)}
+
+  .rem{border:1px solid var(--rule);border-radius:5px;padding:13px 18px;background:var(--paper-2)}
+  .rem .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:10px}
+  .rem ul{margin:0;padding-left:18px}
+  .rem li{margin-bottom:6px;font-size:14px;line-height:1.5;color:var(--ink-2)}
+  .rem li:last-child{margin-bottom:0}
+  .rem li b{color:var(--ink);font-weight:600}
+
+  table.map{width:100%;border-collapse:collapse;margin-top:20px;font-size:13.5px}
+  table.map th{text-align:left;font:600 10px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-3);padding:0 12px 9px 0;border-bottom:1px solid var(--rule-2)}
+  table.map td{padding:9px 12px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-2);vertical-align:top;line-height:1.45}
+  table.map td:first-child{font:600 12.5px var(--sans);color:var(--ink);white-space:nowrap}
+  table.map td:nth-child(2){font:500 11.5px var(--mono);color:var(--c3-ln);white-space:nowrap}
+  table.map tr:last-child td{border-bottom:none}
+
+  .end{margin-top:58px;padding-top:23px;border-top:3px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+
+  @media (max-width:640px){
+    .page{padding:0 18px 70px}
+    .stop{grid-template-columns:1fr;gap:8px 0}
+    .clock{padding-top:0}
+    .strip{flex-wrap:wrap}
+    .strip a{flex:1 1 30%}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="page">
+
+<header class="mast">
+  <div class="kicker">Presenter Script &middot; For the System Blueprint</div>
+  <h1>QuantSim Blueprint Walkthrough</h1>
+  <p class="sub">Two three-minute passes over the same page. The first walks the building &mdash; what
+  QuantSim does and why it is split up, with no vocabulary anyone has to already know. The second walks
+  the blueprint proper &mdash; the eight services, the event rail, the stores, and what happens between
+  a click and a progress bar.</p>
+  <div class="meta">
+    <div><b>Runtime</b><br>3:00 + 3:00, six beats each</div>
+    <div><b>Needs on screen</b><br>QuantSim System Blueprint</div>
+    <div><b>Pace</b><br>~150 words / minute</div>
+    <div><b>Source</b><br>ARC v0.2, &sect;3&ndash;&sect;10</div>
+  </div>
+</header>
+
+<div class="which">
+  <b>Which script do I use?</b> You now have three. They differ only in which picture is on the screen
+  behind you.
+  <ul>
+    <li><b>This one</b> &mdash; when you are presenting from the <b>System Blueprint</b> page. Use it by default; it is the one keyed to the diagrams you built last.</li>
+    <li><b>High-Level Script (part 1 of 2)</b> &mdash; when you are showing the plain five-tier Figure A on its own.</li>
+    <li><b>Low-Level Script (part 2 of 2)</b> &mdash; when you are showing Figures B, C and D: service layering, the outbox, and the run sequence. Keep this one; it goes deeper than Part 2 below and is the right answer if the panel drills into the outbox.</li>
+  </ul>
+</div>
+
+<!-- ===================== PART 1 ===================== -->
+<div class="part">
+  <div class="pn">Part 1 &middot; High-level overview</div>
+  <h2>The building &mdash; what it does, and why it is in pieces</h2>
+  <p class="plede">Runs entirely on <b>Diagram 2</b> until 2:05, then one switch up to Diagram 1 for the
+  vocabulary. Written so a supervisor outside the field can follow every sentence.</p>
+</div>
+
+<div class="strip">
+  <a href="#h1"><b>0:00</b>The question</a>
+  <a href="#h2"><b>0:25</b>Rooms 1&ndash;4</a>
+  <a href="#h3"><b>1:05</b>Rooms 5&ndash;7</a>
+  <a href="#h4"><b>1:40</b>Two rules</a>
+  <a href="#h5"><b>2:05</b>Same picture, real names</a>
+  <a href="#h6"><b>2:40</b>Why split</a>
+</div>
+
+<div class="cut">
+  <b>Before you start:</b> scroll the blueprint page to Diagram 2 and leave it there. The building is
+  your opener &mdash; not the poster. Starting on the poster loses a non-technical room in the first
+  fifteen seconds, and you cannot get them back.
+</div>
+
+<div class="timeline">
+
+  <div class="stop" id="h1">
+    <div class="clock">0:00<span class="dur">0:25</span></div>
+    <div class="bd">
+      <div class="eyebrow">Opening</div>
+      <h3>Start with the question, not the system</h3>
+      <div class="look d2"><span class="tagw">Diagram 2</span><span>Far left &mdash; the <b>person and speech bubble</b>, then the <b>front desk</b>. Point at the bubble on your first sentence.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Everything QuantSim does exists to answer one question: is this portfolio risky, and if so,
+        why? That sounds simple. It is not, because there is no single number sitting anywhere that
+        tells you.</p>
+        <p>So think of the system as a building. You walk in with your question. The front desk checks
+        your badge and sends you to exactly one room &mdash; you never wander the corridors yourself,
+        and you never open a filing cabinet yourself.</p>
+      </div>
+      <span class="point">Do not say &ldquo;API gateway&rdquo; yet. You earn that word at 2:05, once they already know what the thing does.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="h2">
+    <div class="clock">0:25<span class="dur">0:40</span></div>
+    <div class="bd">
+      <div class="eyebrow">The top row</div>
+      <h3>Rooms one to four &mdash; building the picture</h3>
+      <div class="look d2"><span class="tagw">Diagram 2</span><span>Top row, left to right. Touch each numbered badge as you name it: <b>1 archive</b>, <b>2 what-if room</b>, <b>3 trading floor</b>, <b>4 forecaster</b>.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Room one is the archive. Every price and every headline we hold, cleaned and checked
+        <em>before</em> it is filed &mdash; because once a bad number is in the building, everyone
+        downstream has already copied it.</p>
+        <p>Room two is the what-if room. It takes real history and generates thousands of plausible
+        futures from it, so we are not betting on the one path that actually happened.</p>
+        <p>Room three is the trading floor. It plays your strategy through those futures, in strict
+        order, and records every buy and sell it would have made.</p>
+        <p>Room four is the forecaster. It has learned from past behaviour, so it can tell you the odds
+        &mdash; how volatile things are about to get, what regime we are in.</p>
+      </div>
+      <span class="point">Four rooms in forty seconds is ten seconds each. If you feel yourself elaborating, you are already over &mdash; cut to the next badge.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="h3">
+    <div class="clock">1:05<span class="dur">0:35</span></div>
+    <div class="bd">
+      <div class="eyebrow">The bottom row</div>
+      <h3>Rooms five to seven &mdash; and the answer comes back</h3>
+      <div class="look d2"><span class="tagw">Diagram 2</span><span>Bottom row, right to left: <b>5 stress lab</b>, <b>6 translator</b>, <b>7 control room</b>. Then follow the long teal arrow all the way back to the screen on the far left.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Room five is the stress lab, and it is the one that makes this a risk product rather than a
+        reporting tool. It breaks your portfolio on purpose &mdash; a flash crash, a liquidity shock, a
+        whole sector collapsing &mdash; and measures what would actually survive.</p>
+        <p>Room six is the translator. It takes all of that and says it in one sentence you can act on,
+        with the reasons attached.</p>
+        <p>Room seven is the control room. It is watching all of it, and when something crosses a line
+        it raises the alarm. Notice the arrow: you never refresh anything. The answer comes back to your
+        screen on its own.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="h4">
+    <div class="clock">1:40<span class="dur">0:25</span></div>
+    <div class="bd">
+      <div class="eyebrow">The two rules</div>
+      <h3>Cabinets and the mail room</h3>
+      <div class="look d2"><span class="tagw">Diagram 2</span><span>Point at any one <b>filing cabinet</b>, then the legend line under it, then the purple <b>Internal mail</b> band along the bottom.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Two rules govern the whole building, and they are the entire architecture in plain language.</p>
+        <p>First, every room keeps its own files, and no room can open another room's cabinet. If you
+        want something from another room, you ask that room &mdash; you do not reach into its drawers.</p>
+        <p>Second, the mail room. Rooms leave notes for each other rather than standing in each other's
+        doorways waiting. The stress lab does not wait for the forecaster to be free; it gets a note
+        when the forecaster is done.</p>
+      </div>
+      <span class="point">These two sentences are the payload of the whole high-level talk. Everything before was setup and everything after is vocabulary. Slow down here.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="h5">
+    <div class="clock">2:05<span class="dur">0:35</span></div>
+    <div class="bd">
+      <div class="eyebrow">The switch</div>
+      <h3>Same picture, engineering names</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Scroll up to the poster. Run your finger down the <b>numbered tier keys</b> on the far left: 1, 2, 3, 5 &mdash; then across to the purple <b>rail</b> for 4.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Here is the same building with the real names on it. The person is tier one, the browser.
+        The front desk is tier two, the API gateway &mdash; the only thing in the system with a public
+        address. The seven rooms plus a security office are tier three: eight services, each owning one
+        job. The filing cabinets are tier five: eight separate databases, one per service. And the mail
+        room is tier four, Kafka.</p>
+        <p>One thing worth pointing out. Kafka is drawn as a rail beside the services, not as a band
+        underneath them. That is deliberate. Nothing you sit and wait for goes through it &mdash; it
+        carries notes between rooms, it is never on the path from a room to its own cabinet.</p>
+      </div>
+      <table class="map">
+        <tr><th>In the building</th><th>Module</th><th>Real name</th></tr>
+        <tr><td>Front desk</td><td>&mdash;</td><td>API gateway &mdash; TLS, token verification, routing</td></tr>
+        <tr><td>Security office</td><td>M0</td><td>Platform / Identity &mdash; accounts, roles, audit</td></tr>
+        <tr><td>The archive</td><td>M1</td><td>Market Data &mdash; prices, news, returns, correlation</td></tr>
+        <tr><td>The what-if room</td><td>M2</td><td>Simulation &mdash; calibration and Monte Carlo</td></tr>
+        <tr><td>The trading floor</td><td>M3</td><td>Trading &mdash; strategies and the trade-event log</td></tr>
+        <tr><td>The forecaster</td><td>M4</td><td>ML &mdash; model registry and feature store</td></tr>
+        <tr><td>The stress lab</td><td>M5</td><td>Risk &amp; TDA &mdash; stress runs and topology</td></tr>
+        <tr><td>The translator</td><td>M6</td><td>Explainability &mdash; SHAP, attribution, narration</td></tr>
+        <tr><td>The control room</td><td>M7</td><td>Dashboard &amp; Alerting &mdash; read models, alerts</td></tr>
+        <tr><td>The mail room</td><td>&mdash;</td><td>Apache Kafka &mdash; the event backbone</td></tr>
+        <tr><td>The cabinets</td><td>&mdash;</td><td>Database per service &mdash; eight, no shared tables</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="stop" id="h6">
+    <div class="clock">2:40<span class="dur">0:20</span></div>
+    <div class="bd">
+      <div class="eyebrow">Close</div>
+      <h3>Why bother splitting it at all</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Point at the amber <b>Services</b> band once, then stop pointing and look at the room.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>The obvious question is why not build one program. Because the work is not one shape. Some of
+        it is a person clicking a button and waiting two seconds. Some of it is an hour of heavy
+        mathematics on a dedicated machine. Separating them means the slow work never makes the fast
+        work feel slow, and a change to the risk mathematics cannot break trade execution. Eight modules,
+        nine releasable pieces, sixteen things running &mdash; all built from one shared template so
+        three people can actually maintain it.</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Likely first questions</span>
+        <ul>
+          <li><b>&ldquo;Is this over-engineered for a student project?&rdquo;</b> The compute-heavy rooms need their own machines and their own libraries. The template is what keeps eight services readable by three people &mdash; a cross-cutting fix is made once, not eight times.</li>
+          <li><b>&ldquo;What if one room goes down?&rdquo;</b> One capability degrades, not the building. Every call names in advance what it does when its dependency is unavailable.</li>
+          <li><b>&ldquo;Is it real or simulated?&rdquo;</b> Be straight: the POC is a click-through with mocked data. The blueprint is the design being defended, not the code that exists today.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===================== PART 2 ===================== -->
+<div class="part">
+  <div class="pn">Part 2 &middot; Low-level overview</div>
+  <h2>The blueprint &mdash; tiers, services, rail, stores</h2>
+  <p class="plede">Runs entirely on <b>Diagram 1</b>. Assumes Part 1 has landed, so it never re-explains
+  what a module does &mdash; it explains what each one <em>owns</em> and what happens on a request.</p>
+</div>
+
+<div class="strip">
+  <a href="#l1"><b>0:00</b>Client &amp; edge</a>
+  <a href="#l2"><b>0:20</b>The eight cells</a>
+  <a href="#l3"><b>1:05</b>The rail</a>
+  <a href="#l4"><b>1:35</b>The stores</a>
+  <a href="#l5"><b>2:05</b>A run, end to end</a>
+  <a href="#l6"><b>2:40</b>Stack &amp; template</a>
+</div>
+
+<div class="cut">
+  <b>Before you start:</b> the poster is wide. Set the browser zoom so the whole left-hand stack and the
+  purple rail are visible at once without scrolling &mdash; if you have to pan sideways mid-sentence you
+  will lose the beat. The right-hand panels can be off-screen; you point at them once, at 2:05.
+</div>
+
+<div class="timeline">
+
+  <div class="stop" id="l1">
+    <div class="clock">0:00<span class="dur">0:20</span></div>
+    <div class="bd">
+      <div class="eyebrow">Tiers 1 and 2</div>
+      <h3>One origin, one front door, and a boundary people get wrong</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Blue band, then green band. Point at the <b>red-flagged note</b> at the bottom of the green band on your last sentence.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Tier one holds no business logic and no database access, and it speaks to exactly one origin
+        &mdash; so the decomposition is invisible to the browser and can change without a frontend
+        release.</p>
+        <p>Tier two is the gateway. TLS, token verification, rate limiting, routing by path prefix. The
+        line worth stating explicitly is the one it does <em>not</em> cross: it authenticates, but it
+        does not authorise. Whether this user may run this specific action is decided inside the service
+        that owns the action &mdash; because a gateway-only check means anything reaching a service by
+        another route is implicitly trusted.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="l2">
+    <div class="clock">0:20<span class="dur">0:45</span></div>
+    <div class="bd">
+      <div class="eyebrow">Tier 3</div>
+      <h3>Eight cells &mdash; and how to read the tags</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Amber band. Point at <b>one</b> cell &mdash; M2 Simulation is the clearest &mdash; and read its two tags aloud. Then sweep the other seven without naming them individually.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Tier three is eight autonomous services, split by bounded context rather than by technical
+        layer. Read one cell and you can read them all. Take Simulation: a module number, what it owns
+        in one line, then two tags. The grey tag is its database &mdash; simulation_db, and it holds
+        credentials to no other. The amber tag is its worker &mdash; a separate deployment with its own
+        resource limits, which is where the heavy work actually runs.</p>
+        <p>Seven of the eight carry a worker tag. Only Platform is API-only. And the workers are not all
+        the same animal &mdash; four are job workers that scale on queue backlog, three are continuous
+        consumers that scale on partition count. Trading is the one with a correctness constraint
+        attached: it scales by adding partitions, never by adding concurrency inside one, because its
+        whole guarantee is per-portfolio ordering.</p>
+        <p>The test every boundary had to pass: can this thing change its data model without asking
+        anyone's permission? Risk and TDA is the clearest yes &mdash; persistent homology needs Ripser
+        and GUDHI, heavyweight native libraries nothing else wants, and it is the most volatile code we
+        have.</p>
+      </div>
+      <span class="point">If you are running long, cut the third paragraph. The tag-reading paragraph is the one that makes the rest of the poster legible.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="l3">
+    <div class="clock">1:05<span class="dur">0:30</span></div>
+    <div class="bd">
+      <div class="eyebrow">Tier 4</div>
+      <h3>Why the backbone is a rail and not a band</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>The purple <b>rail</b> on the right of the amber band. Point at its three bullets, then at the bold line at its foot.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Tier four carries three families of traffic. High-volume streams &mdash; ticks and order
+        lifecycle, ordered per partition key. Coarse domain events other services react to. And the
+        feeds that keep local read models current.</p>
+        <p>Its position is the argument. An earlier draft put the event backbone as a layer between the
+        domain and the data-access layer, so every request traversed a log on the way to its own
+        database. That makes writes slower, reads indirect, and a broker outage stops a service reading
+        data it already owns. So it is drawn beside the request path. Delivery is at-least-once, which
+        makes every consumer in the system idempotent &mdash; not as an optimisation, as a
+        precondition.</p>
+      </div>
+      <span class="point">This is the beat where an examiner who has seen the old six-layer diagram will interrupt. Good &mdash; you have just pre-answered them.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="l4">
+    <div class="clock">1:35<span class="dur">0:30</span></div>
+    <div class="bd">
+      <div class="eyebrow">Tier 5</div>
+      <h3>Hot, warm, cold &mdash; and the bill</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Grey band, three cells left to right. Then point back up at the column of grey <b>db tags</b> in the amber band.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Three storage tiers, each partitioned by owning service. Hot is Postgres with TimescaleDB
+        &mdash; eight databases, one per service. Warm is Redis, one logical database each, holding
+        cache, job state and the task queue. Cold is Parquet on object storage, one system but
+        per-service prefixes and credentials, for closed path sets and model artifacts.</p>
+        <p>Database-per-service is the decision that actually separates this from a modular monolith,
+        and it is the expensive one. No cross-service joins, no distributed transactions. Any view
+        spanning two services is assembled by the caller or maintained as a local projection, and
+        consistency is eventual. We are not arguing that cost away &mdash; we are naming the machinery
+        that makes it survivable.</p>
+      </div>
+      <span class="point">Locally these are eight logical databases in one container, each with its own role &mdash; so the ownership rule is enforced by grant, not by good manners.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="l5">
+    <div class="clock">2:05<span class="dur">0:35</span></div>
+    <div class="bd">
+      <div class="eyebrow">Right-hand panel</div>
+      <h3>One run, eight steps, and the one that matters</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Right column, <b>Example flow</b> panel. Walk the eight icons with the pointer. Land hard on step 7.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Concretely. A quant clicks run. The gateway verifies and routes to Simulation. Simulation
+        validates, writes a job row marked queued, and hands back a job id &mdash; the request is over
+        in milliseconds. The id goes onto its own Redis queue. A worker on a separate deployment claims
+        it under a lease, splits the paths across its cores, and bulk-writes results.</p>
+        <p>Step seven is the one to dwell on. The worker does not publish to Kafka directly. It writes
+        its business rows and an outbox row in one local transaction &mdash; both or neither &mdash; and
+        a drain worker publishes from that outbox afterwards. That closes the gap where a service commits
+        and then dies before announcing it, which would leave the databases permanently diverged with
+        nothing to detect it. A crash now produces a duplicate, never a loss. Then Dashboard projects the
+        event and pushes to the browser.</p>
+      </div>
+      <span class="point">Simulation never talks to the browser. It announces facts; Dashboard owns the connection. That is why a Simulation redeploy drops no live client.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="l6">
+    <div class="clock">2:40<span class="dur">0:20</span></div>
+    <div class="bd">
+      <div class="eyebrow">Close</div>
+      <h3>The stack, and the thing that makes eight survivable</h3>
+      <div class="look d1"><span class="tagw">Diagram 1</span><span>Bottom right, the <b>Technology stack</b> table. Point at the &ldquo;Scaffolding&rdquo; row specifically.</span></div>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Python and FastAPI throughout, so the service code and the quant code are the same language
+        with no rewrite across a boundary. Kafka in every environment, including development, so
+        ordering and lag bugs surface on a laptop rather than in production. Postgres and TimescaleDB
+        hot, Redis warm, Parquet cold.</p>
+        <p>And the row I would point at if I could only point at one: scaffolding. One shared template.
+        Resilience policy, tracing, the outbox, migrations, the RBAC dependency &mdash; written once,
+        not eight times. That single row is the reason a three-person team can run eight services at
+        all.</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Likely first questions</span>
+        <ul>
+          <li><b>&ldquo;Why not put jobs on Kafka too?&rdquo;</b> Job semantics &mdash; claim, lease, retry, dead-letter, one consumer &mdash; and log semantics &mdash; durable ordered replay, many consumers, offsets &mdash; are different problems. Collapsing them loses one of the two.</li>
+          <li><b>&ldquo;What happens when Kafka is down?&rdquo;</b> Reads keep working, because they never touch it. Writes commit locally and queue in the outbox; the platform catches up when the broker returns.</li>
+          <li><b>&ldquo;Where is the service mesh?&rdquo;</b> Deliberately absent. Retries, breakers and mTLS live in the template, which is sufficient at eight services and avoids a large debugging burden. It is recorded as an open question, not a settled no.</li>
+          <li><b>&ldquo;Two services need the same data &mdash; who owns it?&rdquo;</b> One owner, always. Rolling correlation lives in Market Data, not Risk, because a correlation matrix is derived market data by definition &mdash; and two implementations of one rolling window would eventually disagree.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="end">
+  QuantSim &mdash; Architecture &amp; Physical Design v0.2 &middot; blueprint walkthrough script &middot;
+  pairs with QuantSim-System-Blueprint.html
+</div>
+
+</div>

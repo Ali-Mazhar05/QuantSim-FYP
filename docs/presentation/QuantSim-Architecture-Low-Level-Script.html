@@ -1,0 +1,537 @@
+<title>QuantSim Architecture — Low Level</title>
+<style>
+  :root{
+    --ink:#14181d; --ink-2:#3d4650; --ink-3:#6b7683; --rule:#e2e6ea; --rule-2:#c9d0d7;
+    --paper:#ffffff; --paper-2:#f7f9fa; --accent:#0b6f5b; --accent-soft:#e8f4f0;
+    --warn:#a85205; --warn-soft:#fdf4ec; --stop:#b81f1a; --stop-soft:#fcf0ef;
+    --fill:#f2f5f7;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:Georgia,"Iowan Old Style",serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e9eef2; --ink-2:#b6c1cb; --ink-3:#828e99; --rule:#252c33; --rule-2:#3b444d;
+      --paper:#12161a; --paper-2:#0d1114; --accent:#4fc0a3; --accent-soft:#102420;
+      --warn:#dd9345; --warn-soft:#241a10; --stop:#e2756e; --stop-soft:#241514;
+      --fill:#181d22;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e9eef2; --ink-2:#b6c1cb; --ink-3:#828e99; --rule:#252c33; --rule-2:#3b444d;
+    --paper:#12161a; --paper-2:#0d1114; --accent:#4fc0a3; --accent-soft:#102420;
+    --warn:#dd9345; --warn-soft:#241a10; --stop:#e2756e; --stop-soft:#241514;
+    --fill:#181d22;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper-2);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0}
+  .wrap{max-width:980px;margin:0 auto;padding:0 32px 100px;background:var(--paper)}
+
+  .mast{padding:56px 0 34px;border-bottom:3px solid var(--ink)}
+  .mast .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .mast h1{font:600 38px/1.12 var(--serif);margin:14px 0 12px;letter-spacing:-.02em;text-wrap:balance}
+  .mast .sub{font-size:17px;color:var(--ink-2);max-width:62ch}
+  .meta{display:flex;flex-wrap:wrap;gap:0 40px;margin-top:24px;font:13px/1.7 var(--mono);color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:600}
+
+  .strip{display:flex;margin:34px 0 0;border:1px solid var(--rule);border-radius:4px;overflow:hidden;font:11px/1 var(--mono)}
+  .strip a{flex:1;text-align:center;padding:12px 4px;color:var(--ink-2);text-decoration:none;border-right:1px solid var(--rule);background:var(--paper-2)}
+  .strip a:last-child{border-right:none}
+  .strip a b{display:block;color:var(--ink);font-size:12px;margin-bottom:4px}
+  .strip a:hover,.strip a:focus-visible{background:var(--accent-soft);color:var(--accent);outline:none}
+
+  .figblock{margin:40px 0 0;padding:26px 0 0;border-top:1px solid var(--rule)}
+  .figblock h2{font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 18px}
+  figure{margin:0}
+  .canvas{overflow-x:auto;border:1px solid var(--rule);border-radius:5px;background:var(--paper);padding:14px}
+  .canvas svg{width:100%;min-width:740px;height:auto;display:block}
+  figcaption{font:12px/1.6 var(--mono);color:var(--ink-3);margin-top:10px;max-width:80ch}
+  figcaption b{color:var(--ink-2);font-weight:600}
+
+  .box{fill:var(--fill);stroke:var(--rule-2);stroke-width:1}
+  .box-key{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+  .box-bus{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.4}
+  .chip{fill:var(--paper);stroke:var(--rule-2);stroke-width:1}
+  .shell{fill:none;stroke:var(--rule-2);stroke-width:1.2;stroke-dasharray:3 4}
+  .txn{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:6 4}
+  .t{fill:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .t-name{font-size:13px;font-weight:600}
+  .t-sub{font-size:10px;fill:var(--ink-3)}
+  .t-mono{font-family:var(--mono);font-size:10px;fill:var(--ink-2)}
+  .t-hdr{font-family:var(--mono);font-size:9px;letter-spacing:.13em;fill:var(--ink-3)}
+  .t-big{font-size:15px;font-weight:600}
+  .t-lbl{font-family:var(--mono);font-size:9px;fill:var(--ink-3)}
+  .t-num{font-family:var(--mono);font-size:11px;font-weight:700;fill:var(--accent)}
+  .sync{stroke:var(--accent);stroke-width:1.6;fill:none}
+  .async{stroke:var(--warn);stroke-width:1.5;fill:none;stroke-dasharray:5 4}
+  .hair{stroke:var(--rule-2);stroke-width:1;fill:none;stroke-dasharray:2 4}
+  .ah-sync{fill:var(--accent)}
+  .ah-async{fill:var(--warn)}
+
+  .note{border:1px solid var(--rule-2);border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:22px 0 0;font-size:14.5px;line-height:1.62;color:var(--ink-2)}
+  .note b{color:var(--ink);font-weight:600}
+
+  .timeline{margin-top:52px}
+  .stop{display:grid;grid-template-columns:86px 1fr;gap:0 22px;padding:30px 0;border-top:1px solid var(--rule);scroll-margin-top:16px}
+  .stop:first-child{border-top:3px solid var(--ink);padding-top:34px}
+  .stop .clock{font:600 13px/1.3 var(--mono);color:var(--accent);padding-top:2px}
+  .stop .clock .dur{display:block;margin-top:5px;font:11px/1 var(--mono);color:var(--ink-3);font-weight:400}
+  .stop .body{min-width:0}
+  .stop h3{font:600 22px/1.2 var(--serif);margin:0 0 3px;letter-spacing:-.01em}
+  .stop .module{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+  .stop .where{font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 16px}
+  .stop .where b{color:var(--ink-2);font-weight:600}
+
+  .vo{border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 16px}
+  .vo .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px}
+  .vo p{font:17px/1.62 var(--serif);color:var(--ink);margin:0 0 10px}
+  .vo p:last-child{margin-bottom:0}
+  .point{display:block;font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 10px}
+  .point::before{content:"\25B8 ";color:var(--accent)}
+
+  .rem{border:1px solid var(--rule);border-radius:4px;padding:13px 18px;background:var(--paper-2)}
+  .rem .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:9px}
+  .rem ul{margin:0;padding-left:18px}
+  .rem li{margin-bottom:5px;font-size:14px;line-height:1.5;color:var(--ink-2)}
+  .rem li:last-child{margin-bottom:0}
+  .rem li b{color:var(--ink);font-weight:600}
+
+  .cut{border:1px solid var(--rule-2);border-left:4px solid var(--warn);background:var(--warn-soft);padding:12px 18px;border-radius:0 4px 4px 0;margin:22px 0 0;font-size:14px;line-height:1.6;color:var(--ink-2)}
+  .cut b{color:var(--warn)}
+
+  pre.sql{margin:16px 0 0;padding:14px 16px;background:var(--paper-2);border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;overflow-x:auto;font:12px/1.65 var(--mono);color:var(--ink-2)}
+  pre.sql b{color:var(--ink);font-weight:600}
+
+  table.inv{width:100%;border-collapse:collapse;margin-top:22px;font-size:13.5px}
+  table.inv th{text-align:left;font:600 10px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);padding:0 12px 9px 0;border-bottom:1px solid var(--rule-2)}
+  table.inv td{padding:9px 12px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-2);vertical-align:top}
+  table.inv td:first-child{font:600 12px var(--mono);color:var(--accent);white-space:nowrap}
+  table.inv td b{color:var(--ink);font-weight:600}
+  table.inv tr:last-child td{border-bottom:none}
+
+  .end{margin-top:56px;padding-top:24px;border-top:3px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+
+  @media (max-width:640px){
+    .wrap{padding:0 18px 70px}
+    .stop{grid-template-columns:1fr;gap:6px 0}
+    .stop .clock{padding-top:0}
+    .strip{flex-wrap:wrap}
+    .strip a{flex:1 1 30%}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">Presenter Script &middot; Part 2 of 2</div>
+  <h1>QuantSim Architecture &mdash; The Low-Level View</h1>
+  <p class="sub">Three minutes on the machinery: what one service looks like inside, how a write and its
+  event stay in step across eight databases, and what actually happens between the click and the
+  progress bar. This is the talk for the person who asks &ldquo;yes, but what stops it going wrong?&rdquo;</p>
+  <div class="meta">
+    <div><b>Total runtime</b><br>3:00, six beats</div>
+    <div><b>Figures</b><br>Three &mdash; B, C and D</div>
+    <div><b>Pace</b><br>~150 words / minute</div>
+    <div><b>Prerequisite</b><br>High-level script, part 1</div>
+  </div>
+</header>
+
+<div class="strip">
+  <a href="#s1"><b>0:00</b>Inside a service</a>
+  <a href="#s2"><b>0:20</b>The template</a>
+  <a href="#s3"><b>0:50</b>The outbox</a>
+  <a href="#s4"><b>1:30</b>A run, end to end</a>
+  <a href="#s5"><b>2:10</b>Data without joins</a>
+  <a href="#s6"><b>2:35</b>When it breaks</a>
+</div>
+
+<div class="figblock">
+  <h2>Figure B &mdash; Inside one service: the modular monolith, repeated eight times</h2>
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1000 500" role="img" aria-label="Internal structure of one QuantSim service: four layers stacked, API routes, application, domain, and infrastructure, where each layer calls only the layer beneath it; the infrastructure layer is the only one permitted to reach outside the process, to its own database, to the outbox and Kafka, and to other services' APIs.">
+        <defs>
+          <marker id="bhs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-sync" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+          <marker id="bha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-async" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <text class="t-hdr" x="30" y="48">ONE SERVICE &mdash; ALL EIGHT ARE LAID OUT IDENTICALLY</text>
+        <rect class="shell" x="30" y="64" width="470" height="406" rx="5"/>
+
+        <rect class="box" x="50" y="104" width="430" height="64" rx="4"/>
+        <text class="t t-name" x="66" y="130">1 &nbsp;API / routes</text>
+        <text class="t t-sub" x="66" y="150">FastAPI route models &middot; validation &middot; RBAC declared on every route</text>
+
+        <rect class="box" x="50" y="188" width="430" height="64" rx="4"/>
+        <text class="t t-name" x="66" y="214">2 &nbsp;Application</text>
+        <text class="t t-sub" x="66" y="234">use cases &mdash; validate, write the job row, enqueue, orchestrate</text>
+
+        <rect class="box" x="50" y="272" width="430" height="64" rx="4"/>
+        <text class="t t-name" x="66" y="298">3 &nbsp;Domain</text>
+        <text class="t t-sub" x="66" y="318">entities, invariants, the mathematics &mdash; no I/O of any kind</text>
+
+        <rect class="box-key" x="50" y="356" width="430" height="64" rx="4"/>
+        <text class="t t-name" x="66" y="382">4 &nbsp;Infrastructure</text>
+        <text class="t t-sub" x="66" y="402">repositories &middot; outbound clients &middot; outbox writer &middot; Kafka consumer</text>
+
+        <line class="sync" x1="265" y1="168" x2="265" y2="184" marker-end="url(#bhs)"/>
+        <line class="sync" x1="265" y1="252" x2="265" y2="268" marker-end="url(#bhs)"/>
+        <line class="sync" x1="265" y1="336" x2="265" y2="352" marker-end="url(#bhs)"/>
+
+        <text class="t-lbl" x="50" y="442">A layer calls only the layer beneath it. The one addition:</text>
+        <text class="t-lbl" x="50" y="458">only layer 4 may open a socket.</text>
+
+        <text class="t-hdr" x="560" y="118">EVERYTHING OUTSIDE THE PROCESS</text>
+
+        <rect class="chip" x="560" y="138" width="410" height="62" rx="4"/>
+        <text class="t t-name" x="576" y="164">its own database only</text>
+        <text class="t-mono" x="576" y="184">trading_db &mdash; no grant on any other service's database</text>
+
+        <rect class="box-bus" x="560" y="238" width="410" height="62" rx="4"/>
+        <text class="t t-name" x="576" y="264">outbox_event &rarr; drain &rarr; Kafka</text>
+        <text class="t-mono" x="576" y="284">never a direct publish from domain code &mdash; see Figure C</text>
+
+        <rect class="chip" x="560" y="338" width="410" height="62" rx="4"/>
+        <text class="t t-name" x="576" y="364">other services' published APIs</text>
+        <text class="t-mono" x="576" y="384">timeout &middot; retry+jitter &middot; breaker &middot; bulkhead &middot; named fallback</text>
+
+        <path class="sync" d="M480,382 L520,382 L520,169 L556,169" marker-end="url(#bhs)"/>
+        <path class="async" d="M480,388 L534,388 L534,269 L556,269" marker-end="url(#bha)"/>
+        <path class="sync" d="M480,394 L520,394 L520,369 L556,369" marker-end="url(#bhs)"/>
+
+        <text class="t-lbl" x="560" y="442">Domain code records an intent; layer 4 turns it into a resilient</text>
+        <text class="t-lbl" x="560" y="458">call or an outbox row &mdash; so the service is testable alone.</text>
+      </svg>
+    </div>
+    <figcaption><b>The modular monolith, drawn.</b> This is the &ldquo;inside&rdquo; half of the
+    architecture: a strict four-layer application, identical in all eight services because all eight are
+    generated from the same template. The one rule distributed operation adds to ordinary layering is
+    that <b>all outbound communication is confined to layer 4</b> &mdash; no domain object ever opens an
+    HTTP connection or publishes to Kafka itself.</figcaption>
+  </figure>
+</div>
+
+<div class="figblock">
+  <h2>Figure C &mdash; The transactional outbox: how a write and its event stay in step</h2>
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1000 310" role="img" aria-label="The transactional outbox pattern: a service writes its business rows and an outbox_event row inside one local transaction; a drain worker then reads unpublished rows in order, publishes them to Kafka, and marks them published only after the broker acknowledges, so a crash produces a duplicate rather than a lost event; consumers deduplicate.">
+        <defs>
+          <marker id="chs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-sync" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+          <marker id="cha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-async" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <text class="t-hdr" x="30" y="62">ONE LOCAL TRANSACTION &mdash; BOTH ROWS OR NEITHER</text>
+        <rect class="txn" x="30" y="76" width="290" height="160" rx="5"/>
+
+        <rect class="box" x="46" y="100" width="258" height="54" rx="4"/>
+        <text class="t t-name" x="62" y="124">trade_event / order rows</text>
+        <text class="t t-sub" x="62" y="142">the business write</text>
+
+        <rect class="box-bus" x="46" y="166" width="258" height="54" rx="4"/>
+        <text class="t t-name" x="62" y="190">outbox_event row</text>
+        <text class="t t-sub" x="62" y="208">topic, key, schema_version, payload</text>
+
+        <line class="sync" x1="320" y1="168" x2="374" y2="168" marker-end="url(#chs)"/>
+        <text class="t-lbl" x="347" y="160" text-anchor="middle">COMMIT</text>
+
+        <rect class="box" x="378" y="138" width="160" height="60" rx="4"/>
+        <text class="t t-name" x="394" y="164">outbox drain</text>
+        <text class="t t-sub" x="394" y="182">reads unpublished, in id order</text>
+
+        <line class="async" x1="538" y1="168" x2="592" y2="168" marker-end="url(#cha)"/>
+        <text class="t-lbl" x="565" y="160" text-anchor="middle">publish</text>
+
+        <rect class="box-bus" x="596" y="132" width="120" height="72" rx="4"/>
+        <text class="t t-big" x="656" y="166" text-anchor="middle">Kafka</text>
+        <text class="t t-sub" x="656" y="186" text-anchor="middle">topic partition</text>
+
+        <line class="async" x1="716" y1="168" x2="774" y2="168" marker-end="url(#cha)"/>
+        <text class="t-lbl" x="745" y="160" text-anchor="middle">at-least-once</text>
+
+        <rect class="box" x="778" y="126" width="192" height="84" rx="4"/>
+        <text class="t t-name" x="794" y="152">consumer, elsewhere</text>
+        <text class="t-mono" x="794" y="172">processed_event dedup</text>
+        <text class="t t-sub" x="794" y="192">idempotent on the business key</text>
+
+        <path class="async" d="M640,132 L640,98 L458,98 L458,134" marker-end="url(#cha)"/>
+        <text class="t-lbl" x="549" y="90" text-anchor="middle">mark published_at only after the broker acks</text>
+
+        <text class="t-lbl" x="30" y="270" style="fill:var(--warn)">A crash between publish and mark produces a duplicate &mdash; never a loss.</text>
+        <text class="t-lbl" x="30" y="288">That is the whole trade: the hard problem (atomicity across two systems) becomes an easy one (tolerating duplicates).</text>
+      </svg>
+    </div>
+    <figcaption><b>The mechanism the eventual consistency rests on.</b> Two-phase commit across Postgres
+    and Kafka is not available, and a plain dual write &mdash; commit, then publish &mdash; loses the
+    event whenever the process dies in between, permanently and undetectably. The outbox closes that
+    gap. It ships in the shared template, so every one of the eight services has it whether its authors
+    thought about it or not.</figcaption>
+  </figure>
+
+  <pre class="sql">CREATE TABLE <b>outbox_event</b> (
+  id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  topic          text        NOT NULL,
+  event_key      text        NOT NULL,   -- Kafka partition key, e.g. portfolio_id
+  schema_version int         NOT NULL,
+  payload        jsonb       NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  published_at   timestamptz             -- NULL until the drain confirms the broker ack
+);
+CREATE INDEX ON outbox_event (id) WHERE published_at IS NULL;   -- the drain's hot path</pre>
+</div>
+
+<div class="figblock">
+  <h2>Figure D &mdash; One simulation run, click to progress bar</h2>
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1000 480" role="img" aria-label="Sequence of a simulation run across six participants: browser, gateway, Simulation API, Simulation worker, Kafka, and Dashboard. The API writes a queued job row and returns immediately; the worker claims the job from a Redis queue, computes, and publishes progress and completion events to Kafka; Dashboard projects them and pushes updates to the browser over WebSocket.">
+        <defs>
+          <marker id="dhs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-sync" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+          <marker id="dha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-async" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <rect class="box-key" x="8" y="18" width="150" height="36" rx="4"/>
+        <text class="t t-name" x="83" y="41" text-anchor="middle">Browser</text>
+        <rect class="box-key" x="175" y="18" width="150" height="36" rx="4"/>
+        <text class="t t-name" x="250" y="41" text-anchor="middle">API Gateway</text>
+        <rect class="box" x="342" y="18" width="150" height="36" rx="4"/>
+        <text class="t t-name" x="417" y="41" text-anchor="middle">M2 API</text>
+        <rect class="box" x="508" y="18" width="150" height="36" rx="4"/>
+        <text class="t t-name" x="583" y="41" text-anchor="middle">M2 CPU worker</text>
+        <rect class="box-bus" x="675" y="18" width="150" height="36" rx="4"/>
+        <text class="t t-name" x="750" y="41" text-anchor="middle">Kafka</text>
+        <rect class="box" x="842" y="18" width="150" height="36" rx="4"/>
+        <text class="t t-name" x="917" y="41" text-anchor="middle">M7 Dashboard</text>
+
+        <line class="hair" x1="83" y1="62" x2="83" y2="436"/>
+        <line class="hair" x1="250" y1="62" x2="250" y2="436"/>
+        <line class="hair" x1="417" y1="62" x2="417" y2="436"/>
+        <line class="hair" x1="583" y1="62" x2="583" y2="436"/>
+        <line class="hair" x1="750" y1="62" x2="750" y2="436"/>
+        <line class="hair" x1="917" y1="62" x2="917" y2="436"/>
+
+        <text class="t-num" x="20" y="100">1</text>
+        <line class="sync" x1="83" y1="96" x2="246" y2="96" marker-end="url(#dhs)"/>
+        <text class="t-lbl" x="166" y="88" text-anchor="middle">POST /v1/simulations/runs</text>
+
+        <text class="t-num" x="20" y="140">2</text>
+        <line class="sync" x1="250" y1="136" x2="413" y2="136" marker-end="url(#dhs)"/>
+        <text class="t-lbl" x="332" y="128" text-anchor="middle">verify JWT, route by path prefix</text>
+
+        <text class="t-num" x="20" y="188">3</text>
+        <rect class="box-key" x="345" y="162" width="146" height="44" rx="4"/>
+        <text class="t-mono" x="418" y="181" text-anchor="middle">job row = queued</text>
+        <text class="t t-sub" x="418" y="197" text-anchor="middle">returns the job id at once</text>
+
+        <text class="t-num" x="20" y="240">4</text>
+        <line class="sync" x1="417" y1="236" x2="579" y2="236" marker-end="url(#dhs)"/>
+        <text class="t-lbl" x="498" y="228" text-anchor="middle">enqueue on its own Redis queue</text>
+        <text class="t t-sub" x="498" y="252" text-anchor="middle">claim &middot; lease &middot; retry &middot; dead-letter</text>
+
+        <text class="t-num" x="20" y="296">5</text>
+        <rect class="box" x="511" y="270" width="146" height="44" rx="4"/>
+        <text class="t-mono" x="584" y="289" text-anchor="middle">N paths across cores</text>
+        <text class="t t-sub" x="584" y="305" text-anchor="middle">bulk write to simulation_db</text>
+
+        <text class="t-num" x="20" y="348">6</text>
+        <line class="async" x1="583" y1="344" x2="746" y2="344" marker-end="url(#dha)"/>
+        <text class="t-lbl" x="664" y="336" text-anchor="middle">sim.progress (via outbox)</text>
+
+        <text class="t-num" x="20" y="384">7</text>
+        <line class="async" x1="750" y1="380" x2="913" y2="380" marker-end="url(#dha)"/>
+        <text class="t-lbl" x="832" y="372" text-anchor="middle">project into dashboard_db</text>
+
+        <text class="t-num" x="20" y="420">8</text>
+        <line class="async" x1="917" y1="416" x2="87" y2="416" marker-end="url(#dha)"/>
+        <text class="t-lbl" x="500" y="408" text-anchor="middle">WebSocket push &mdash; M7 owns every client connection</text>
+
+        <text class="t-lbl" x="20" y="460" style="fill:var(--warn)">Simulation publishes facts and knows nothing about who is watching. On sim.completed the same event also wakes Risk and Explainability.</text>
+      </svg>
+    </div>
+    <figcaption><b>Where the two planes separate.</b> Steps 1&ndash;4 are the interactive plane and end in
+    milliseconds: the API validates, writes a queued job row, and hands back a job id. Step 5 is the compute plane, on a different deployment with its own resource limits. Note
+    step 8 in particular &mdash; progress reaches the browser through Dashboard, not through Simulation,
+    so a Simulation redeploy does not drop a single live client connection.</figcaption>
+  </figure>
+</div>
+
+<div class="cut">
+  <b>Before you start:</b> this script assumes the high-level talk has already run. Do not re-explain
+  the eight modules. Have all three figures reachable in one keystroke &mdash; you switch figure at
+  0:50 and again at 1:30, and fumbling either transition costs you the beat.
+</div>
+
+<div class="timeline">
+
+  <div class="stop" id="s1">
+    <div class="clock">0:00<span class="dur">0:20</span></div>
+    <div class="body">
+      <div class="module">Figure B &middot; service internals</div>
+      <h3>Four layers, and one rule the network adds</h3>
+      <p class="where"><b>On screen</b> Figure B &nbsp;&middot;&nbsp; <b>point at</b> layer 4</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Zooming into any one of the eight, this is what you find. Four layers: routes, application,
+        domain, infrastructure. A layer calls only the layer beneath it, which is ordinary. The addition
+        distributed operation forces is at the bottom &mdash; all outbound communication is confined to
+        layer four. Domain code never opens an HTTP connection and never publishes to Kafka. It records
+        an intent, and layer four turns that into a resilient call or a row in the outbox.</p>
+        <p>Two things follow. The resilience policy lives in one place per service instead of scattered
+        through business logic. And the service is testable on its own, with nothing else running.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s2">
+    <div class="clock">0:20<span class="dur">0:30</span></div>
+    <div class="body">
+      <div class="module">Figure B &middot; the shared template</div>
+      <h3>Nine releasable units, sixteen running deployments</h3>
+      <p class="where"><b>On screen</b> Figure B &nbsp;&middot;&nbsp; <b>point at</b> nothing &mdash; this beat is spoken</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>That layout is not written eight times. Every service is generated from one template, and the
+        template carries the health and readiness endpoints, structured logging with correlation-id
+        propagation, OpenTelemetry tracing, the outbox table and its drain, the resilient HTTP client,
+        the idempotent Kafka consumer wrapper, the RBAC dependency, the Alembic setup, and the
+        Dockerfile.</p>
+        <p>On deployment, be precise about the count. Nine releasable units &mdash; eight services and
+        the gateway. Seven of the eight ship a worker beside their API, so sixteen deployments actually
+        run. And those workers are not all the same animal: four are job workers, measured by queue
+        depth and scaled on backlog; three are continuous &mdash; Market Data's scheduler, Trading's
+        ordering engine, Dashboard's alert evaluator &mdash; measured by consumer lag and scaled by
+        partition count. That is why they are never merged.</p>
+      </div>
+      <table class="inv">
+        <tr><th>Worker</th><th>Kind</th><th>Scaled by</th></tr>
+        <tr><td>M2, M4, M5, M6</td><td><b>Job workers</b> &mdash; queued &rarr; running &rarr; succeeded / failed</td><td>Queue depth, job latency</td></tr>
+        <tr><td>M1 scheduler</td><td><b>Continuous</b> &mdash; cron-like ingest, no user submits it</td><td>Schedule interval</td></tr>
+        <tr><td>M3 engine</td><td><b>Continuous</b> &mdash; one consumer per portfolio partition, strict order</td><td>Partition count &mdash; never concurrency</td></tr>
+        <tr><td>M7 evaluator</td><td><b>Continuous</b> &mdash; standing evaluation loop over alert rules</td><td>Consumer lag</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="stop" id="s3">
+    <div class="clock">0:50<span class="dur">0:40</span></div>
+    <div class="body">
+      <div class="module">Figure C &middot; the outbox</div>
+      <h3>The failure that would corrupt everything, and the fix</h3>
+      <p class="where"><b>Switch to</b> Figure C &nbsp;&middot;&nbsp; <b>point at</b> the dashed transaction box, then the ack arrow</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>This is the mechanism I would defend hardest, because without it the whole event-driven design
+        is wishful thinking. The subtlest failure in a system like this is the gap between &ldquo;I
+        committed my state&rdquo; and &ldquo;I published my event&rdquo;. If a service commits and then
+        dies before publishing, nothing downstream ever learns, the databases diverge permanently, and
+        there is nothing to detect it. Two-phase commit across Postgres and Kafka is not available to us.</p>
+        <p>So every service writes its business rows and an outbox row in one local transaction &mdash;
+        both or neither. A small drain worker then reads unpublished rows in id order, publishes them,
+        and marks them published only after the broker acknowledges. A crash between publish and mark
+        produces a duplicate, never a loss. And duplicates are already handled, because delivery is
+        at-least-once and every consumer deduplicates on a business key. The hard problem becomes an
+        easy one.</p>
+      </div>
+      <span class="point">If you have time for one more sentence: the outbox is in the template, so all eight services have it whether their author thought about it or not.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="s4">
+    <div class="clock">1:30<span class="dur">0:40</span></div>
+    <div class="body">
+      <div class="module">Figure D &middot; execution model</div>
+      <h3>What happens between the click and the progress bar</h3>
+      <p class="where"><b>Switch to</b> Figure D &nbsp;&middot;&nbsp; <b>walk</b> steps 1 through 8 with the pointer</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Concretely, a user starts a Monte Carlo run. The gateway verifies the token and routes to
+        Simulation. Simulation validates, writes a job row in status queued, enqueues the id on its own
+        Redis queue, and returns the job id immediately &mdash; the request is over in milliseconds. A
+        CPU worker on a separate deployment claims the job under a lease, partitions the paths across
+        its cores, and bulk-writes results.</p>
+        <p>Then the interesting part. The worker publishes progress through its outbox to Kafka.
+        Dashboard consumes it, projects it into its own database, and pushes to the browser over a
+        WebSocket. Simulation never talks to the browser &mdash; it announces facts and knows nothing
+        about who is watching. That is why a Simulation redeploy does not drop a single live client
+        connection, and why the same completion event can also wake Risk and Explainability without
+        Simulation knowing they exist.</p>
+      </div>
+      <span class="point">Every job carries an idempotency key derived from its parameters, so a caller that times out on submission can safely retry &mdash; it cannot produce two result sets.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="s5">
+    <div class="clock">2:10<span class="dur">0:25</span></div>
+    <div class="body">
+      <div class="module">Data</div>
+      <h3>No joins &mdash; validate on write, project for read</h3>
+      <p class="where"><b>Back to</b> Figure A if it is one key away, otherwise stay on D</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Eight databases means no foreign key ever crosses a service boundary, so we have one pattern
+        for that and we apply it everywhere: validate on write, project for read, never join. Simulation
+        checks an instrument exists by calling Market Data when the calibration is written, and keeps a
+        small local reference projection for display.</p>
+        <p>The load-bearing case is the dashboard. If every widget fanned out to five services, a page
+        load would multiply latency and couple its availability to all of them at once. Instead
+        Dashboard subscribes to everyone's domain events and keeps its own query-shaped projections, so
+        a widget read touches exactly one database &mdash; its own. The cost is bounded staleness,
+        measured as event-to-projection lag, and these are analytical views that were reading
+        precomputed aggregates anyway.</p>
+      </div>
+      <span class="point">ML's feature store is the same pattern doing extra work: each value is stamped with the knowledge-time the event arrived, which makes look-ahead bias structurally impossible rather than merely discouraged.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="s6">
+    <div class="clock">2:35<span class="dur">0:25</span></div>
+    <div class="body">
+      <div class="module">Failure</div>
+      <h3>Every call site names its fallback</h3>
+      <p class="where"><b>Point at</b> Figure B's third chip &mdash; the resilience list &mdash; if it is still on screen</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Last thing. Because the network is an ordinary failure condition, every outbound call from
+        layer four carries the same policy: a timeout always set, bounded retries with jittered backoff
+        for idempotent operations only, a circuit breaker, a bulkhead bounding concurrency per
+        dependency, and an explicit fallback. The rule that makes it coherent is that every call site
+        must name its fallback. &ldquo;Unavailable&rdquo; is never allowed to mean hang or unhandled
+        exception; it means a specific chosen degradation, written down and asserted in tests.</p>
+        <p>And where a workflow spans services, there is no distributed transaction &mdash; it is a
+        choreographed saga with compensations. If a stress run's simulated market fails, Risk marks its
+        own run failed and emits stress.failed. The invariant is not that three databases changed
+        atomically. It is that no service ever shows a state implying another service's work succeeded
+        when it did not.</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Likely first questions</span>
+        <ul>
+          <li><b>&ldquo;Why not put the job queue on Kafka too?&rdquo;</b> Job semantics &mdash; claim, lease, retry, dead-letter, single consumer &mdash; and log semantics &mdash; durable ordered replay, many independent consumers, offsets &mdash; are different problems. Collapsing them loses one of the two.</li>
+          <li><b>&ldquo;How does Trading stay strictly ordered?&rdquo;</b> Kafka partitions keyed by portfolio, one consumer per partition, consumers idempotent on (portfolio_id, seq). It scales by adding partitions, never by adding concurrency inside one.</li>
+          <li><b>&ldquo;What if the LLM provider is down?&rdquo;</b> The XAI worker has a timeout, a breaker, and a cached-or-templated fallback &mdash; narration degrades, the explanation itself still returns.</li>
+          <li><b>&ldquo;Can you rebuild it from nothing?&rdquo;</b> Terraform provisions the infrastructure and each service's Alembic history provisions its own schema, so no engineer's manual knowledge sits in the loop.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="end">
+  QuantSim &mdash; Architecture &amp; Physical Design v0.2 &middot; low-level presenter script &middot;
+  companion: QuantSim-Architecture-High-Level-Script.html
+</div>
+
+</div>

@@ -1,0 +1,176 @@
+<title>QuantSim Architecture Stack (Mono)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    /* QuantSim app tokens: --color-bg-0 and --color-text-primary. Nothing else. */
+    --ink:#0a0a0a; --ink-2:#0a0a0a; --ink-3:#0a0a0a; --paper:#ffffff;
+    --c1-bg:#ffffff; --c1-ln:#0a0a0a;
+    --c2-bg:#ffffff; --c2-ln:#0a0a0a;
+    --c3-bg:#ffffff; --c3-ln:#0a0a0a;
+    --c4-bg:#ffffff; --c4-ln:#0a0a0a;
+    --c5-bg:#ffffff; --c5-ln:#0a0a0a;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#ffffff;font-family:var(--sans)}
+  .canvas{background:var(--paper);padding:20px 24px;display:inline-block}
+  svg{display:block;width:1240px;height:auto}
+  svg text{font-family:var(--sans)}
+  .ttl{font-size:27px;font-weight:700;fill:var(--ink)}
+  .num{font-size:23px;font-weight:700;fill:var(--ink-3)}
+  .band{font-size:17px;font-weight:600;fill:var(--ink)}
+  .box{font-size:12.5px;font-weight:600;fill:var(--ink)}
+  .sto{font-size:14px;font-weight:600;fill:var(--ink)}
+</style>
+
+<div class="canvas">
+<svg viewBox="0 0 1240 658" role="img" aria-label="QuantSim architecture stack, top to bottom: browser, gateway, eight services, Kafka off to the side, and per-service storage.">
+  <defs>
+    <marker id="a-s" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--c2-ln)"/>
+    </marker>
+    <marker id="a-k" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--c4-ln)"/>
+    </marker>
+  </defs>
+
+  <text class="ttl" x="630" y="42" text-anchor="middle">QuantSim Architecture</text>
+
+  <!-- ============ 1 BROWSER ============ -->
+  <text class="num" x="34" y="119">1</text>
+  <rect x="90" y="76" width="1080" height="70" rx="9" fill="var(--c1-bg)" stroke="var(--c1-ln)" stroke-width="2.4"/>
+  <text class="band" x="114" y="117">Browser</text>
+  <g transform="translate(612,93)" fill="none" stroke="var(--c1-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="6" width="30" height="20" rx="2.5"/><path d="M14,31 h8 M18,26 v5"/>
+  </g>
+
+  <line x1="630" y1="146" x2="630" y2="172" stroke="var(--c2-ln)" stroke-width="2.2" marker-end="url(#a-s)"/>
+
+  <!-- ============ 2 GATEWAY ============ -->
+  <text class="num" x="34" y="219">2</text>
+  <rect x="90" y="176" width="1080" height="70" rx="9" fill="var(--c2-bg)" stroke="var(--c2-ln)" stroke-width="2.4"/>
+  <text class="band" x="114" y="217">Gateway</text>
+  <g transform="translate(612,193)" fill="none" stroke="var(--c2-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18,3 L31,8 v9 c0,8 -5,13 -13,16 c-8,-3 -13,-8 -13,-16 V8 Z"/><path d="M12,17 l4,4 l8,-8"/>
+  </g>
+
+  <line x1="630" y1="246" x2="630" y2="272" stroke="var(--c2-ln)" stroke-width="2.2" marker-end="url(#a-s)"/>
+
+  <!-- ============ 3 SERVICES ============ -->
+  <text class="num" x="34" y="344">3</text>
+  <rect x="90" y="276" width="1080" height="120" rx="9" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="2.4"/>
+  <text class="band" x="114" y="342">Services</text>
+
+  <!-- Platform : key -->
+  <rect x="225" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(261.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="13" r="6"/><path d="M15.5,17.5 L29,31 M25,29 l3,-3 M21.5,25.5 l3,-3"/>
+  </g>
+  <text class="box" x="279.5" y="368" text-anchor="middle">Platform</text>
+
+  <!-- Market : candlesticks -->
+  <rect x="342" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(378.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8,6 v24 M18,4 v28 M28,8 v20"/>
+    <rect x="4.5" y="11" width="7" height="13" rx="1.5" fill="var(--paper)"/>
+    <rect x="14.5" y="9" width="7" height="16" rx="1.5" fill="var(--c3-ln)"/>
+    <rect x="24.5" y="13" width="7" height="10" rx="1.5" fill="var(--paper)"/>
+  </g>
+  <text class="box" x="396.5" y="368" text-anchor="middle">Market</text>
+
+  <!-- Simulation : dice -->
+  <rect x="459" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(495.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linejoin="round">
+    <rect x="5" y="5" width="26" height="26" rx="5"/>
+    <circle cx="12" cy="12" r="2.2" fill="var(--c3-ln)" stroke="none"/>
+    <circle cx="18" cy="18" r="2.2" fill="var(--c3-ln)" stroke="none"/>
+    <circle cx="24" cy="24" r="2.2" fill="var(--c3-ln)" stroke="none"/>
+  </g>
+  <text class="box" x="513.5" y="368" text-anchor="middle">Simulation</text>
+
+  <!-- Trading : swap -->
+  <rect x="576" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(612.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5,13 h22 M23,9 l4,4 l-4,4 M31,23 h-22 M13,19 l-4,4 l4,4"/>
+  </g>
+  <text class="box" x="630.5" y="368" text-anchor="middle">Trading</text>
+
+  <!-- ML : node graph -->
+  <rect x="693" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(729.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8,10 L18,18 L8,26 M18,18 L28,10 M18,18 L28,26"/>
+    <circle cx="8" cy="10" r="3.2" fill="var(--paper)"/><circle cx="8" cy="26" r="3.2" fill="var(--paper)"/>
+    <circle cx="18" cy="18" r="3.2" fill="var(--paper)"/>
+    <circle cx="28" cy="10" r="3.2" fill="var(--paper)"/><circle cx="28" cy="26" r="3.2" fill="var(--paper)"/>
+  </g>
+  <text class="box" x="747.5" y="368" text-anchor="middle">ML</text>
+
+  <!-- Risk : shield + crash -->
+  <rect x="810" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(846.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18,4 L31,9 v9 c0,8 -5,13 -13,16 c-8,-3 -13,-8 -13,-16 V9 Z"/>
+    <path d="M11,16 l5,5 l4,-7 l6,11"/>
+  </g>
+  <text class="box" x="864.5" y="368" text-anchor="middle">Risk</text>
+
+  <!-- Explainability : speech bubble -->
+  <rect x="927" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(963.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="7" width="28" height="19" rx="5"/>
+    <path d="M12,26 h8 l-9,7 z" fill="var(--paper)"/>
+    <path d="M10,14 h16 M10,20 h10"/>
+  </g>
+  <text class="box" x="981.5" y="368" text-anchor="middle">Explain</text>
+
+  <!-- Dashboard : grid -->
+  <rect x="1044" y="288" width="109" height="96" rx="7" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="1.1"/>
+  <g transform="translate(1080.5,300)" fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linejoin="round">
+    <rect x="5" y="5" width="11" height="11" rx="2"/><rect x="20" y="5" width="11" height="11" rx="2"/>
+    <rect x="5" y="20" width="11" height="11" rx="2"/><rect x="20" y="20" width="11" height="11" rx="2"/>
+  </g>
+  <text class="box" x="1098.5" y="368" text-anchor="middle">Dashboard</text>
+
+  <!-- services -> storage, routed clear of Kafka -->
+  <line x1="279.5" y1="396" x2="279.5" y2="522" stroke="var(--c2-ln)" stroke-width="2.2" marker-end="url(#a-s)"/>
+  <!-- services <-> kafka -->
+  <line x1="630" y1="396" x2="630" y2="422" stroke="var(--c4-ln)" stroke-width="2.2" stroke-dasharray="6 5" marker-start="url(#a-k)" marker-end="url(#a-k)"/>
+
+  <!-- ============ 4 KAFKA ============ -->
+  <text class="num" x="34" y="469">4</text>
+  <rect x="380" y="426" width="510" height="70" rx="9" fill="var(--c4-bg)" stroke="var(--c4-ln)" stroke-width="2.4"/>
+  <text class="band" x="404" y="467">Kafka</text>
+  <g transform="translate(617,443)" fill="none" stroke="var(--c4-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4,11 h17 M4,18 h24 M4,25 h13"/>
+    <circle cx="26.5" cy="11" r="3.5"/><circle cx="22.5" cy="25" r="3.5"/>
+  </g>
+
+  <!-- ============ 5 STORAGE ============ -->
+  <text class="num" x="34" y="582">5</text>
+  <rect x="90" y="526" width="1080" height="96" rx="9" fill="var(--c5-bg)" stroke="var(--c5-ln)" stroke-width="2.4"/>
+  <text class="band" x="114" y="580">Storage</text>
+
+  <rect x="225" y="538" width="305" height="72" rx="7" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.1"/>
+  <g transform="translate(251,556)" fill="none" stroke="var(--c5-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="18" cy="8" rx="12" ry="4.5"/>
+    <path d="M6,8 v20 c0,2.5 5.4,4.5 12,4.5 s12,-2 12,-4.5 V8"/>
+    <path d="M6,18 c0,2.5 5.4,4.5 12,4.5 s12,-2 12,-4.5"/>
+  </g>
+  <text class="sto" x="307" y="580">Postgres</text>
+
+  <rect x="542" y="538" width="305" height="72" rx="7" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.1"/>
+  <g transform="translate(568,556)" fill="none" stroke="var(--c5-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18,4 L32,11 L18,18 L4,11 Z"/><path d="M4,18 L18,25 L32,18 M4,25 L18,32 L32,25"/>
+  </g>
+  <text class="sto" x="624" y="580">Redis</text>
+
+  <rect x="859" y="538" width="294" height="72" rx="7" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.1"/>
+  <g transform="translate(885,556)" fill="none" stroke="var(--c5-ln)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="18" cy="10" rx="12" ry="4"/>
+    <path d="M6,10 h24 l-2.5,20 c-0.2,1.6 -1.5,2.8 -3,2.8 H11.5 c-1.6,0 -2.9,-1.2 -3,-2.8 Z"/>
+  </g>
+  <text class="sto" x="941" y="580">Object Store</text>
+
+  <!-- push back to the browser -->
+  <path d="M1153,336 L1205,336 L1205,111 L1174,111" fill="none" stroke="var(--c4-ln)" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a-k)"/>
+</svg>
+</div>

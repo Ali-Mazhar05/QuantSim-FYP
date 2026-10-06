@@ -1,0 +1,172 @@
+<title>QuantSim Competitor Comparison</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --ink:#12171c; --ink-2:#3f4a55; --ink-3:#6f7b87; --paper:#ffffff;
+    --rule:#d8dee4; --rule-2:#eaeef1;
+    --yes:#0a6e4e; --part:#c07a06; --no:#c0272d;
+    --qs:#0b6f5b; --qs-bg:#f0f8f6;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f6f8f9;font-family:var(--sans);color:var(--ink)}
+  .canvas{background:var(--paper);width:1280px;margin:24px auto;padding:26px 30px 22px}
+
+  .head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  h1{font-size:30px;font-weight:700;letter-spacing:.01em;margin:0}
+  .num{font-size:22px;font-weight:700;color:var(--ink-3)}
+  .sub{font-size:13px;color:var(--ink-2);margin:0 0 16px;max-width:960px;line-height:1.45}
+
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  col.f{width:250px}
+  col.p{width:auto}
+  th,td{border-bottom:1px solid var(--rule-2);padding:8px 10px;vertical-align:middle}
+  thead th{border-bottom:1.6px solid var(--rule);padding-bottom:9px;text-align:center;
+           font-size:13.5px;font-weight:700;line-height:1.25}
+  thead th .kind{display:block;font-size:10.5px;font-weight:500;color:var(--ink-3);
+                 margin-top:2px;letter-spacing:.02em}
+  thead th.f{text-align:left;font-size:11px;font-weight:600;color:var(--ink-3);
+             text-transform:uppercase;letter-spacing:.07em}
+  tbody td.f{font-size:12.5px;font-weight:600;line-height:1.3}
+  tbody td.f span{display:block;font-weight:400;font-size:11px;color:var(--ink-3);margin-top:1px}
+  tbody td.m{text-align:center}
+
+  .mark{display:inline-flex;align-items:center;justify-content:center;
+        width:27px;height:27px;border-radius:50%;font-size:16px;font-weight:700;
+        line-height:1;color:#fff;font-style:normal}
+  .m-y{background:var(--yes)}
+  .m-p{background:var(--part)}
+  .m-n{background:var(--no)}
+
+  col.qs{background:var(--qs-bg)}
+  thead th.qs{color:var(--qs);border-bottom-color:var(--qs)}
+  thead th.qs .kind{color:var(--qs)}
+
+  tr.price td{border-bottom:none;border-top:1.6px solid var(--rule);
+              padding-top:11px;vertical-align:top;font-size:10.5px;line-height:1.45;
+              color:var(--ink-2);text-align:left}
+  tr.price td.f{font-size:11px;font-weight:600;color:var(--ink-3);
+                text-transform:uppercase;letter-spacing:.07em}
+  tr.price b{display:block;font-size:11.5px;font-weight:700;color:var(--ink);margin-bottom:2px}
+
+  .foot{display:flex;gap:20px;align-items:center;margin-top:14px;
+        font-size:10.5px;color:var(--ink-3)}
+  .foot .k{display:inline-flex;align-items:center;gap:5px}
+  .foot .mark{width:19px;height:19px;font-size:11px}
+  .foot .note{margin-left:auto;text-align:right;max-width:520px;line-height:1.4}
+</style>
+
+<div class="canvas">
+  <div class="head">
+    <h1>Competitive Landscape</h1>
+    <div class="num">4</div>
+  </div>
+  <p class="sub">Existing platforms are capable, but each is optimised around a different objective. The gap is the
+  <b>combination</b> of synthetic multi-model simulation, deliberate stress testing, topology-based structural analysis
+  and explainable AI inside one auditable research environment.</p>
+
+  <table>
+    <colgroup>
+      <col class="f"><col class="p"><col class="p"><col class="p"><col class="p"><col class="p qs">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="f">Core capability</th>
+        <th>SimCorp One<span class="kind">Institutional front-to-back</span></th>
+        <th>QuantConnect<span class="kind">Cloud algo backtesting</span></th>
+        <th>QuantRocket<span class="kind">Python research stack</span></th>
+        <th>AlgoTrader / Wyden<span class="kind">Institutional execution</span></th>
+        <th class="qs">QuantSim<span class="kind">Research &amp; risk simulation</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="f">Synthetic multi-model market simulation
+          <span>Monte Carlo, jump-diffusion, regime-switching path generation</span></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Deliberate stress &amp; scenario testing
+          <span>Operator-defined shocks as a first-class workflow</span></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Topology-based structural analysis
+          <span>Persistent homology on correlation structure</span></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Explainable AI on risk drivers
+          <span>Per-feature attribution behind every model output</span></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Composite risk score across lenses
+          <span>Stress, topology and ML reconciled into one verdict</span></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Strategy evaluation environment
+          <span>Run a strategy over generated or historical paths</span></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Auditable, reproducible runs
+          <span>Versioned inputs, role-based access, traceable outputs</span></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-p">–</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr>
+        <td class="f">Usable without institutional onboarding
+          <span>No enterprise sales cycle or per-module licensing</span></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+        <td class="m"><i class="mark m-n">✕</i></td>
+        <td class="m"><i class="mark m-y">✓</i></td>
+      </tr>
+      <tr class="price">
+        <td class="f">Pricing model</td>
+        <td><b>Enterprise licence, quote only</b>Modular per-function and per-user subscription, multi-year institutional contracts. No public price list.</td>
+        <td><b>Free tier + seats</b>Researcher ~$60/mo; Team from ~$24/user/mo; Trading Firm from ~$48/user/mo; Institution from ~$96/user/mo, billed annually. Compute add-ons from $10&ndash;$20/mo.</td>
+        <td><b>Free tier + subscription</b>Free research tier with 2007&ndash;2011 US price history. Paid plans from ~$20/mo, split into Non-Professional and Professional licences. Market data billed separately.</td>
+        <td><b>Enterprise licence, quote only</b>Priced by user count, markets traded and deployment model. Positioned at the top of the market. No public price list.</td>
+        <td class="qs"><b>Single research environment</b>One platform, no per-module licensing and no market-data resale. Currently a proof of concept for academic and research use.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="foot">
+    <span class="k"><i class="mark m-y">✓</i> Core product capability</span>
+    <span class="k"><i class="mark m-p">–</i> Partial or user-built</span>
+    <span class="k"><i class="mark m-n">✕</i> Not offered</span>
+    <span class="note">QuantSim is a research and experimentation environment, not a replacement for institutional trading infrastructure. Pricing as published by each vendor, September 2026.</span>
+  </div>
+</div>
