@@ -75,6 +75,7 @@ merged, green in Jenkins and deployed to DEV.
 |---|---|---|---|---|
 | I1-00 | CI/CD: Jenkins, four environments, content-hashed images, smoke tests, rollback, approvals | A | ✅ | `Jenkinsfile`, `ci/`, `docs/ci-cd.md`, PRs #1–#11 |
 | I1-01 | Frontend POC imported into `frontend/`, unit tests added | C | ✅ | PR #1, #5 |
+| I1-02 | Centralised CI: dedicated build agent, any member can host Jenkins in turn with state hand-over and a host lease, CI-server setup with HTTPS and GitHub sign-in, nightly backups | A | 🔄 in review | `feature/centralized-jenkins`, `ci/jenkins/README.md` |
 
 ### 3.2 Platform foundation (Member A)
 
@@ -128,24 +129,28 @@ merged, green in Jenkins and deployed to DEV.
 
 ---
 
-## 4. Schedule to the Mid
+## 4. Order of work
 
-The rubric places the Mid around semester week 8. Dates below assume the evaluation in
-the week of **26 October 2026**; adjust once the date is confirmed.
+The team's priority is to build the whole Iteration 1 architecture properly rather than
+to a fixed date, so tasks are ordered by dependency instead of by week. Each member
+works down their column; a row starts once the rows it depends on are merged.
 
-| Week | Dates | Member A | Member B | Member C | Checkpoint |
-|---|---|---|---|---|---|
-| 1 | 7–13 Oct | I1-10, I1-11, I1-15 | I1-20, I1-22 | I1-41, I1-46, start I1-40 | Stack runs in DEV; schemas migrate in CI |
-| 2 | 14–20 Oct | I1-12, I1-13, I1-16 | I1-23, I1-24, I1-21 | I1-42, I1-43 | Login works end to end; one ingestion run lands clean bars |
-| 3 | 21–25 Oct | I1-14, I1-17 (stretch), I1-53 | I1-25, I1-26, I1-27, I1-28, I1-30 | I1-44, I1-45, I1-40 | Demo spine passes on TEST; report drafted |
-| Mid week | 26 Oct → | I1-52 rehearsal | I1-29 (stretch) | I1-51 final | Demo from TEST (or ACC once a server exists) |
+| Step | Member A | Member B | Member C | Done when |
+|---|---|---|---|---|
+| 1 | I1-10, I1-11 | I1-20 (schema design) | I1-41, I1-46, start I1-40 | The template and a sample service pass Backend CI |
+| 2 | I1-12, I1-13, I1-14, I1-15 | I1-20, I1-22 | I1-40 | The full stack runs in DEV; `market_db` migrates in CI |
+| 3 | I1-16 | I1-21, I1-23, I1-24 | I1-42, I1-43 | Login works end to end; one ingestion run lands clean bars |
+| 4 | I1-17 | I1-25, I1-26, I1-27, I1-28, I1-30 | I1-44, I1-45 | The demo spine passes on TEST |
+| 5 | I1-53 | I1-29 | I1-51, I1-52 | Released to ACC and PROD as `v0.1.0`; Mid report and demo ready |
+
+Progress against this plan is recorded in [progress-log.md](progress-log.md).
 
 **Critical path:** I1-10 → I1-11 → I1-15 → I1-20 → I1-23 → I1-24 → I1-27 → I1-44. If
 anything on it slips, cut in this order: I1-17 tracing, I1-29 correlation, I1-45 admin
 page, catch-up run in I1-26. Never cut I1-23 or I1-24; they are the demo.
 
-**Recovery rule:** any task more than three days late gets a named helper and a new date
-recorded in this file (rubric criterion 2 rewards a justified, owner-assigned recovery plan).
+**Recovery rule:** any task more than three days past its expected finish gets a named
+helper and a new target recorded in the progress log (rubric criterion 2 rewards a justified, owner-assigned recovery plan).
 
 ---
 
