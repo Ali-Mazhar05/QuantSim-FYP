@@ -166,7 +166,8 @@ When the Oracle Cloud (or Hetzner) server exists:
 
 1. **Jenkins:** follow `ci/jenkins/README.md` and `ci/jenkins/secrets/README.md`.
 2. **Branches:** `develop` from `main`, then `test` and `acceptance` from `develop`.
-3. **GitHub repository settings:** default branch `develop`; protect `develop-poc` from
+3. **GitHub repository settings** (not enforced on a private repository with a free plan;
+   see [Known limitations](#known-limitations)): default branch `develop`; protect `develop-poc` from
    deletion and force pushes; protect the four environment branches:
 
    | Branch | Required checks | Reviews | Up to date | Linear history |
@@ -200,6 +201,17 @@ When the Oracle Cloud (or Hetzner) server exists:
 
 ## Known limitations
 
+- Branch protection is not enforced. QuantSim-FYP is a private repository on a free
+  GitHub plan, where branch protection rules and rulesets are not applied. The promotion
+  rules are followed by team convention instead: every change goes through a pull
+  request, a pull request is merged only when its Jenkins check is green, and a
+  promotion pull request is merged only when the previous environment's status
+  (`quantsim/dev-verified`, `quantsim/test-verified`, `quantsim/acceptance-signoff`) is
+  green on it. Nobody pushes directly to `develop`, `test`, `acceptance` or `main`, and
+  `develop-poc` is never changed or deleted. Jenkins still posts every status, so each
+  pull request shows whether the rules were met. The rules in
+  [One-time setup](#one-time-setup) apply as written if the repository is made public or
+  moved to a paid plan.
 - Jenkins can use the host's Docker socket, which is equivalent to root on that host, and
   builds run on the controller. Acceptable for one machine; a separate build agent is the
   next step.
