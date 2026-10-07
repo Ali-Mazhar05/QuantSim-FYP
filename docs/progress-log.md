@@ -7,6 +7,24 @@ repository or in Jenkins.
 ## 2026-10-07
 
 **Delivered**
+- **I1-10 – I1-14 Shared service template (`feature/service-template`, 9 commits, 75
+  tests).** The uv workspace and `libs/qs_template`, which every backend service builds
+  on:
+  - configuration from `QS_*` environment variables that fails fast when incomplete;
+    structured JSON logs with request id and user; RFC 9457 problem-details errors that
+    never leak internals; `/api/<service>/health` (with the build's content hash for the
+    smoke test) and `/ready` (database and dependency checks, 503 while one fails);
+    async database sessions that commit or roll back as a unit
+  - authentication: RS256 tokens verified in every service against the Platform
+    service's public keys (cached, rotation-aware, protected against refetch floods,
+    fail closed), role checks, and a shared Redis revocation list so deactivation and
+    role changes cut off existing tokens everywhere (FR-PLT-002..005)
+  - transactional outbox, idempotent consumers and Redpanda adapters with retries and a
+    dead-letter topic (NFR-REL-007, NFR-REL-008, NFR-OBS-003)
+  - database audit trail with before/after state, acting user and request id, deleted
+    rows kept, log refuses UPDATE, DELETE and TRUNCATE (FR-PLT-006..008, NFR-INT-005)
+  - Backend CI now covers `libs/` too and starts a throwaway PostgreSQL + TimescaleDB
+    and Redpanda for tests that need them
 - **I1-02 Centralised CI (in review, `feature/centralized-jenkins`).**
   - Builds moved off the Jenkins controller onto a dedicated SSH build agent container;
     the controller no longer has Docker access.
@@ -38,12 +56,22 @@ repository or in Jenkins.
 - GitHub sign-in configuration loads and redirects to GitHub; Caddy configuration valid.
 
 **Found and fixed**
+- asyncpg runs one SQL statement per call, which would also break Alembic migrations;
+  the audit installer now ships as single statements.
+- A Python helper inserted control characters into a shell script while editing it;
+  caught by review and removed.
 - Helper commands in `host.sh` ran `rclone` instead of a shell, which silently broke
   link detection and the state check. Found by the hand-over test; fixed before review.
 - The tunnel dropped on networks that block QUIC; switched to HTTP/2 over TCP 443.
 - An earlier pull request build was aborted after 45 minutes: Docker Desktop had stopped
   because the development laptop's disk was full. Not a pipeline fault; freeing disk
   space and rebuilding fixed it. Recorded as a risk in the plan.
+
+**Risk raised**
+- The development laptop's disk is nearly full (about 2 GB free). Docker Desktop has
+  already failed to start once for this reason; the infrastructure stack and service
+  images need roughly 5 GB more. Freeing space, or moving builds to the free Oracle
+  server, is now on the critical path.
 
 **Decided**
 - Laptop hosting rotates between members until an always-on server exists; the free
