@@ -16,6 +16,7 @@ no trailing spaces.
 | `sops_age_key` | Jenkins' age private key; its public half is in `.sops.yaml` | Already generated. **Back it up** somewhere safe outside this machine |
 | `agent_ssh_key` (+ `.pub`) | Key the controller uses to reach the build agent | Created by `init-env.sh`; copy it along with the others when moving hosts |
 | `github_oauth_client_id`, `github_oauth_client_secret` | **CI server only:** GitHub sign-in for Jenkins | The OAuth App described in `ci/jenkins/README.md` |
+| `r2_access_key_id`, `r2_secret_access_key` | **Shared hosting only:** access to the `quantsim-ci` R2 bucket that holds the hand-over state and the host lease | Cloudflare → R2 → Manage API tokens (see `ci/jenkins/README.md`) |
 
 ## GitHub App
 

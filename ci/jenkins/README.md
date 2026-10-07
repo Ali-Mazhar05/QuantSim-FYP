@@ -18,6 +18,7 @@ on clicks in the UI.
 | `Caddyfile` | HTTPS routes for Jenkins, DEV and TEST on the CI server |
 | `init-env.sh` | Prepares a host: agent SSH key, `.env`, secret check |
 | `bootstrap-server.sh` | Turns a fresh Ubuntu server into the CI server |
+| `host.sh`, `lease.sh` | Taking turns hosting: state hand-over through R2 and the host lease |
 | `backup.sh` | Nightly backup of Jenkins and the agent's recorded releases |
 | `secrets/` | Credential files, never committed (see `secrets/README.md`) |
 
@@ -31,8 +32,8 @@ anyone pushes ─▶ GitHub ─▶ Jenkins controller (schedules, never builds)
 ```
 
 - **One Jenkins at a time.** Whichever machine runs these containers is the team's CI
-  server. Two running at once would both build, deploy and post statuses, so stop one
-  before starting another.
+  server. Two running at once would both build, deploy and post statuses; `host.sh`
+  enforces one host through a lease.
 - **Pushes from anyone are built.** Jenkins only makes outbound calls to GitHub. It
   scans the repository every 2 minutes on a laptop (5 on the server, where GitHub's
   webhook also starts builds immediately).
@@ -41,42 +42,47 @@ anyone pushes ─▶ GitHub ─▶ Jenkins controller (schedules, never builds)
 - **While the host is off or asleep nothing builds.** Builds start once it is back.
   The CI server removes that limitation.
 
-## Host it on a laptop
+## Take turns hosting on laptops
 
-Any team member can host. Needs Docker Desktop with about 10 GB free disk and 4 GB
-memory for Docker.
-
-1. Get the secret files from whoever hosted before (over a private channel, never in
-   chat history or git) and put them in `ci/jenkins/secrets/`.
-2. From the repository root:
-   ```bash
-   ci/jenkins/init-env.sh
-   docker compose -f ci/jenkins/compose.yml up -d --build
-   ```
-3. Open http://localhost:8080 and sign in as `admin` (password in
-   `secrets/admin_password`).
-4. Keep the laptop awake while the team is working. In Docker Desktop turn on
-   **Start Docker Desktop when you sign in**; Jenkins then restarts by itself.
-
-**Let the team open Jenkins** (logs, approvals) from anywhere with a free tunnel:
+Any team member can host Jenkins, one at a time, and it stays the same whoever runs it:
+the same configuration (from the repository), the same job history and build numbers,
+the same recorded releases for rollback, and the same DEV and TEST images.
+`host.sh` hands Jenkins' state over through Cloudflare R2 and keeps a **host lease** there
+so two laptops never run Jenkins at once.
 
 ```bash
-docker compose -f ci/jenkins/compose.yml --profile tunnel up -d
-docker compose -f ci/jenkins/compose.yml logs tunnel | grep trycloudflare.com
+ci/jenkins/host.sh status    # who hosts Jenkins now, and its link
+ci/jenkins/host.sh start     # take over hosting on this laptop
+ci/jenkins/host.sh stop      # hand over: stop Jenkins here and upload its state
 ```
 
-Share the `https://<random>.trycloudflare.com` address. It changes whenever the tunnel
-restarts. Set `JENKINS_URL` in `ci/jenkins/.env` to it and run `up -d` again so build
-links on GitHub point there.
+- `start` refuses while someone else's lease is fresh (seen in the last 10 minutes). If
+  their laptop died without `stop`, wait 10 minutes or use `start --force`; anything
+  that changed on their machine since its last `stop` is lost.
+- `start` fetches the latest state if someone else hosted since, opens a free public
+  link (`https://<random>.trycloudflare.com`, shown by `status`), and rebuilds `develop`
+  and `test` so DEV and TEST come up on this laptop from the same images.
+- Always `stop` before closing the laptop for the day, so the next person gets your
+  latest state.
+- Everyone signs in as `admin` (password in `secrets/admin_password`).
 
-### Hand over to another member
+### One-time setup per laptop
+Needs Docker Desktop with about 10 GB free disk and 4 GB memory for Docker.
 
-1. Current host: `docker compose -f ci/jenkins/compose.yml down` (and back up if the
-   history matters: `ci/jenkins/backup.sh`).
-2. New host: steps 1–3 above. Jenkins rebuilds its whole configuration and rescans the
-   repository; build history starts fresh unless a backup is restored.
-3. The new host's DEV and TEST are empty until the next build of `develop` and `test`.
-   Re-run those two branches from the Jenkins UI to bring them up.
+1. Get the secret files from a teammate over a private channel and put them in
+   `ci/jenkins/secrets/` (see `secrets/README.md`), including the two R2 keys.
+2. From the repository root: `ci/jenkins/init-env.sh`
+3. In Docker Desktop turn on **Start Docker Desktop when you sign in**.
+
+### One-time setup for the team (Cloudflare R2, free)
+1. Cloudflare dashboard → R2 → create a bucket named `quantsim-ci`.
+2. R2 → Manage API tokens → create a token with **Object Read & Write** on that bucket
+   only. Save its Access Key ID and Secret Access Key as `secrets/r2_access_key_id` and
+   `secrets/r2_secret_access_key`, and share them with the team like the other secrets.
+
+### Hosting alone, without hand-over
+`docker compose -f ci/jenkins/compose.yml up -d --build` runs Jenkins on this machine
+without R2, the lease or the public link. Use it only when nobody else hosts.
 
 ## Host it on the CI server (always on, free)
 

@@ -171,10 +171,12 @@ One Jenkins serves the whole team; pushes from anyone, anywhere, are built by it
 | Host | When | Builds while… | Team access |
 |---|---|---|---|
 | **CI server** (Oracle Cloud Always Free, `ci/jenkins/bootstrap-server.sh`) | The target setup | always | `https://ci.<ci-domain>`, GitHub sign-in; webhooks start builds within seconds |
-| **A team member's laptop** (`ci/jenkins/init-env.sh`) | Until the server exists | that laptop is on and awake | Results on every pull request; logs and approvals through the optional tunnel link |
+| **Team members' laptops, taking turns** (`ci/jenkins/host.sh start / stop`) | Until the server exists | the current host's laptop is on and awake | Results on every pull request; `host.sh status` gives anyone the current Jenkins link |
 
-Only one may run at a time, and moving between them takes a few commands because the
-whole configuration lives in `ci/jenkins/`. Builds run on a dedicated agent container,
+Only one may run at a time. On laptops `host.sh` enforces that with a lease and hands
+Jenkins' history and recorded releases from one host to the next through Cloudflare R2,
+so Jenkins stays the same whoever runs it; its configuration always comes from
+`ci/jenkins/`. Builds run on a dedicated agent container,
 never on the Jenkins controller. Setup and handover steps are in `ci/jenkins/README.md`.
 
 ## One-time setup
