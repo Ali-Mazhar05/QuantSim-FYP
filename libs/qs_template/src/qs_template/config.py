@@ -30,6 +30,13 @@ class ServiceSettings(BaseSettings):
     db_pool_size: int = Field(default=5, ge=1, le=50)
     db_pool_timeout_seconds: float = Field(default=5.0, gt=0)
 
+    # Token verification (qs_template.auth). The Platform service publishes its public
+    # signing keys at the JWKS URL; every other service verifies tokens against them.
+    auth_jwks_url: str | None = None
+    auth_issuer: str = "quantsim-platform"
+    auth_audience: str = "quantsim"
+    auth_leeway_seconds: int = Field(default=30, ge=0, le=300)
+
     @property
     def api_prefix(self) -> str:
         """Every route of a service lives under /api/<service-name>."""
