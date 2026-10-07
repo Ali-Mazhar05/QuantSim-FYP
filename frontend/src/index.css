@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+  --color-bg-0: #ffffff;
+  --color-bg-1: #ffffff;
+  --color-bg-2: #f6f6f6;
+  --color-bg-3: #ececec;
+  --color-border: #e2e2e2;
+  --color-border-strong: #cfcfcf;
+  /* Boundary for interactive chips/controls; >=3:1 on white so the outline
+     itself identifies the control (WCAG 1.4.11), unlike the hairline above. */
+  --color-border-control: #909097;
+
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #52525a;
+  --color-text-muted: #6b6b73;
+
+  /* Accent is split by job: -accent is a FILL (dark text sits on it),
+     -accent-hover is its pressed/hover fill, and -accent-strong is the INK
+     used whenever the brand teal has to be read as text, an icon, or a
+     stroke. Never swap the two - the fill fails contrast as text, and the
+     ink fails as a background for black text. */
+  --color-accent: #67caaf;
+  --color-accent-hover: #4bb599;
+  --color-accent-strong: #0b6f5b;
+
+  /* Informational/in-progress states. Deliberately blue, not teal: the old
+     teal "info" tone was indistinguishable from the green "success" tone. */
+  --color-info: #1a56c4;
+
+  /* Risk ramp. Every step is >=4.5:1 on white and on its own 10% tint, and
+     each pair is >=20 deltaE apart so the steps stay separable. "moderate"
+     is amber-orange rather than yellow - yellow cannot reach 4.5:1 without
+     turning brown. */
+  --color-risk-low: #137536;
+  --color-risk-moderate: #8a6100;
+  --color-risk-elevated: #a85205;
+  --color-risk-high: #b81f1a;
+  --color-risk-severe: #a10f3d;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg-0);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-1);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #47474a;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.qs-panel {
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
+}
+
+.qs-panel-2 {
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+}
+
+.qs-scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@keyframes qs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.qs-live-dot {
+  animation: qs-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes qs-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.qs-fade-in {
+  animation: qs-fade-in 0.25s ease-out;
+}
+
+@keyframes qs-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.qs-slide-in {
+  animation: qs-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
