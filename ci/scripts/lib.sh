@@ -66,6 +66,14 @@ component_var() {
   printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
 }
 
+# Absolute path of an existing file, in a form both bash and the docker CLI accept
+# (C:/... on Windows, /... elsewhere)
+abs_path() {
+  local dir
+  dir="$(cd "$(dirname "$1")" && { pwd -W 2>/dev/null || pwd; })"
+  printf '%s/%s' "$dir" "$(basename "$1")"
+}
+
 image_repo() { printf '%s-%s' "$IMAGE_PREFIX" "$1"; }
 
 project_version() {
@@ -131,6 +139,7 @@ run_in_image() {
 # Pinned toolchain images used by the CI scripts
 NODE_IMAGE="node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402"
 UV_IMAGE="ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58"
+SOPS_IMAGE="ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea"
 TIMESCALE_IMAGE="timescale/timescaledb:2.22.1-pg17@sha256:fba60021a224479e174ae1ec577c1a0576d5185b09fe9e622f1d19e4bf5bab0d"
 
 # A name unique to this build, safe for Docker objects
