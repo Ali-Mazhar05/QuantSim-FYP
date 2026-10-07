@@ -24,6 +24,8 @@ hotfix/*      branched from main, checked and built, merged into main and back i
 | ACC | `acceptance` | Cloudflare Pages, branch `acceptance` | `https://acceptance.<project>.pages.dev` |
 | PROD | `main` | Cloudflare Pages, production branch | `https://<project>.pages.dev` |
 
+The Jenkins host is whichever machine runs `ci/jenkins/`: the always-on CI server, or
+a team member's laptop while there is none. See [Where Jenkins runs](#where-jenkins-runs).
 Each environment's settings live in `deploy/env/<env>.env`. ACC and PROD currently host
 only the frontend; backend services join them once a server exists (see
 [Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
@@ -97,15 +99,15 @@ Branch `hotfix/<name>` from `main`, open a pull request into `main`, and after r
 merge `main` back into `develop`.
 
 ### Roll back by hand
-From the Jenkins container:
+From the build agent on the Jenkins host:
 
 ```bash
-docker compose -f ci/jenkins/compose.yml exec jenkins bash
-cd /var/jenkins_home/workspace/<a checkout of the repository>
+docker compose -f ci/jenkins/compose.yml exec -u jenkins agent bash
+cd /home/jenkins/agent/workspace/<a checkout of the repository>
 ci/scripts/rollback.sh <env> previous   # the release before the current one
 ```
 
-Recorded releases are in `/var/jenkins_home/releases/<env>/`.
+Recorded releases are in `/home/jenkins/agent/releases/<env>/` on the agent.
 
 ### Change a secret
 Secrets are SOPS-encrypted per environment in `deploy/secrets/<env>.enc.env`.
@@ -162,6 +164,19 @@ When the Oracle Cloud (or Hetzner) server exists:
    `SMOKE_BASE_URL` to the server's address.
 4. If the server is ARM, set `PLATFORMS=linux/amd64,linux/arm64` for image builds.
 
+## Where Jenkins runs
+
+One Jenkins serves the whole team; pushes from anyone, anywhere, are built by it.
+
+| Host | When | Builds while… | Team access |
+|---|---|---|---|
+| **CI server** (Oracle Cloud Always Free, `ci/jenkins/bootstrap-server.sh`) | The target setup | always | `https://ci.<ci-domain>`, GitHub sign-in; webhooks start builds within seconds |
+| **A team member's laptop** (`ci/jenkins/init-env.sh`) | Until the server exists | that laptop is on and awake | Results on every pull request; logs and approvals through the optional tunnel link |
+
+Only one may run at a time, and moving between them takes a few commands because the
+whole configuration lives in `ci/jenkins/`. Builds run on a dedicated agent container,
+never on the Jenkins controller. Setup and handover steps are in `ci/jenkins/README.md`.
+
 ## One-time setup
 
 1. **Jenkins:** follow `ci/jenkins/README.md` and `ci/jenkins/secrets/README.md`.
@@ -212,13 +227,12 @@ When the Oracle Cloud (or Hetzner) server exists:
   pull request shows whether the rules were met. The rules in
   [One-time setup](#one-time-setup) apply as written if the repository is made public or
   moved to a paid plan.
-- Jenkins can use the host's Docker socket, which is equivalent to root on that host, and
-  builds run on the controller. Acceptable for one machine; a separate build agent is the
-  next step.
+- The build agent can use the host's Docker, which is equivalent to root on that host;
+  keep the host dedicated to CI. The controller itself has no Docker access.
 - The DEV and TEST frontends stay up on Cloudflare Pages, but their backend services
-  and Jenkins share one machine and stop when it is off.
-- Without a public URL, GitHub webhooks cannot reach Jenkins; it scans the repository
-  every 2 minutes instead.
+  and Jenkins share the Jenkins host. On a laptop host they stop when the laptop is off.
+- On a laptop host GitHub webhooks cannot reach Jenkins, so it scans the repository every
+  2 minutes instead.
 - The frontend was imported from `develop-poc` with a subtree merge. `git log` shows the
   full POC history, but per-file history (`git log -- frontend/src/...`) starts at the
   import.
