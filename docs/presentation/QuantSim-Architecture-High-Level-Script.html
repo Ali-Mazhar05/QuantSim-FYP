@@ -1,0 +1,506 @@
+<title>QuantSim Architecture — High Level</title>
+<style>
+  :root{
+    --ink:#14181d; --ink-2:#3d4650; --ink-3:#6b7683; --rule:#e2e6ea; --rule-2:#c9d0d7;
+    --paper:#ffffff; --paper-2:#f7f9fa; --accent:#0b6f5b; --accent-soft:#e8f4f0;
+    --warn:#a85205; --warn-soft:#fdf4ec; --stop:#b81f1a; --stop-soft:#fcf0ef;
+    --fill:#f2f5f7;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:Georgia,"Iowan Old Style",serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e9eef2; --ink-2:#b6c1cb; --ink-3:#828e99; --rule:#252c33; --rule-2:#3b444d;
+      --paper:#12161a; --paper-2:#0d1114; --accent:#4fc0a3; --accent-soft:#102420;
+      --warn:#dd9345; --warn-soft:#241a10; --stop:#e2756e; --stop-soft:#241514;
+      --fill:#181d22;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e9eef2; --ink-2:#b6c1cb; --ink-3:#828e99; --rule:#252c33; --rule-2:#3b444d;
+    --paper:#12161a; --paper-2:#0d1114; --accent:#4fc0a3; --accent-soft:#102420;
+    --warn:#dd9345; --warn-soft:#241a10; --stop:#e2756e; --stop-soft:#241514;
+    --fill:#181d22;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper-2);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0}
+  .wrap{max-width:980px;margin:0 auto;padding:0 32px 100px;background:var(--paper)}
+
+  .mast{padding:56px 0 34px;border-bottom:3px solid var(--ink)}
+  .mast .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .mast h1{font:600 38px/1.12 var(--serif);margin:14px 0 12px;letter-spacing:-.02em;text-wrap:balance}
+  .mast .sub{font-size:17px;color:var(--ink-2);max-width:62ch}
+  .meta{display:flex;flex-wrap:wrap;gap:0 40px;margin-top:24px;font:13px/1.7 var(--mono);color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:600}
+
+  .strip{display:flex;margin:34px 0 0;border:1px solid var(--rule);border-radius:4px;overflow:hidden;font:11px/1 var(--mono)}
+  .strip a{flex:1;text-align:center;padding:12px 4px;color:var(--ink-2);text-decoration:none;border-right:1px solid var(--rule);background:var(--paper-2)}
+  .strip a:last-child{border-right:none}
+  .strip a b{display:block;color:var(--ink);font-size:12px;margin-bottom:4px}
+  .strip a:hover,.strip a:focus-visible{background:var(--accent-soft);color:var(--accent);outline:none}
+
+  .figblock{margin:44px 0 0;padding:26px 0 0;border-top:1px solid var(--rule)}
+  .figblock h2{font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 18px}
+  figure{margin:0}
+  .canvas{overflow-x:auto;border:1px solid var(--rule);border-radius:5px;background:var(--paper);padding:14px}
+  .canvas svg{width:100%;min-width:760px;height:auto;display:block}
+  figcaption{font:12px/1.6 var(--mono);color:var(--ink-3);margin-top:10px;max-width:80ch}
+  figcaption b{color:var(--ink-2);font-weight:600}
+
+  .box{fill:var(--fill);stroke:var(--rule-2);stroke-width:1}
+  .box-edge{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.4}
+  .box-bus{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.4}
+  .chip{fill:var(--paper);stroke:var(--rule-2);stroke-width:1}
+  .t{fill:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .t-name{font-size:13px;font-weight:600}
+  .t-sub{font-size:10px;fill:var(--ink-3)}
+  .t-mono{font-family:var(--mono);font-size:10px;fill:var(--ink-2)}
+  .t-hdr{font-family:var(--mono);font-size:9px;letter-spacing:.13em;fill:var(--ink-3)}
+  .t-big{font-size:15px;font-weight:600}
+  .t-lbl{font-family:var(--mono);font-size:9.5px;fill:var(--ink-3)}
+  .badge{fill:var(--accent)}
+  .badge-t{font-family:var(--mono);font-size:10px;font-weight:700;fill:var(--paper)}
+  .sync{stroke:var(--accent);stroke-width:1.6;fill:none}
+  .async{stroke:var(--warn);stroke-width:1.5;fill:none;stroke-dasharray:5 4}
+  .hair{stroke:var(--rule-2);stroke-width:1;fill:none}
+  .ah-sync{fill:var(--accent)}
+  .ah-async{fill:var(--warn)}
+
+  .note{border:1px solid var(--rule-2);border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:22px 0 0;font-size:14.5px;line-height:1.62;color:var(--ink-2)}
+  .note b{color:var(--ink);font-weight:600}
+
+  .timeline{margin-top:52px}
+  .stop{display:grid;grid-template-columns:86px 1fr;gap:0 22px;padding:30px 0;border-top:1px solid var(--rule);scroll-margin-top:16px}
+  .stop:first-child{border-top:3px solid var(--ink);padding-top:34px}
+  .stop .clock{font:600 13px/1.3 var(--mono);color:var(--accent);padding-top:2px}
+  .stop .clock .dur{display:block;margin-top:5px;font:11px/1 var(--mono);color:var(--ink-3);font-weight:400}
+  .stop .body{min-width:0}
+  .stop h3{font:600 22px/1.2 var(--serif);margin:0 0 3px;letter-spacing:-.01em}
+  .stop .module{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+  .stop .where{font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 16px}
+  .stop .where b{color:var(--ink-2);font-weight:600}
+
+  .vo{border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 16px}
+  .vo .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px}
+  .vo p{font:17px/1.62 var(--serif);color:var(--ink);margin:0 0 10px}
+  .vo p:last-child{margin-bottom:0}
+  .point{display:block;font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 10px}
+  .point::before{content:"\25B8 ";color:var(--accent)}
+
+  .rem{border:1px solid var(--rule);border-radius:4px;padding:13px 18px;background:var(--paper-2)}
+  .rem .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:9px}
+  .rem ul{margin:0;padding-left:18px}
+  .rem li{margin-bottom:5px;font-size:14px;line-height:1.5;color:var(--ink-2)}
+  .rem li:last-child{margin-bottom:0}
+  .rem li b{color:var(--ink);font-weight:600}
+
+  .cut{border:1px solid var(--rule-2);border-left:4px solid var(--warn);background:var(--warn-soft);padding:12px 18px;border-radius:0 4px 4px 0;margin:22px 0 0;font-size:14px;line-height:1.6;color:var(--ink-2)}
+  .cut b{color:var(--warn)}
+
+  table.inv{width:100%;border-collapse:collapse;margin-top:22px;font-size:13.5px}
+  table.inv th{text-align:left;font:600 10px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);padding:0 12px 9px 0;border-bottom:1px solid var(--rule-2)}
+  table.inv td{padding:9px 12px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-2);vertical-align:top}
+  table.inv td:first-child{font:600 12px var(--mono);color:var(--accent);white-space:nowrap}
+  table.inv td b{color:var(--ink);font-weight:600}
+  table.inv tr:last-child td{border-bottom:none}
+
+  .end{margin-top:56px;padding-top:24px;border-top:3px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+  .end a{color:var(--accent)}
+
+  @media (max-width:640px){
+    .wrap{padding:0 18px 70px}
+    .stop{grid-template-columns:1fr;gap:6px 0}
+    .stop .clock{padding-top:0}
+    .strip{flex-wrap:wrap}
+    .strip a{flex:1 1 30%}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">Presenter Script &middot; Part 1 of 2</div>
+  <h1>QuantSim Architecture &mdash; The High-Level View</h1>
+  <p class="sub">A three-minute account of how QuantSim is put together: eight modules, each built as a
+  modular monolith on the inside and deployed as an independent service on the outside, joined by one
+  front door and one event backbone. This is the talk you give before anyone asks about a table or a
+  topic name.</p>
+  <div class="meta">
+    <div><b>Total runtime</b><br>3:00, seven beats</div>
+    <div><b>Figure</b><br>One &mdash; the five deployment tiers</div>
+    <div><b>Pace</b><br>~150 words / minute</div>
+    <div><b>Companion</b><br>Low-level script, part 2</div>
+  </div>
+</header>
+
+<div class="strip">
+  <a href="#s1"><b>0:00</b>The claim</a>
+  <a href="#s2"><b>0:20</b>Client &amp; edge</a>
+  <a href="#s3"><b>0:45</b>The eight</a>
+  <a href="#s4"><b>1:25</b>Inside vs out</a>
+  <a href="#s5"><b>1:55</b>The backbone</a>
+  <a href="#s6"><b>2:25</b>Own data</a>
+  <a href="#s7"><b>2:45</b>Payoff</a>
+</div>
+
+<div class="figblock">
+  <h2>Figure A &mdash; System view: five deployment tiers</h2>
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1000 700" role="img" aria-label="QuantSim system architecture: a browser talks over HTTPS to a single API gateway, which routes to eight autonomous services, each owning its own database; the services exchange asynchronous events over a Kafka backbone drawn beside the synchronous request path, and the Dashboard service pushes live updates back to the browser over WebSocket.">
+        <defs>
+          <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-sync" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+          <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="ah-async" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <text class="t-hdr" x="20" y="40">TIER 1 &middot; CLIENT</text>
+        <text class="t-hdr" x="200" y="40">TIER 2 &middot; EDGE</text>
+        <text class="t-hdr" x="340" y="40">TIER 3 &middot; SERVICES + TIER 5 &middot; ONE DATABASE EACH</text>
+        <text class="t-hdr" x="760" y="40">TIER 4 &middot; INTEGRATION</text>
+
+        <text class="t-hdr" x="20" y="116">LEGEND</text>
+        <line class="sync" x1="22" y1="140" x2="56" y2="140" marker-end="url(#ahs)"/>
+        <text class="t-lbl" x="64" y="144">synchronous request</text>
+        <line class="async" x1="22" y1="168" x2="56" y2="168" marker-end="url(#aha)"/>
+        <text class="t-lbl" x="64" y="172">asynchronous event</text>
+        <text class="t-lbl" x="64" y="188">and server push</text>
+
+        <rect class="box-edge" x="20" y="300" width="150" height="78" rx="4"/>
+        <text class="t t-name" x="95" y="328" text-anchor="middle">Browser (SPA)</text>
+        <text class="t t-sub" x="95" y="346" text-anchor="middle">no business logic</text>
+        <text class="t t-sub" x="95" y="362" text-anchor="middle">no database access</text>
+
+        <line class="sync" x1="170" y1="339" x2="196" y2="339" marker-end="url(#ahs)"/>
+        <text class="t-lbl" x="183" y="331" text-anchor="middle" style="font-size:8px">HTTPS</text>
+
+        <rect class="box-edge" x="200" y="56" width="110" height="566" rx="4"/>
+        <g transform="rotate(-90 255 339)">
+          <text class="t t-big" x="255" y="322" text-anchor="middle">API Gateway</text>
+          <text class="t t-sub" x="255" y="342" text-anchor="middle">TLS &middot; verify JWT &middot; rate limit &middot; route by path prefix</text>
+          <text class="t-mono" x="255" y="358" text-anchor="middle">the only public address</text>
+        </g>
+
+        <rect class="box" x="340" y="56" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="66" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="79.5" text-anchor="middle">M0</text>
+        <text class="t t-name" x="392" y="82">Platform / Identity</text>
+        <text class="t t-sub" x="392" y="99">API only &mdash; issues every token</text>
+        <rect class="chip" x="556" y="76" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="91" text-anchor="middle">platform_db</text>
+        <line class="sync" x1="310" y1="87" x2="336" y2="87" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="87" x2="754" y2="87" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="128" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="138" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="151.5" text-anchor="middle">M1</text>
+        <text class="t t-name" x="392" y="154">Market Data</text>
+        <text class="t t-sub" x="392" y="171">+ scheduler &mdash; cleaning is a gate</text>
+        <rect class="chip" x="556" y="148" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="163" text-anchor="middle">market_db</text>
+        <line class="sync" x1="310" y1="159" x2="336" y2="159" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="159" x2="754" y2="159" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="200" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="210" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="223.5" text-anchor="middle">M2</text>
+        <text class="t t-name" x="392" y="226">Simulation</text>
+        <text class="t t-sub" x="392" y="243">+ CPU workers &mdash; Monte Carlo</text>
+        <rect class="chip" x="556" y="220" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="235" text-anchor="middle">simulation_db</text>
+        <line class="sync" x1="310" y1="231" x2="336" y2="231" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="231" x2="754" y2="231" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="272" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="282" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="295.5" text-anchor="middle">M3</text>
+        <text class="t t-name" x="392" y="298">Trading</text>
+        <text class="t t-sub" x="392" y="315">+ engine worker &mdash; event-sourced</text>
+        <rect class="chip" x="556" y="292" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="307" text-anchor="middle">trading_db</text>
+        <line class="sync" x1="310" y1="303" x2="336" y2="303" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="303" x2="754" y2="303" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="344" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="354" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="367.5" text-anchor="middle">M4</text>
+        <text class="t t-name" x="392" y="370">ML</text>
+        <text class="t t-sub" x="392" y="387">+ GPU worker &mdash; registry, features</text>
+        <rect class="chip" x="556" y="364" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="379" text-anchor="middle">ml_db</text>
+        <line class="sync" x1="310" y1="375" x2="336" y2="375" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="375" x2="754" y2="375" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="416" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="426" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="439.5" text-anchor="middle">M5</text>
+        <text class="t t-name" x="392" y="442">Risk &amp; TDA</text>
+        <text class="t t-sub" x="392" y="459">+ CPU workers &mdash; stress, homology</text>
+        <rect class="chip" x="556" y="436" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="451" text-anchor="middle">risk_db</text>
+        <line class="sync" x1="310" y1="447" x2="336" y2="447" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="447" x2="754" y2="447" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="488" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="498" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="511.5" text-anchor="middle">M6</text>
+        <text class="t t-name" x="392" y="514">Explainability</text>
+        <text class="t t-sub" x="392" y="531">+ LLM worker &mdash; SHAP, narration</text>
+        <rect class="chip" x="556" y="508" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="523" text-anchor="middle">xai_db</text>
+        <line class="sync" x1="310" y1="519" x2="336" y2="519" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="519" x2="754" y2="519" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box" x="340" y="560" width="340" height="62" rx="4"/>
+        <rect class="badge" x="352" y="570" width="30" height="19" rx="3"/>
+        <text class="badge-t" x="367" y="583.5" text-anchor="middle">M7</text>
+        <text class="t t-name" x="392" y="586">Dashboard &amp; Alerting</text>
+        <text class="t t-sub" x="392" y="603">+ evaluator &mdash; owns client conns</text>
+        <rect class="chip" x="556" y="580" width="112" height="22" rx="3"/>
+        <text class="t-mono" x="612" y="595" text-anchor="middle">dashboard_db</text>
+        <line class="sync" x1="310" y1="591" x2="336" y2="591" marker-end="url(#ahs)"/>
+        <line class="async" x1="686" y1="591" x2="754" y2="591" marker-start="url(#aha)" marker-end="url(#aha)"/>
+
+        <rect class="box-bus" x="760" y="56" width="220" height="566" rx="4"/>
+        <text class="t t-big" x="870" y="92" text-anchor="middle">Kafka</text>
+        <text class="t t-sub" x="870" y="110" text-anchor="middle">event backbone</text>
+        <line class="hair" x1="776" y1="130" x2="964" y2="130"/>
+        <text class="t-mono" x="776" y="158">streaming events</text>
+        <text class="t t-sub" x="776" y="175">ticks, order lifecycle &mdash;</text>
+        <text class="t t-sub" x="776" y="190">ordered per partition key</text>
+        <text class="t-mono" x="776" y="224">domain events</text>
+        <text class="t t-sub" x="776" y="241">sim.completed, prediction.ready,</text>
+        <text class="t t-sub" x="776" y="256">stress.completed, regime.transition</text>
+        <text class="t-mono" x="776" y="290">read-model feeds</text>
+        <text class="t t-sub" x="776" y="307">ML feature materialisation and</text>
+        <text class="t t-sub" x="776" y="322">Dashboard widget projections</text>
+        <line class="hair" x1="776" y1="352" x2="964" y2="352"/>
+        <text class="t-mono" x="776" y="380" style="fill:var(--warn)">off the request path</text>
+        <text class="t t-sub" x="776" y="399">Nothing a user waits on</text>
+        <text class="t t-sub" x="776" y="414">traverses this log. It carries</text>
+        <text class="t t-sub" x="776" y="429">facts between services &mdash; never</text>
+        <text class="t t-sub" x="776" y="444">a service to its own database.</text>
+        <line class="hair" x1="776" y1="472" x2="964" y2="472"/>
+        <text class="t t-sub" x="776" y="500">acks=all, RF &#8805; 3, min ISR 2.</text>
+        <text class="t t-sub" x="776" y="518">Delivery is at-least-once, so</text>
+        <text class="t t-sub" x="776" y="536">every consumer is idempotent.</text>
+        <text class="t t-sub" x="776" y="562">Same broker in dev and prod &mdash;</text>
+        <text class="t t-sub" x="776" y="580">no substitution to hide bugs.</text>
+
+        <rect class="chip" x="700" y="638" width="280" height="24" rx="3"/>
+        <text class="t-mono" x="712" y="654">Redis &mdash; one logical DB per service</text>
+        <rect class="chip" x="700" y="668" width="280" height="24" rx="3"/>
+        <text class="t-mono" x="712" y="684">Object store &mdash; per-service prefix</text>
+
+        <path class="async" d="M510,622 L510,664 L95,664 L95,382" marker-end="url(#aha)"/>
+        <text class="t-lbl" x="302" y="678" text-anchor="middle">WebSocket / SSE &mdash; live progress and alerts, pushed by M7 alone</text>
+      </svg>
+    </div>
+    <figcaption><b>What the picture claims.</b> Solid teal is the path a user waits on: browser &rarr;
+    one gateway &rarr; exactly one owning service &rarr; that service's own database. Dashed amber is
+    everything asynchronous. Kafka is drawn beside that path, not beneath it &mdash; a request never
+    traverses the log to reach data it already owns. Every service sits on the same rung: there is no
+    service-of-services and no shared database in the middle.</figcaption>
+  </figure>
+
+  <div class="note">
+    <b>On &ldquo;modular monolith with microservices&rdquo;.</b> The two words describe two zoom levels
+    and both are true at once. <b>Outside</b>, the eight modules are eight independently deployable
+    services with eight databases &mdash; the microservice half, and Figure A is its picture.
+    <b>Inside</b>, each service is a strict four-layer modular monolith generated from one shared
+    template, so all eight are laid out identically. Nine releasable units in total &mdash; eight
+    services plus the gateway &mdash; which expand into sixteen running deployments, because seven of
+    the eight ship a worker alongside their API.
+  </div>
+</div>
+
+<div class="cut">
+  <b>Before you start:</b> have Figure A on screen, full width, before the clock runs. Do not narrate
+  the diagram appearing. You point at four things across three minutes &mdash; the gateway column, the
+  service stack, the Kafka rail, and the column of database chips &mdash; so have a pointer ready and
+  use it exactly four times.
+</div>
+
+<div class="timeline">
+
+  <div class="stop" id="s1">
+    <div class="clock">0:00<span class="dur">0:20</span></div>
+    <div class="body">
+      <div class="module">Opening &middot; the claim</div>
+      <h3>One sentence, then the diagram</h3>
+      <p class="where"><b>Point at</b> nothing yet &mdash; let them read the shape while you talk</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>QuantSim simulates markets, replays strategies against them, and scores the resulting
+        portfolio for risk three different ways. That workload is not one shape. Some of it is a user
+        clicking a button and waiting; some of it is an hour of persistent homology on a CPU node. So
+        the architecture's whole job is to stop those two kinds of work from interfering with each
+        other. Eight modules, eight services, one front door, one event log.</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Hold the line</span>
+        <ul>
+          <li>Do not list the eight yet. You name them at 0:45, and naming them twice costs twenty seconds you do not have.</li>
+          <li>If only one phrase lands in this beat, make it <b>&ldquo;interactive work and compute work must not interfere.&rdquo;</b> Every later decision is downstream of it.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s2">
+    <div class="clock">0:20<span class="dur">0:25</span></div>
+    <div class="body">
+      <div class="module">Tiers 1 and 2 &middot; client and edge</div>
+      <h3>The browser knows one address</h3>
+      <p class="where"><b>Point at</b> the browser box, then run your finger up the gateway column</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Tier one is a single-page app with no business logic and no database access. What matters is
+        that it talks to exactly one origin &mdash; the browser never addresses a service directly, so
+        we can split or merge services without ever shipping a frontend release.</p>
+        <p>Tier two is the gateway, the only component with a public address. It terminates TLS,
+        verifies the token, rate-limits, and routes each path prefix to the owning service. What it
+        deliberately does not do is authorise. Authentication happens once at the edge; whether this
+        user may run that particular action is decided inside the service that owns the action, because
+        a gateway-only check would implicitly trust anything arriving by another route.</p>
+      </div>
+      <span class="point">If asked &ldquo;why not expose the services directly?&rdquo; &mdash; that is eight public surfaces, eight TLS configs, eight auth implementations, and CORS sprawl.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="s3">
+    <div class="clock">0:45<span class="dur">0:40</span></div>
+    <div class="body">
+      <div class="module">Tier 3 &middot; the eight modules</div>
+      <h3>Why these eight and not some other eight</h3>
+      <p class="where"><b>Point at</b> the service stack &mdash; one sweep down it, M0 to M7</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Tier three is eight autonomous services, and the split is by bounded context, not by
+        technical layer. Platform owns identity and audit. Market Data owns instruments, prices, news,
+        and derived series like rolling correlation. Simulation owns calibration and Monte Carlo.
+        Trading owns the ordered log of what a strategy actually did. ML owns the model registry and the
+        feature store. Risk and TDA owns stress scenarios and the topology pipeline. Explainability
+        turns those outputs into attributions and plain English. Dashboard owns every widget, every
+        alert rule, and every open browser connection.</p>
+        <p>The test each boundary had to pass was simple: can this thing change its data model without
+        asking anyone's permission? Risk and TDA is the clearest yes. Persistent homology needs Ripser
+        and GUDHI &mdash; heavyweight native libraries nothing else in the platform wants &mdash; and it
+        is the most research-volatile code we have. As its own service it ships its own image and
+        redeploys mid-experiment without touching trade execution.</p>
+      </div>
+      <table class="inv">
+        <tr><th>Module</th><th>Owns</th><th>Compute profile</th></tr>
+        <tr><td>M0</td><td><b>Platform / Identity</b> &mdash; accounts, roles, scope grants, audit sink</td><td>I/O-bound, API only</td></tr>
+        <tr><td>M1</td><td><b>Market Data</b> &mdash; bars, news, returns, volatility, correlation, replay sessions</td><td>I/O-bound, scheduled</td></tr>
+        <tr><td>M2</td><td><b>Simulation</b> &mdash; calibrations, Monte Carlo runs, paths, run statistics</td><td>CPU-bound, bursty</td></tr>
+        <tr><td>M3</td><td><b>Trading</b> &mdash; strategies, portfolios, the trade-event log, orders, fills</td><td>Event-sequenced</td></tr>
+        <tr><td>M4</td><td><b>ML</b> &mdash; model registry, point-in-time feature store, predictions</td><td>CPU/GPU, bursty</td></tr>
+        <tr><td>M5</td><td><b>Risk &amp; TDA</b> &mdash; stress runs, distance matrices, persistence, topological score</td><td>CPU-bound</td></tr>
+        <tr><td>M6</td><td><b>Explainability</b> &mdash; SHAP, contribution, risk decomposition, narration</td><td>I/O-bound (LLM)</td></tr>
+        <tr><td>M7</td><td><b>Dashboard &amp; Alerting</b> &mdash; read models, layouts, alert rules and triggers</td><td>Read-heavy</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="stop" id="s4">
+    <div class="clock">1:25<span class="dur">0:30</span></div>
+    <div class="body">
+      <div class="module">The style decision</div>
+      <h3>Modular monolith inside, microservice outside</h3>
+      <p class="where"><b>Point at</b> any single service box &mdash; and say &ldquo;all eight look like this&rdquo;</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Here is the part people usually ask about, so I will get ahead of it. We are three people
+        running eight services, and eight services built eight different ways would be unmaintainable.
+        So every service is generated from one shared template and differs only in its domain layer. The
+        template fixes the internal layering, the framework, the health probes, structured logging,
+        tracing, the outbox and its drain, the resilient outbound client, the Kafka consumer wrapper,
+        the RBAC dependency, and the migration setup.</p>
+        <p>That is the modular monolith half of the answer: inside any one of these boxes is a clean
+        four-layer application, and the layering is identical in all eight. Microservices is what
+        happens at the boundary &mdash; separate image, separate database, separate pipeline, separate
+        scaling policy. Anyone who has worked in one service can navigate any other, and a cross-cutting
+        fix is made once instead of eight times.</p>
+      </div>
+      <span class="point">This beat is your defence against &ldquo;isn't this over-engineered for three people?&rdquo; &mdash; answer it before it is asked.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="s5">
+    <div class="clock">1:55<span class="dur">0:30</span></div>
+    <div class="body">
+      <div class="module">Tier 4 &middot; integration</div>
+      <h3>Kafka sits beside the request path, not under it</h3>
+      <p class="where"><b>Point at</b> the amber rail &mdash; then trace one solid teal arrow to show what does <em>not</em> touch it</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Tier four is Kafka, and its position on this diagram is a deliberate correction. An earlier
+        draft placed the event backbone as a layer between the domain and the data-access layer &mdash;
+        every request passing through a log on the way to its own database. That makes writes slower and
+        reads indirect, and it means a broker outage stops a service reading data it already owns.</p>
+        <p>So Kafka sits to the side. It carries three families of traffic: high-volume streams like
+        ticks and order events, coarse domain facts other services react to, and the feeds that keep
+        local read models current. Simulation does not know Dashboard exists &mdash; it announces that a
+        run completed, and Dashboard reacts. Delivery is at-least-once, which means every consumer in
+        the system is idempotent. That is not an optimisation; it is a precondition.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s6">
+    <div class="clock">2:25<span class="dur">0:20</span></div>
+    <div class="body">
+      <div class="module">Tier 5 &middot; data</div>
+      <h3>Eight databases, and the bill that comes with them</h3>
+      <p class="where"><b>Point at</b> the column of database chips &mdash; one sweep, top to bottom</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>Each service owns one database and holds credentials to no other. This is the decision that
+        actually separates microservices from a modular monolith, and it is the expensive one. There are
+        no cross-service joins and no distributed transactions. Any view spanning two services is either
+        assembled by the caller or maintained as a local projection, and consistency across the eight is
+        eventual rather than transactional. We are not arguing that cost away &mdash; the low-level talk
+        is largely about the machinery that makes it survivable.</p>
+      </div>
+      <span class="point">Locally these are eight logical databases in one Postgres container, each with its own role &mdash; so ownership is enforced by privilege, not by good manners.</span>
+    </div>
+  </div>
+
+  <div class="stop" id="s7">
+    <div class="clock">2:45<span class="dur">0:15</span></div>
+    <div class="body">
+      <div class="module">Close</div>
+      <h3>What the shape buys</h3>
+      <p class="where"><b>Point at</b> nothing &mdash; look at the room</p>
+      <div class="vo">
+        <span class="lbl">Voiceover</span>
+        <p>So: a change to the TDA pipeline cannot break trade execution. The three compute-heavy
+        services scale, and fail, independently of the interactive path. A fault degrades one capability
+        instead of the whole application. Eight modules, nine releasable units, sixteen running
+        deployments &mdash; and one shared template that keeps all of it learnable by three people.</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Likely first questions</span>
+        <ul>
+          <li><b>&ldquo;Why not a modular monolith end to end?&rdquo;</b> It was version 0.1 of the design. It lost on independent scaling of the three compute-heavy services, and on the native-dependency isolation Risk/TDA needs.</li>
+          <li><b>&ldquo;Isn't eight databases overkill?&rdquo;</b> Eight schemas in one instance leaves every service one convenient JOIN from a distributed monolith, and shares a failure domain besides.</li>
+          <li><b>&ldquo;Where is the service mesh?&rdquo;</b> Deliberately absent. Retries, breakers and mTLS live in the shared template, which is sufficient at eight services and avoids a large debugging burden.</li>
+          <li><b>&ldquo;What happens when Kafka is down?&rdquo;</b> Reads keep working &mdash; they never touch it. Writes commit locally and queue in the outbox; the platform catches up when the broker returns.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="end">
+  QuantSim &mdash; Architecture &amp; Physical Design v0.2 &middot; high-level presenter script &middot;
+  companion: QuantSim-Architecture-Low-Level-Script.html
+</div>
+
+</div>

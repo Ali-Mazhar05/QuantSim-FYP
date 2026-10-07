@@ -1,0 +1,767 @@
+<title>QuantSim Pricing and Unit Economics</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --ink:#12171c; --ink-2:#3f4a55; --ink-3:#6f7b87; --paper:#ffffff;
+    --rule:#c7d0d7; --rule-2:#e4e9ec; --band:#f4f7f8;
+    --teal:#00806a; --teal-bg:#e9f5f2; --teal-dk:#0b6f5b;
+    --amber:#c07a06; --amber-bg:#fdf6e8;
+    --red:#c0272d; --red-bg:#fbeeee;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef1f3;font-family:var(--sans);color:var(--ink);
+       font-size:14px;line-height:1.5}
+  .page{background:var(--paper);max-width:1180px;margin:0 auto;padding:44px 56px 56px}
+  h1{font-size:31px;font-weight:700;margin:0 0 4px}
+  .dek{font-size:14px;color:var(--ink-2);margin:0 0 6px;max-width:920px}
+  .stamp{font-size:11.5px;color:var(--ink-3);margin:0 0 30px;padding-bottom:16px;
+         border-bottom:2px solid var(--ink)}
+  h2{font-size:19px;font-weight:700;margin:40px 0 4px;padding-top:16px;
+     border-top:1px solid var(--rule)}
+  h2 .n{color:var(--teal);font-variant-numeric:tabular-nums;margin-right:8px}
+  h3{font-size:14px;font-weight:700;margin:24px 0 6px}
+  h4{font-size:12.5px;font-weight:700;margin:18px 0 4px;color:var(--ink-2)}
+  p{margin:0 0 11px;max-width:920px}
+  ul{margin:0 0 12px;padding-left:19px;max-width:920px}
+  li{margin-bottom:5px}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--band);
+       padding:1px 5px;border-radius:3px}
+  pre{font-family:var(--mono);font-size:11.5px;background:var(--band);border-radius:5px;
+      padding:12px 14px;overflow-x:auto;margin:8px 0 14px;line-height:1.55;
+      border-left:3px solid var(--rule)}
+  .muted{color:var(--ink-3)}
+
+  table{border-collapse:collapse;width:100%;margin:12px 0 16px;font-size:13px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--rule-2);vertical-align:top}
+  thead th{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;
+           letter-spacing:.06em;border-bottom:1.5px solid var(--rule);white-space:nowrap}
+  td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  th.n{font-family:var(--sans)}
+  td.c,th.c{text-align:center}
+  tr.tot td{font-weight:700;border-top:1.5px solid var(--rule);border-bottom:none;background:var(--band)}
+  tr.sub td{font-weight:600;background:#fafbfc}
+  .win{color:var(--teal);font-weight:600}
+  .warn{color:var(--amber);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
+  .free{background:var(--teal-bg)}
+
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 20px}
+  .card{border:1px solid var(--rule);border-radius:6px;padding:12px 14px}
+  .card .k{font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;
+           letter-spacing:.06em;margin-bottom:5px}
+  .card .v{font-size:22px;font-weight:700;font-family:var(--mono);
+           font-variant-numeric:tabular-nums;line-height:1.1}
+  .card .s{font-size:11px;color:var(--ink-3);margin-top:3px}
+  .card.hl{border-color:var(--teal);background:var(--teal-bg)}
+  .card.hl .v,.card.hl .k{color:var(--teal)}
+
+  .note{border-left:3px solid var(--amber);background:var(--amber-bg);
+        padding:10px 14px;margin:14px 0;font-size:13px;max-width:920px}
+  .note b{display:block;margin-bottom:2px}
+  .pick{border-left:3px solid var(--teal);background:var(--teal-bg);
+        padding:10px 14px;margin:14px 0;font-size:13px;max-width:920px}
+  .pick b{display:block;margin-bottom:2px;color:var(--teal-dk)}
+  .stop{border-left:3px solid var(--red);background:var(--red-bg);
+        padding:10px 14px;margin:14px 0;font-size:13px;max-width:920px}
+  .stop b{display:block;margin-bottom:2px;color:var(--red)}
+
+  figure{margin:18px 0 22px;max-width:920px}
+  figcaption{font-size:11.5px;color:var(--ink-3);margin-top:8px;line-height:1.45}
+  svg text{font-family:var(--sans)}
+  .ct{font-size:14px;font-weight:700;fill:var(--ink)}
+  .cs{font-size:11px;fill:var(--ink-3)}
+  .cl{font-size:12px;fill:var(--ink-2);text-anchor:end}
+  .cl.b{font-size:12px;font-weight:700;fill:var(--ink)}
+  .cn{font-size:11.5px;fill:var(--ink-2);font-family:var(--mono)}
+  .cn.b{font-weight:700;fill:var(--ink)}
+  .cnr{font-size:11.5px;fill:var(--ink-2);font-family:var(--mono);text-anchor:end}
+  .cin{font-size:11px;font-weight:700;fill:#ffffff;text-anchor:middle;font-family:var(--mono)}
+  .cx{font-size:10.5px;fill:var(--ink-3);text-anchor:middle}
+  .cx2{font-size:10px;fill:var(--ink-3);text-anchor:end;font-family:var(--mono)}
+
+  .src{font-size:11.5px;color:var(--ink-3);margin-top:34px;padding-top:14px;border-top:1px solid var(--rule)}
+  @media print{body{background:#fff}.page{max-width:none;padding:0}}
+</style>
+
+<div class="page">
+
+<h1>QuantSim Pricing and Unit Economics</h1>
+<p class="dek">A zero-cost launch stack for today, the data layer that carries it, the tier
+model for when it outgrows that, and the revenue, cost and profit at 100, 1,000, 10,000 and
+100,000 users.</p>
+<p class="stamp">Vendor list prices and free-tier allowances retrieved September 2026.
+Workload volumes are engineering estimates and are marked as such throughout.</p>
+
+<div class="cards">
+  <div class="card hl"><div class="k">Setup cost today</div><div class="v">$0.00</div>
+    <div class="s">to roughly 150 users</div></div>
+  <div class="card"><div class="k">Individual price</div><div class="v">Free</div>
+    <div class="s">Pro at $30 a month</div></div>
+  <div class="card"><div class="k">Heaviest module</div><div class="v">40%</div>
+    <div class="s">Monte Carlo generation</div></div>
+  <div class="card"><div class="k">Net at 100,000 users</div><div class="v">$180,454</div>
+    <div class="s">per month, 53% margin</div></div>
+</div>
+
+<!-- ============================================ 01 -->
+<h2><span class="n">01</span>Phase 0: the setup we run now, at $0 a month</h2>
+
+<p>Everything below sits inside a permanent free allowance. Not a trial, not credits that
+expire. The three components that matter are PostgreSQL with TimescaleDB, a Redis cache and
+object storage, and all three are free at this size.</p>
+
+<table>
+  <thead><tr><th style="width:20%">Component</th><th style="width:24%">What we run</th>
+    <th style="width:28%">Free allowance, September 2026</th><th class="n" style="width:10%">Cost</th>
+    <th style="width:18%">Watch out for</th></tr></thead>
+  <tbody>
+  <tr><td><b>Database</b></td>
+    <td>PostgreSQL 17 + TimescaleDB Community, self-hosted</td>
+    <td>Open source, no licence fee. Bounded only by the 200 GB volume below.</td>
+    <td class="n win">$0</td><td>You operate it. No managed failover.</td></tr>
+  <tr><td><b>Cache and queue</b></td>
+    <td>Redis 8, self-hosted on the same host</td>
+    <td>Open source under AGPLv3. Bounded by RAM, roughly 2 GB allocated.</td>
+    <td class="n win">$0</td><td>Shares CPU with the database.</td></tr>
+  <tr><td><b>Object storage</b></td>
+    <td>Cloudflare R2, free tier</td>
+    <td>10 GB stored, 1M Class A and 10M Class B operations a month, egress always free.</td>
+    <td class="n win">$0</td><td>10 GB is the hard ceiling.</td></tr>
+  <tr><td><b>Compute</b></td>
+    <td>Oracle Cloud Always Free, ARM Ampere A1</td>
+    <td>2 OCPU, 12 GB RAM, 200 GB block volume, 10 TB egress a month.</td>
+    <td class="n win">$0</td><td>Halved from 4 OCPU in 2026, and capacity is regional.</td></tr>
+  <tr><td><b>CDN, DNS, WAF</b></td><td>Cloudflare Free plan</td>
+    <td>Unbounded CDN bandwidth, basic WAF, DNS.</td><td class="n win">$0</td><td>&mdash;</td></tr>
+  <tr><td><b>CI/CD</b></td><td>GitHub Actions</td><td>2,000 minutes a month.</td>
+    <td class="n win">$0</td><td>ARM64 build targets.</td></tr>
+  <tr><td><b>Email</b></td><td>Resend free tier</td><td>3,000 messages a month.</td>
+    <td class="n win">$0</td><td>&mdash;</td></tr>
+  <tr><td><b>Error tracking</b></td><td>Sentry Developer</td><td>5,000 events a month.</td>
+    <td class="n win">$0</td><td>&mdash;</td></tr>
+  <tr><td><b>Market data</b></td><td>Free end-of-day feeds for calibration</td>
+    <td>Delayed daily bars only.</td><td class="n win">$0</td>
+    <td>No intraday. Fine, because simulation is synthetic.</td></tr>
+  <tr class="tot"><td>Total</td><td></td><td></td><td class="n win">$0.00</td><td></td></tr>
+  </tbody>
+</table>
+
+<div class="note"><b>There is no free managed Postgres with TimescaleDB in 2026</b>
+Tiger Cloud, the managed Timescale product, offers a 30-day trial and then starts at $30 a
+month. Neon's free tier is 0.5 GB and 100 compute-hours but cannot load the TimescaleDB
+extension at all. Supabase is the same story. If you want time-series Postgres for nothing,
+self-hosting the Community edition is the only route, and that is what Phase 0 does.</div>
+
+<h3>What Phase 0 actually holds</h3>
+<p>The constraint is CPU, not storage, and it is worth knowing which wall you hit first.</p>
+
+<table>
+  <thead><tr><th style="width:34%">Resource</th><th class="n" style="width:20%">Available</th>
+    <th class="n" style="width:20%">Used at 100 users</th><th class="n" style="width:12%">Headroom</th>
+    <th style="width:14%">Binding?</th></tr></thead>
+  <tbody>
+  <tr><td>Batch compute, after the database and API take their share</td>
+    <td class="n">584 core-hours</td><td class="n">403 core-hours</td><td class="n">1.4&times;</td>
+    <td class="bad">Yes, first</td></tr>
+  <tr><td>Object storage, R2 free tier</td><td class="n">10 GB</td><td class="n">0.9 GB</td>
+    <td class="n">11&times;</td><td>No</td></tr>
+  <tr><td>Database volume</td><td class="n">200 GB</td><td class="n">~3 GB</td>
+    <td class="n">66&times;</td><td>No</td></tr>
+  <tr><td>Egress</td><td class="n">10 TB</td><td class="n">~50 GB</td><td class="n">200&times;</td><td>No</td></tr>
+  </tbody>
+</table>
+
+<p>Phase 0 carries roughly <b>150 users</b> comfortably and about 900 simulation runs a
+month. Past that the ARM cores saturate, the queue backs up, and the answer is one rented
+machine rather than a re-architecture. Nothing in the Phase 0 design has to be thrown away:
+the same Postgres, the same Redis, the same R2 buckets, on bigger hardware.</p>
+
+<!-- ============================================ 02 -->
+<h2><span class="n">02</span>The data layer</h2>
+
+<h3>PostgreSQL 17 with the TimescaleDB extension</h3>
+<p>One engine serves both the transactional and the time-series workload. Running Timescale
+as a Postgres extension rather than as a second database means one backup path, one
+connection pool, one set of credentials, and one place where the audit log joins against the
+run history.</p>
+
+<table>
+  <thead><tr><th style="width:24%">Item</th><th style="width:76%">Specification</th></tr></thead>
+  <tbody>
+  <tr><td><b>Hardware, Phase 2</b></td><td>2 &times; Hetzner AX102. Ryzen 9 7950X3D, 16 cores
+    and 32 threads, 128 GB DDR5 ECC, 2 &times; 1.92 TB NVMe in RAID 1. Primary plus a
+    synchronous streaming replica in a second datacentre.</td></tr>
+  <tr><td><b>Pooling</b></td><td>PgBouncer in transaction mode. Services never connect
+    directly. 200 server connections against roughly 2,000 client connections.</td></tr>
+  <tr><td><b>Failover</b></td><td>Patroni, with read-only dashboard queries routed to the replica.</td></tr>
+  <tr><td><b>Backup</b></td><td>pgBackRest. Full weekly, incremental every six hours,
+    continuous WAL archiving to R2. Point-in-time recovery window of 30 days.</td></tr>
+  </tbody>
+</table>
+
+<h4>Configuration for a 128 GB node</h4>
+<pre>shared_buffers            = 32GB        # 25% of RAM
+effective_cache_size      = 96GB
+work_mem                  = 64MB
+maintenance_work_mem      = 2GB
+max_connections           = 200         # PgBouncer fronts this
+wal_level                 = replica
+max_wal_size              = 16GB
+checkpoint_timeout        = 15min
+random_page_cost          = 1.1         # NVMe, not spinning disk
+effective_io_concurrency  = 200
+timescaledb.max_background_workers = 16</pre>
+
+<h4>What lives where</h4>
+<p>Ordinary Postgres tables hold everything transactional: <code>users</code>,
+<code>organisations</code>, <code>roles</code>, <code>portfolios</code>,
+<code>positions</code>, <code>run_manifests</code>, <code>alerts</code> and
+<code>api_keys</code>. Four tables become Timescale hypertables.</p>
+
+<table>
+  <thead><tr><th style="width:22%">Hypertable</th><th class="n" style="width:12%">Chunk</th>
+    <th class="n" style="width:14%">Compress after</th><th class="n" style="width:12%">Retention</th>
+    <th class="n" style="width:12%">Est. size</th><th style="width:28%">Segment by</th></tr></thead>
+  <tbody>
+  <tr><td><code>market_bars</code></td><td class="n">7 days</td><td class="n">7 days</td>
+    <td class="n">10 years</td><td class="n">~12 GB</td><td><code>symbol</code>, ordered by <code>ts DESC</code></td></tr>
+  <tr><td><code>risk_metrics</code></td><td class="n">30 days</td><td class="n">30 days</td>
+    <td class="n">by tier</td><td class="n">~2 GB</td><td><code>portfolio_id</code></td></tr>
+  <tr><td><code>simulation_summary</code></td><td class="n">7 days</td><td class="n">7 days</td>
+    <td class="n">by tier</td><td class="n">~9 GB</td><td><code>run_id</code></td></tr>
+  <tr><td><code>audit_events</code></td><td class="n">30 days</td><td class="n">never</td>
+    <td class="n">7 years</td><td class="n">~35 GB</td><td>uncompressed, for fast point reads</td></tr>
+  </tbody>
+</table>
+
+<p>Five years of minute bars for 5,000 symbols is 2.46 billion rows, roughly 118 GB raw.
+Timescale's columnar compression reaches 10&ndash;20&times; on OHLCV data, bringing it to
+about 12 GB and keeping the whole market history on local NVMe. Total database footprint is
+near <b>80 GB</b>, growing about 25 GB a year against 1.92 TB of disk.</p>
+
+<h3>Redis 8 for cache and queue</h3>
+
+<div class="pick"><b>Why Redis rather than Valkey, and when that answer flips</b>
+The 2024 objection to Redis was licensing: it left open source for RSAL and SSPL, which is
+what created Valkey in the first place. That objection expired. Redis 8, released May 2025,
+is tri-licensed and includes <b>AGPLv3</b>, an OSI-approved open-source licence. QuantSim
+runs stock Redis as an internal cache, does not modify it, and does not resell it as a
+managed service, so AGPL imposes no practical obligation here.
+<br><br>
+That makes Redis the better choice for this project on every other axis: universal client
+libraries, the deepest operational literature, and native data types added to the core in
+version 8 that this workload actually uses, including time series for the market cache and
+t-digest for streaming quantiles.
+<br><br>
+Valkey remains the drop-in escape hatch. It is BSD-3 licensed, Linux Foundation governed,
+roughly 8% faster with about 20% lower memory use, and is now the default on AWS ElastiCache,
+Google Memorystore and Debian-family distributions. The wire protocol is identical, so
+migration is a hostname change. <b>Switch if</b> an institutional customer's procurement
+blanket-bans AGPL dependencies, which some enterprises do, or if managed Redis pricing
+becomes the deciding factor at Phase 3.</div>
+
+<p>Two separate Redis instances run, not one. An evicting cache and a durable job queue want
+opposite memory policies, and combining them means that under memory pressure a queued
+simulation is silently evicted and a user's run disappears with no error anywhere.</p>
+
+<table>
+  <thead><tr><th style="width:16%">Instance</th><th class="n" style="width:12%">Memory</th>
+    <th class="n" style="width:18%">Eviction</th><th class="n" style="width:20%">Persistence</th>
+    <th style="width:34%">Principle</th></tr></thead>
+  <tbody>
+  <tr><td><b>cache</b></td><td class="n">16 GB</td><td class="n">allkeys-lru</td>
+    <td class="n">none</td>
+    <td>Holds only what can be rebuilt from Postgres or R2. Losing it costs latency, never data.</td></tr>
+  <tr><td><b>queue</b></td><td class="n">8 GB</td><td class="n win">noeviction</td>
+    <td class="n">AOF everysec<br>+ hourly RDB</td>
+    <td>Holds work in flight. Losing an entry loses a user's run, so it must never evict.</td></tr>
+  </tbody>
+</table>
+
+<h4>What is stored in the cache instance</h4>
+<table>
+  <thead><tr><th style="width:22%">Key pattern</th><th style="width:14%">Redis type</th>
+    <th class="n" style="width:10%">TTL</th><th class="n" style="width:14%">Working set</th>
+    <th style="width:40%">Contents and why it is cached</th></tr></thead>
+  <tbody>
+  <tr><td><code>sess:&lt;token&gt;</code></td><td>Hash</td><td class="n">24 h</td><td class="n">~10 MB</td>
+    <td>User id, organisation, tier and role for the bearer token. Every request reads it, so
+    it must never touch Postgres.</td></tr>
+  <tr><td><code>perm:&lt;user&gt;</code></td><td>Set</td><td class="n">10 min</td><td class="n">~5 MB</td>
+    <td>Resolved RBAC permission set, flattened from roles so authorisation is one lookup
+    rather than a three-table join.</td></tr>
+  <tr><td><code>rl:&lt;user&gt;:&lt;route&gt;</code></td><td>String counter</td><td class="n">60 s</td>
+    <td class="n">~5 MB</td>
+    <td>Sliding-window rate limits, per tier. This is how the free-tier fair-use cap is
+    actually enforced.</td></tr>
+  <tr><td><code>mkt:&lt;symbol&gt;</code></td><td>TimeSeries</td><td class="n">5 s</td><td class="n">~10 MB</td>
+    <td>Latest bar and quote per symbol. Shields Timescale from the read fan-out when a
+    thousand dashboards poll the same tickers.</td></tr>
+  <tr><td><code>agg:&lt;portfolio&gt;</code></td><td>JSON</td><td class="n">15 min</td><td class="n">~600 MB</td>
+    <td>Precomputed dashboard tiles: value at risk, expected shortfall, volatility, beta,
+    drawdown. Recomputing these per page load would dominate the serving cost.</td></tr>
+  <tr><td><code>res:&lt;run_id&gt;</code></td><td>JSON</td><td class="n">1 h</td><td class="n">~2 GB</td>
+    <td>Finished run results, so a simulation that has just completed renders instantly
+    instead of round-tripping to object storage.</td></tr>
+  <tr><td><code>cat:symbols</code></td><td>Sorted set</td><td class="n">6 h</td><td class="n">~5 MB</td>
+    <td>Symbol catalogue for autocomplete, scored by search popularity.</td></tr>
+  </tbody>
+</table>
+
+<h4>What is stored in the queue instance</h4>
+<table>
+  <thead><tr><th style="width:22%">Key pattern</th><th style="width:14%">Redis type</th>
+    <th class="n" style="width:10%">TTL</th><th class="n" style="width:14%">Working set</th>
+    <th style="width:40%">Contents</th></tr></thead>
+  <tbody>
+  <tr><td><code>q:sim</code>, <code>q:tda</code>,<br><code>q:ml</code>, <code>q:xai</code></td>
+    <td>Stream</td><td class="n">none</td><td class="n">~200 MB</td>
+    <td>One stream per worker pool, each with four priority levels read in strict order. This
+    is where the queue-priority column of the tier table becomes real scheduling behaviour.</td></tr>
+  <tr><td><code>lock:&lt;job_hash&gt;</code></td><td>String, SET NX</td><td class="n">30 s</td>
+    <td class="n">~1 MB</td>
+    <td>Deduplication, so an impatient double-click produces one run and one charge.</td></tr>
+  <tr><td><code>prog:&lt;run_id&gt;</code></td><td>Hash</td><td class="n">1 h</td><td class="n">~20 MB</td>
+    <td>Live progress, stage and percentage, which the UI polls for its progress bar.</td></tr>
+  <tr><td><code>dlq:&lt;module&gt;</code></td><td>Stream</td><td class="n">30 days</td><td class="n">~50 MB</td>
+    <td>Dead letters. Jobs that failed their retry budget, kept for inspection.</td></tr>
+  </tbody>
+</table>
+
+<p>Total working set is under <b>3 GB</b> against 24 GB provisioned, an eight-fold headroom
+that absorbs a traffic spike without evicting anything that matters. Hardware at Phase 2 is
+2 &times; AX52, 8 cores and 64 GB each, primary and replica with Sentinel.</p>
+
+<div class="note"><b>What deliberately does not go in Redis</b>
+Anything that must survive a restart, anything that must be auditable, and anything large.
+Simulation artifacts go to R2, market history to Timescale, and the audit log to Postgres
+where it can be queried under oath. Redis holds only rebuildable state, plus the one durable
+exception of the queue, which is why the queue gets its own instance with its own
+persistence settings.</div>
+
+<h3>Cloudflare R2 for object storage</h3>
+<p>Storage is $0.015 per GB-month and egress is free. Egress is the reason: a chart-dense
+client reads far more than it writes, and 5 TB of monthly egress costs $450 on S3 against
+nothing here, on a total bill of $78.</p>
+
+<table>
+  <thead><tr><th style="width:24%">Bucket</th><th class="n" style="width:18%">Class</th>
+    <th class="n" style="width:16%">Lifecycle</th><th style="width:42%">Contents</th></tr></thead>
+  <tbody>
+  <tr><td><code>quantsim-runs</code></td><td class="n">Standard</td><td class="n">90 days &rarr; IA</td>
+    <td>Run artifacts. Immutable once written.</td></tr>
+  <tr><td><code>quantsim-models</code></td><td class="n">Standard</td><td class="n">versioned</td>
+    <td>Trained risk models and scalers, content-addressed by hash.</td></tr>
+  <tr><td><code>quantsim-exports</code></td><td class="n">Standard</td><td class="n">delete at 7 days</td>
+    <td>User-generated CSV, Parquet and PDF exports.</td></tr>
+  <tr><td><code>quantsim-archive</code></td><td class="n">Infrequent Access</td><td class="n">by tier</td>
+    <td>Runs past 90 days, at $0.01 per GB-month.</td></tr>
+  <tr><td><code>quantsim-backups</code></td><td class="n">Infrequent Access</td><td class="n">30 days</td>
+    <td>pgBackRest base backups and WAL segments.</td></tr>
+  </tbody>
+</table>
+
+<h4>What one run writes</h4>
+<pre>runs/&lt;org_id&gt;/&lt;run_id&gt;/manifest.json      ~4 KB    seed, config, code version, checksums
+runs/&lt;org_id&gt;/&lt;run_id&gt;/quantiles.parquet  ~2.0 MB  path quantile surfaces
+runs/&lt;org_id&gt;/&lt;run_id&gt;/risk.parquet       ~0.5 MB  VaR and expected-shortfall curves
+runs/&lt;org_id&gt;/&lt;run_id&gt;/tda.parquet        ~1.0 MB  persistence diagrams and barcodes
+runs/&lt;org_id&gt;/&lt;run_id&gt;/attrib.parquet     ~1.5 MB  per-feature attribution
+runs/&lt;org_id&gt;/&lt;run_id&gt;/preview.png        ~0.2 MB  dashboard thumbnail
+                                          -------
+                                          ~8 MB, 6 objects, Parquet with zstd level 3</pre>
+
+<div class="pick"><b>What is never written: the raw path tensor</b>
+A 10,000-path, 252-step, 50-asset simulation in float32 is
+<code>10,000 &times; 252 &times; 50 &times; 4 = 504 MB</code> of raw paths. Persisting that per
+run is unaffordable at any price. The manifest stores the seed and the full configuration
+instead, which regenerates the run bit-exactly on demand, and only the aggregates a human
+actually reads are kept. That is a <b>63-fold reduction</b>, and exact reproducibility from a
+seed is what the audit requirement wanted in the first place.</div>
+
+<!-- ============================================ 03 -->
+<h2><span class="n">03</span>Pricing</h2>
+
+<p>Flat monthly price, round numbers, no credits and no overage invoices. Individuals stay
+free permanently, with every analysis module included rather than a crippled demo.</p>
+
+<table>
+  <thead><tr><th style="width:16%">Tier</th><th class="n" style="width:14%">Price</th>
+    <th class="n" style="width:10%">Seats</th><th class="n" style="width:12%">Per seat</th>
+    <th style="width:48%">For</th></tr></thead>
+  <tbody>
+  <tr class="free"><td><b>Free</b></td><td class="n win">$0</td><td class="n">1</td>
+    <td class="n win">$0</td>
+    <td>Any individual. Students, academics, independent researchers. Every module included:
+    simulation, stress testing, topology, machine learning, explainability, composite risk.</td></tr>
+  <tr><td><b>Pro</b></td><td class="n">$30</td><td class="n">1</td><td class="n">$30</td>
+    <td>An individual past the free caps. Bigger runs, priority queue, a year of history.</td></tr>
+  <tr><td><b>Team</b></td><td class="n">$180</td><td class="n">10</td><td class="n">$18</td>
+    <td>Research groups. Shared workspaces, peer review, pooled capacity, org-wide audit.</td></tr>
+  <tr><td><b>Institution</b></td><td class="n">$1,500</td><td class="n">25</td><td class="n">$60</td>
+    <td>Departments and funds. Dedicated node, SSO, seven-year retention, on-premise option, SLA.</td></tr>
+  </tbody>
+</table>
+
+<figure>
+{{CHART1}}
+<figcaption>QuantSim sits below the competing seat at every tier. SimCorp and AlgoTrader
+publish no price at all, which is itself a competitive fact worth stating: a research group
+cannot even find out what they cost without a sales call.</figcaption>
+</figure>
+
+<table>
+  <thead><tr><th style="width:22%">Tier</th><th class="n" style="width:15%">Our per seat</th>
+    <th class="n" style="width:15%">Competitor</th><th class="n" style="width:13%">Ratio</th>
+    <th class="n" style="width:13%">Was</th><th style="width:22%">Compared against</th></tr></thead>
+  <tbody>
+  <tr><td>Free</td><td class="n win">$0</td><td class="n">$60</td><td class="n win">0%</td>
+    <td class="n">$0</td><td>QuantConnect Researcher</td></tr>
+  <tr><td>Pro</td><td class="n win">$30</td><td class="n">$60</td><td class="n win">50%</td>
+    <td class="n">$20</td><td>QuantConnect Researcher</td></tr>
+  <tr><td>Team</td><td class="n win">$18</td><td class="n">$24</td><td class="n win">75%</td>
+    <td class="n">$15</td><td>QuantConnect Team</td></tr>
+  <tr><td>Institution</td><td class="n win">$60</td><td class="n">$96</td><td class="n win">62%</td>
+    <td class="n">$40</td><td>QuantConnect Institution</td></tr>
+  <tr><td>Enterprise</td><td class="n win">published</td><td class="n">quote only</td>
+    <td class="n">&mdash;</td><td class="n">&mdash;</td><td>SimCorp One, AlgoTrader / Wyden</td></tr>
+  </tbody>
+</table>
+
+<div class="pick"><b>The increase is what makes the middle of the growth curve survivable</b>
+At the previous prices the platform netted 3.5% at 10,000 users, because that is the point
+where you must hire before the revenue justifies it. At these prices the same 10,000 users
+net 32%. Nothing about the cost model changed; the crossing was a pricing problem, not an
+infrastructure problem. Every tier still sits between half and three quarters of its nearest
+competitor, so the increase costs nothing in positioning.</div>
+
+<h3>What separates the tiers</h3>
+<table>
+  <thead><tr><th style="width:28%">Limit</th><th class="n c free" style="width:18%">Free</th>
+    <th class="n c" style="width:18%">Pro</th><th class="n c" style="width:18%">Team</th>
+    <th class="n c" style="width:18%">Institution</th></tr></thead>
+  <tbody>
+  <tr><td>Simulation paths per run</td><td class="n c free">10,000</td><td class="n c">250,000</td>
+    <td class="n c">1,000,000</td><td class="n c">unlimited</td></tr>
+  <tr><td>Assets per portfolio</td><td class="n c free">25</td><td class="n c">250</td>
+    <td class="n c">1,000</td><td class="n c">unlimited</td></tr>
+  <tr><td>Concurrent jobs</td><td class="n c free">1</td><td class="n c">4</td>
+    <td class="n c">12 pooled</td><td class="n c">32 pooled</td></tr>
+  <tr><td>Runs a month, fair use</td><td class="n c free">50</td><td class="n c">1,500</td>
+    <td class="n c">8,000</td><td class="n c">40,000</td></tr>
+  <tr><td>Queue priority</td><td class="n c free">best effort</td><td class="n c">standard</td>
+    <td class="n c">high</td><td class="n c">dedicated node</td></tr>
+  <tr><td>History retained</td><td class="n c free">7 days</td><td class="n c">12 months</td>
+    <td class="n c">24 months</td><td class="n c">7 years</td></tr>
+  <tr><td>All analysis modules</td><td class="n c free win">yes</td><td class="n c win">yes</td>
+    <td class="n c win">yes</td><td class="n c win">yes</td></tr>
+  <tr><td>SSO, on-premise, SLA</td><td class="n c free">&mdash;</td><td class="n c">&mdash;</td>
+    <td class="n c">&mdash;</td><td class="n c win">yes</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================ 04 -->
+<h2><span class="n">04</span>Scaling: infrastructure at each step</h2>
+
+<p>Four phases. Each is triggered by a wall in the previous one, not by a calendar.</p>
+
+<table>
+  <thead><tr><th style="width:10%">Phase</th><th style="width:14%">Users</th>
+    <th style="width:44%">Infrastructure</th><th class="n" style="width:14%">Monthly</th>
+    <th style="width:18%">Moves when</th></tr></thead>
+  <tbody>
+  <tr class="free"><td><b>0</b></td><td>to 150</td>
+    <td>Oracle free ARM, 2 OCPU. Postgres 17 + TimescaleDB, Redis and the API on one host.
+    R2 free tier. Cloudflare free plan.</td>
+    <td class="n win">$0</td><td>ARM cores saturate</td></tr>
+  <tr><td><b>1</b></td><td>to 1,500</td>
+    <td>One AX102 for batch, one AX52 for Postgres, Redis and the API. R2 paid. First real
+    market-data subscription.</td>
+    <td class="n">$485</td><td>Queue depth, or one host being a single point of failure</td></tr>
+  <tr><td><b>2</b></td><td>to 15,000</td>
+    <td>Ten AX102 batch workers, three AX52 application nodes, a Postgres primary and
+    replica, a Redis and Redpanda pair, spot burst capacity.</td>
+    <td class="n">$3,773</td><td>Database write throughput</td></tr>
+  <tr><td><b>3</b></td><td>to 100,000+</td>
+    <td>94 AX102 batch workers, sharded Postgres, four cache and bus nodes, enterprise data
+    feed, multi-region.</td>
+    <td class="n">$26,510</td><td>&mdash;</td></tr>
+  </tbody>
+</table>
+
+<h4>Phase 1 line by line, at 1,000 users</h4>
+<table>
+  <thead><tr><th style="width:46%">Line</th><th class="n" style="width:18%">Qty</th>
+    <th class="n" style="width:18%">Monthly</th><th style="width:18%"></th></tr></thead>
+  <tbody>
+  <tr><td>Batch compute, Hetzner AX102</td><td class="n">1</td><td class="n">$166</td>
+    <td class="muted">16 cores</td></tr>
+  <tr><td>Postgres + TimescaleDB + Redis + API, AX52</td><td class="n">1</td><td class="n">$87</td>
+    <td class="muted">8 cores</td></tr>
+  <tr><td>Object storage, Cloudflare R2</td><td class="n">~140 GB</td><td class="n">$3</td><td></td></tr>
+  <tr><td>Backups to R2</td><td class="n">&mdash;</td><td class="n">$5</td><td></td></tr>
+  <tr><td>Market data, Databento Standard</td><td class="n">&mdash;</td><td class="n">$199</td>
+    <td class="muted">the largest line</td></tr>
+  <tr><td>Auth, email, error tracking</td><td class="n">&mdash;</td><td class="n">$25</td><td></td></tr>
+  <tr class="tot"><td>Total</td><td class="n"></td><td class="n">$485</td>
+    <td class="muted">$0.49 per user</td></tr>
+  </tbody>
+</table>
+
+<h4>Phase 2 line by line, at 10,000 users</h4>
+<table>
+  <thead><tr><th style="width:40%">Line</th><th class="n" style="width:12%">Qty</th>
+    <th class="n" style="width:14%">Unit</th><th class="n" style="width:14%">Monthly</th>
+    <th style="width:20%"></th></tr></thead>
+  <tbody>
+  <tr><td>Batch compute, AX102</td><td class="n">10</td><td class="n">$166</td><td class="n">$1,660</td>
+    <td class="muted">Monte Carlo, TDA, ML, XAI</td></tr>
+  <tr><td>Burst compute, EC2 c7i spot</td><td class="n">~10k vCPU-h</td><td class="n">$0.013</td>
+    <td class="n">$150</td><td class="muted">peak shedding</td></tr>
+  <tr><td>Application and API, AX52</td><td class="n">3</td><td class="n">$87</td><td class="n">$261</td><td></td></tr>
+  <tr><td>Postgres 17 + TimescaleDB, AX102</td><td class="n">2</td><td class="n">$166</td>
+    <td class="n">$332</td><td class="muted">primary and replica</td></tr>
+  <tr><td>Redis and Redpanda, AX52</td><td class="n">2</td><td class="n">$87</td><td class="n">$174</td>
+    <td class="muted">two Redis instances per host</td></tr>
+  <tr><td>Load balancing and floating IPs</td><td class="n">&mdash;</td><td class="n">&mdash;</td>
+    <td class="n">$60</td><td></td></tr>
+  <tr><td>Object storage, R2</td><td class="n">4.7 TB</td><td class="n">&mdash;</td><td class="n">$78</td>
+    <td class="muted">egress free</td></tr>
+  <tr><td>Backup operations</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">$58</td><td></td></tr>
+  <tr><td>Market data</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">$500</td><td></td></tr>
+  <tr><td>CDN and WAF</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">$200</td><td></td></tr>
+  <tr><td>Observability</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">$150</td><td></td></tr>
+  <tr><td>Auth, email, error tracking</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">$150</td><td></td></tr>
+  <tr class="tot"><td>Total</td><td class="n"></td><td class="n"></td><td class="n">$3,773</td>
+    <td class="muted">$0.38 per user</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================ 05 -->
+<h2><span class="n">05</span>Revenue, cost and profit at each scale</h2>
+
+<p>Same tier mix throughout: 90% free, 7% Pro, 2.5% on Team seats, 0.5% on Institution
+seats. Team and Institution bill per organisation, and seats are a ceiling rather than a
+headcount, which is how institutional licences normally work.</p>
+
+<table>
+  <thead><tr><th style="width:22%">Line</th><th class="n" style="width:14%">100 users</th>
+    <th class="n" style="width:16%">1,000</th><th class="n" style="width:16%">10,000</th>
+    <th class="n" style="width:16%">100,000</th><th style="width:16%"></th></tr></thead>
+  <tbody>
+  <tr><td>Paying accounts</td><td class="n">5</td><td class="n">72</td><td class="n">735</td>
+    <td class="n">7,350</td><td class="muted">seats are pooled</td></tr>
+  <tr class="sub"><td>Revenue</td><td class="n">$150</td><td class="n">$2,460</td>
+    <td class="n">$33,900</td><td class="n">$339,000</td><td class="muted">per month</td></tr>
+  <tr><td>Infrastructure</td><td class="n win">$0</td><td class="n">$485</td>
+    <td class="n">$3,773</td><td class="n">$26,510</td><td class="muted">servers, storage, data</td></tr>
+  <tr><td>Payment processing</td><td class="n">$6</td><td class="n">$93</td>
+    <td class="n">$1,204</td><td class="n">$12,036</td><td class="muted">2.9% + $0.30</td></tr>
+  <tr><td>Maintenance</td><td class="n win">$0</td><td class="n">$500</td>
+    <td class="n">$18,000</td><td class="n">$120,000</td><td class="muted">people and tooling</td></tr>
+  <tr class="sub"><td>Total cost</td><td class="n">$6</td><td class="n">$1,078</td>
+    <td class="n">$22,977</td><td class="n">$158,546</td><td></td></tr>
+  <tr class="tot"><td>Net profit, monthly</td><td class="n win">$144</td><td class="n win">$1,382</td>
+    <td class="n win">$10,923</td><td class="n win">$180,454</td><td></td></tr>
+  <tr class="tot"><td>Net profit, annual</td><td class="n">$1,730</td><td class="n">$16,585</td>
+    <td class="n">$131,081</td><td class="n">$2,165,448</td><td></td></tr>
+  <tr><td>Gross margin</td><td class="n">96%</td><td class="n">77%</td><td class="n">85%</td>
+    <td class="n">89%</td><td class="muted">before maintenance</td></tr>
+  <tr><td>Net margin</td><td class="n">96%</td><td class="n">56%</td><td class="n">32%</td>
+    <td class="n">53%</td><td class="muted">after everything</td></tr>
+  <tr><td>Infrastructure per user</td><td class="n">$0.00</td><td class="n">$0.49</td>
+    <td class="n">$0.38</td><td class="n">$0.27</td><td class="muted">per month</td></tr>
+  <tr><td>Cost to serve one free user</td><td class="n">$0.00</td><td class="n">$0.16</td>
+    <td class="n">$0.15</td><td class="n">$0.11</td><td class="muted">per month</td></tr>
+  </tbody>
+</table>
+
+<figure>
+{{CHART2}}
+<figcaption>Infrastructure never exceeds 20% of revenue and falls as you grow. Maintenance
+does the opposite, peaking at 53% during the 10,000-user crossing where the first hires land
+before the revenue does. The platform stays profitable throughout.</figcaption>
+</figure>
+
+<!-- ============================================ 06 -->
+<h2><span class="n">06</span>Where the cost goes, module by module</h2>
+
+<p>Every module falls into one of three groups, and the group decides what makes it
+expensive. <b>Analysis modules</b> run on the batch fleet and scale with the size of the work
+submitted. <b>Serving modules</b> run on the application tier and scale with users and
+requests. <b>Fixed lines</b> cost the same whether ten people use the platform or ten
+thousand. Confusing the three is how cost models go wrong.</p>
+
+<figure>
+{{CHART4}}
+<figcaption>Monthly infrastructure at 10,000 users, totalling $3,773. Market data is the
+largest single line and it is the one that responds to nothing you do.</figcaption>
+</figure>
+
+<table>
+  <thead><tr><th style="width:26%">Module</th><th style="width:14%">Group</th>
+    <th class="n" style="width:14%">At 10,000</th><th style="width:46%">What drives its cost</th></tr></thead>
+  <tbody>
+  <tr><td><b>Market data</b></td><td>Fixed</td><td class="n">$780</td>
+    <td class="warn">Licensing plus ingest workers and Timescale writes. Independent of user
+    count, which makes it brutal when small and trivial when large.</td></tr>
+  <tr><td><b>Monte Carlo</b></td><td>Analysis</td><td class="n">$724</td>
+    <td>Paths times steps times assets. Linear and embarrassingly parallel.</td></tr>
+  <tr><td><b>TDA topology</b></td><td>Analysis</td><td class="n">$452</td>
+    <td class="warn">Roughly cubic in the number of points. See the warning below.</td></tr>
+  <tr><td><b>Dashboard and delivery</b></td><td>Serving</td><td class="n">$430</td>
+    <td>Application CPU, Redis reads and content delivery. Scales with monthly active users
+    and page views, not with simulation size. The largest serving line, and the one people
+    forget when they model a compute-heavy product.</td></tr>
+  <tr><td><b>ML risk scoring</b></td><td>Analysis</td><td class="n">$326</td>
+    <td>Inference per run, plus retraining amortised across all runs.</td></tr>
+  <tr><td><b>Observability and backups</b></td><td>Fixed</td><td class="n">$183</td>
+    <td>Metrics, logs, traces and the backup pipeline. Grows with services, not users.</td></tr>
+  <tr><td><b>Explainability</b></td><td>Analysis</td><td class="n">$181</td>
+    <td>Features times background samples times model evaluations.</td></tr>
+  <tr><td><b>Platform, auth, gateway</b></td><td>Serving</td><td class="n">$180</td>
+    <td>Every request passes through it. Sessions and permissions live in the Redis cache
+    rather than the database, which is what keeps this line small.</td></tr>
+  <tr><td><b>Portfolio and positions</b></td><td>Serving</td><td class="n">$150</td>
+    <td>Postgres transactions and storage. The only module whose cost is genuinely per-user.</td></tr>
+  <tr><td><b>Alerts and event bus</b></td><td>Serving</td><td class="n">$120</td>
+    <td>Redpanda throughput plus a continuous evaluation loop over portfolios times
+    thresholds. Watch the evaluation frequency: it is the one serving module that can run
+    away without any user action at all.</td></tr>
+  <tr><td><b>Trading strategy</b></td><td>Serving</td><td class="n">$95</td>
+    <td class="win">Reads simulation output rather than producing it, so it is nearly free.
+    Strategy evaluation over pre-generated paths is arithmetic, not simulation.</td></tr>
+  <tr><td><b>Stress testing</b></td><td>Analysis</td><td class="n">$90</td>
+    <td class="win">Reuses generated paths, so a twelve-scenario batch costs a fraction of
+    the run that produced them.</td></tr>
+  <tr><td><b>Composite risk scoring</b></td><td>Analysis</td><td class="n">$36</td>
+    <td>Aggregation over outputs that already exist.</td></tr>
+  <tr><td><b>Administration and RBAC</b></td><td>Serving</td><td class="n">$26</td>
+    <td>Internal tooling and role management. Negligible at any scale.</td></tr>
+  <tr class="tot"><td>Total infrastructure</td><td></td><td class="n">$3,773</td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>The mix inverts as you grow</h3>
+<table>
+  <thead><tr><th style="width:24%">Group</th><th class="n" style="width:19%">1,000 users</th>
+    <th class="n" style="width:19%">10,000</th><th class="n" style="width:19%">100,000</th>
+    <th style="width:19%">Trend</th></tr></thead>
+  <tbody>
+  <tr><td>Analysis compute</td><td class="n">$166 &middot; 34%</td><td class="n">$1,809 &middot; 48%</td>
+    <td class="n">$17,104 &middot; 65%</td><td class="warn">Takes over</td></tr>
+  <tr><td>Serving tier</td><td class="n">$90 &middot; 19%</td><td class="n">$1,001 &middot; 27%</td>
+    <td class="n">$4,006 &middot; 15%</td><td>Roughly flat</td></tr>
+  <tr><td>Fixed platform</td><td class="n">$229 &middot; 47%</td><td class="n">$963 &middot; 25%</td>
+    <td class="n">$5,400 &middot; 20%</td><td class="win">Dilutes away</td></tr>
+  <tr class="tot"><td>Total</td><td class="n">$485</td><td class="n">$3,773</td>
+    <td class="n">$26,510</td><td></td></tr>
+  </tbody>
+</table>
+
+<p>At 1,000 users nearly half the bill is fixed cost, most of it a market-data subscription
+that a hundred users would need just as much. That is why Phase 0 runs on free end-of-day
+feeds: it is the only line that does not shrink when you are small. By 100,000 users the
+picture has inverted and two thirds of the bill is analysis compute, which is the healthy
+shape, because analysis compute is what customers are actually paying for.</p>
+
+<h3>Inside the analysis fleet</h3>
+<p>One representative run at paid-tier caps is roughly 60 vCPU-minutes, and batch compute
+totals $1,810 a month at 10,000 users.</p>
+
+<figure>
+{{CHART3}}
+<figcaption>Share of batch compute for a representative run. Percentages are engineering
+estimates from the module definitions rather than profiler output.</figcaption>
+</figure>
+
+<table>
+  <thead><tr><th style="width:32%">Module</th><th class="n" style="width:12%">Share</th>
+    <th class="n" style="width:16%">vCPU-min per run</th><th class="n" style="width:14%">At 10,000</th>
+    <th style="width:26%">How it scales</th></tr></thead>
+  <tbody>
+  <tr><td><b>Monte Carlo path generation</b></td><td class="n">40%</td><td class="n">24.0</td>
+    <td class="n">$724</td><td>Linear in paths. Shards cleanly across workers.</td></tr>
+  <tr><td><b>TDA persistent homology</b></td><td class="n">25%</td><td class="n">15.0</td>
+    <td class="n">$452</td><td class="warn">Cubic in asset count. The real long-term risk.</td></tr>
+  <tr><td><b>ML risk scoring and retrain</b></td><td class="n">18%</td><td class="n">10.8</td>
+    <td class="n">$326</td><td>Inference cheap, retraining amortised.</td></tr>
+  <tr><td><b>Explainability attribution</b></td><td class="n">10%</td><td class="n">6.0</td>
+    <td class="n">$181</td><td>Linear in features times background samples.</td></tr>
+  <tr><td><b>Stress scenario batch</b></td><td class="n">5%</td><td class="n">3.0</td>
+    <td class="n">$90</td><td>Reuses generated paths.</td></tr>
+  <tr><td><b>Composite risk and alerting</b></td><td class="n">2%</td><td class="n">1.2</td>
+    <td class="n">$36</td><td>Aggregation only.</td></tr>
+  <tr class="tot"><td>Total batch compute</td><td class="n">100%</td><td class="n">60.0</td>
+    <td class="n">$1,810</td><td></td></tr>
+  </tbody>
+</table>
+
+<div class="note"><b>Monte Carlo is the biggest bill; topology is the biggest risk</b>
+Monte Carlo scales linearly in the number of paths, so doubling the workload doubles the
+cost and nothing surprising happens. Persistent homology scales roughly cubically in the
+number of points, so an Institution customer analysing 1,000 assets instead of 100 does not
+consume 10 times more compute, they consume something closer to 1,000 times more. Cap asset
+count per run, use a sparse or witness-complex approximation above a few hundred points, and
+never let the topology module run unbounded on the shared fleet.</div>
+
+<div class="pick"><b>Three modules are almost free, and that is a design result rather than luck</b>
+Trading strategy, stress testing and composite risk together are 6% of batch compute, because
+all three consume simulation output instead of producing it. Generating paths once and then
+running twelve stress scenarios, a strategy evaluation and a composite score against the same
+cached tensor is what keeps a full pipeline at 60 vCPU-minutes. If each of those modules
+re-ran its own simulation, one pipeline would cost nearer 200 vCPU-minutes and the free tier
+would not be affordable.</div>
+
+<!-- ============================================ 07 -->
+<h2><span class="n">07</span>Maintenance</h2>
+
+<table>
+  <thead><tr><th style="width:14%">Users</th><th class="n" style="width:16%">Monthly</th>
+    <th style="width:34%">What it buys</th><th style="width:36%">Who does the work</th></tr></thead>
+  <tbody>
+  <tr class="free"><td>100</td><td class="n win">$0</td>
+    <td>Nothing bought. The domain is the only real expense and it is annual.</td>
+    <td>The founding team, evenings and weekends.</td></tr>
+  <tr><td>1,000</td><td class="n">$500</td>
+    <td>Paid monitoring, on-call paging, backup verification, a staging environment.</td>
+    <td>Still the founding team, now with an on-call rota.</td></tr>
+  <tr><td>10,000</td><td class="n">$18,000</td>
+    <td>Tooling, plus one full-time engineer and half a support person.</td>
+    <td>First hires. The tightest point on the curve.</td></tr>
+  <tr><td>100,000</td><td class="n">$120,000</td>
+    <td>Six people: three engineers, one site reliability engineer, one support, one on
+    growth. Plus compliance, a SOC 2 audit and legal.</td>
+    <td>A real team with a real rota.</td></tr>
+  </tbody>
+</table>
+
+<p>Maintenance is 0%, 20%, 53% and 35% of revenue across the four phases. Infrastructure over
+the same span is 0%, 20%, 11% and 8%. Servers get cheaper per user as you grow; people do not.</p>
+
+<h3>Three risks worth stating</h3>
+<ul>
+<li><b>Phase 0 rests on Oracle's free tier, which was halved in 2026.</b> The Always Free ARM
+allocation went from 4 OCPU and 24 GB to 2 and 12, with no announcement, and capacity is
+regionally unreliable. Keep everything containerised so Phase 0 can move to an $87 rented
+machine in an afternoon, and treat the free tier as a convenience rather than a foundation.</li>
+<li><b>The module estimates are unmeasured.</b> Every figure in section 06, and therefore every
+fleet size and margin in section 05, comes from the module definitions rather than a profiler.
+Measure the Monte Carlo and persistent-homology paths before publishing any cap publicly.</li>
+<li><b>The free tier is unmetered by design, so abuse is the main scaling risk.</b> Fifty runs a
+month at 10,000 paths is the cap, but a script can reach it from every account it creates.
+Gate signup on a verified institutional email or an aged code-hosting account, and rate-limit
+account creation per address range.</li>
+</ul>
+
+<p class="src"><b>Sources, retrieved September 2026.</b>
+Cloudflare R2 pricing and free tier &middot; Oracle Cloud Always Free tier and its 2026
+reduction &middot; Hetzner price adjustment of 15 June 2026 and AX102 product page &middot;
+AWS EC2 on-demand and spot pricing &middot; Redis 8 licensing and Valkey comparison &middot;
+Tiger Data pricing, trial only &middot; Neon free-tier limits &middot; Databento pricing
+&middot; QuantConnect and QuantRocket pricing. Vendor prices are as published. Workload
+volumes, tier mix and conversion rates are modelled estimates and are labelled as such above.</p>
+
+</div>

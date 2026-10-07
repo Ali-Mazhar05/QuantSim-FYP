@@ -1,0 +1,160 @@
+<title>QuantSim Prior FYP Landscape</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --ink:#12171c; --ink-3:#6f7b87; --paper:#ffffff;
+    --title:#0b5334;
+    --rule:#c7d0d7; --rule-2:#e8ecef;
+    --yes:#0a6e4e; --part:#c07a06; --no:#c0272d;
+    --qs:#0a6e4e; --qs-bg:#ecf7f2;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f6f8f9;font-family:var(--sans);color:var(--ink)}
+  .canvas{background:var(--paper);width:1400px;margin:24px auto;padding:34px 40px 28px}
+
+  h1{font-size:36px;font-weight:700;color:var(--title);margin:0 0 26px;letter-spacing:.005em}
+
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  col.f{width:290px}
+  th,td{padding:9px 8px;vertical-align:middle}
+  thead th{text-align:center;font-size:14px;font-weight:700;line-height:1.2;
+           padding-bottom:11px;border-bottom:1.4px solid var(--rule)}
+  thead th .code{display:block;font-size:9.5px;font-weight:400;color:var(--ink-3);
+                 margin-top:3px;letter-spacing:.03em}
+  thead th.f{text-align:left;font-size:11px;font-weight:700;color:var(--ink-3);
+             text-transform:uppercase;letter-spacing:.11em}
+  tbody td{border-bottom:1px solid var(--rule-2)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody td.f{font-size:13.5px;font-weight:700;line-height:1.3}
+  tbody td.m{text-align:center}
+
+  .mark{display:inline-flex;align-items:center;justify-content:center;
+        width:34px;height:34px;border-radius:50%;font-size:19px;font-weight:700;
+        line-height:1;color:#fff;font-style:normal}
+  .m-y{background:var(--yes)}
+  .m-p{background:var(--part)}
+  .m-n{background:var(--no)}
+
+  col.qs{background:var(--qs-bg)}
+  thead th.qs{color:var(--qs);border-bottom:2.4px solid var(--qs)}
+  thead th.qs .code{color:var(--qs)}
+
+  .foot{display:flex;gap:26px;align-items:center;margin-top:22px;
+        font-size:11px;color:var(--ink-3)}
+  .foot .k{display:inline-flex;align-items:center;gap:7px}
+  .foot .mark{width:20px;height:20px;font-size:11px}
+  .foot .note{margin-left:auto;text-align:right;max-width:560px;line-height:1.45}
+</style>
+
+<div class="canvas">
+  <h1>Prior FYP Landscape</h1>
+
+  <table>
+    <colgroup>
+      <col class="f"><col><col><col><col><col><col><col class="qs">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="f">Capability</th>
+        <th>TRADINI<span class="code">F22-066</span></th>
+        <th>Binance ML<span class="code">S23-027</span></th>
+        <th>NeuraSight<span class="code">F23-068</span></th>
+        <th>TradeX<span class="code">S25-024</span></th>
+        <th>CashFlow<span class="code">F25-091</span></th>
+        <th>Trade360<span class="code">F25-342</span></th>
+        <th class="qs">QuantSim<span class="code">this FYP</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="f">Synthetic market simulation</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Stress &amp; scenario testing</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Topological analysis</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Explainable AI on risk</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Composite risk score</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Strategy evaluation</td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Auditable, reproducible runs</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+      <tr>
+        <td class="f">Research output, not trading</td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+        <td class="m"><i class="mark m-p">&#8211;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+        <td class="m"><i class="mark m-n">&#10005;</i></td>
+        <td class="m"><i class="mark m-y">&#10003;</i></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="foot">
+    <span class="k"><i class="mark m-y">&#10003;</i> Available</span>
+    <span class="k"><i class="mark m-p">&#8211;</i> Partial / adjacent</span>
+    <span class="k"><i class="mark m-n">&#10005;</i> Not offered</span>
+    <span class="note">Audited against the FAST BS-FYP repository, Fall 2019 to Fall 2025.
+    Marks reflect each project&rsquo;s own scope statement in that repository.</span>
+  </div>
+</div>

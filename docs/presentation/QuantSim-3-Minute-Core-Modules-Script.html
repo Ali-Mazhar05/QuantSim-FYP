@@ -1,0 +1,378 @@
+<title>QuantSim 3-Minute Walkthrough</title>
+<style>
+  :root{
+    --ink:#14181d; --ink-2:#3d4650; --ink-3:#6b7683; --rule:#e2e6ea; --rule-2:#c9d0d7;
+    --paper:#ffffff; --paper-2:#f7f9fa; --accent:#0b6f5b; --accent-soft:#e8f4f0;
+    --warn:#a85205; --warn-soft:#fdf4ec; --stop:#b81f1a; --stop-soft:#fcf0ef;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:Georgia,"Iowan Old Style",serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper-2);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0}
+  .wrap{max-width:980px;margin:0 auto;padding:0 32px 100px;background:var(--paper)}
+
+  .mast{padding:56px 0 34px;border-bottom:3px solid var(--ink)}
+  .mast .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .mast h1{font:600 38px/1.12 var(--serif);margin:14px 0 12px;letter-spacing:-.02em}
+  .mast .sub{font-size:17px;color:var(--ink-2);max-width:62ch}
+  .meta{display:flex;flex-wrap:wrap;gap:0 40px;margin-top:24px;font:13px/1.7 var(--mono);color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:600}
+
+  /* ---- countdown strip ---- */
+  .strip{display:flex;margin:34px 0 0;border:1px solid var(--rule);border-radius:4px;overflow:hidden;font:11px/1 var(--mono)}
+  .strip a{flex:1;text-align:center;padding:12px 4px;color:var(--ink-2);text-decoration:none;border-right:1px solid var(--rule);background:var(--paper-2)}
+  .strip a:last-child{border-right:none}
+  .strip a b{display:block;color:var(--ink);font-size:12px;margin-bottom:4px}
+  .strip a:hover{background:var(--accent-soft);color:var(--accent)}
+
+  /* ---- timeline ---- */
+  .timeline{margin-top:56px;padding-left:0}
+  .stop{display:grid;grid-template-columns:86px 1fr;gap:0 22px;margin-top:0;padding:30px 0;border-top:1px solid var(--rule);scroll-margin-top:16px;position:relative}
+  .stop:first-child{border-top:3px solid var(--ink);padding-top:34px}
+  .stop .clock{font:600 13px/1.3 var(--mono);color:var(--accent);padding-top:2px}
+  .stop .clock .dur{display:block;margin-top:5px;font:11px/1 var(--mono);color:var(--ink-3);font-weight:400}
+  .stop .body{min-width:0}
+  .stop h3{font:600 22px/1.2 var(--serif);margin:0 0 3px;letter-spacing:-.01em}
+  .stop .module{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+  .stop .where{font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 16px}
+  .stop .where b{color:var(--ink-2);font-weight:600}
+
+  figure{margin:0 0 18px}
+  figure img{width:100%;display:block;border:1px solid var(--rule-2);border-radius:5px;background:#fff}
+  figcaption{font:12px/1.5 var(--mono);color:var(--ink-3);margin-top:8px}
+
+  .vo{border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 16px}
+  .vo .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px}
+  .vo p{font:17px/1.62 var(--serif);color:var(--ink);margin:0 0 10px}
+  .vo p:last-child{margin-bottom:0}
+  .stage{display:block;font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 10px}
+  .stage::before{content:"▸ ";color:var(--accent)}
+
+  .rem{border:1px solid var(--rule);border-radius:4px;padding:13px 18px 13px;margin:0;background:var(--paper-2)}
+  .rem .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:9px}
+  .rem ul{margin:0;padding-left:18px}
+  .rem li{margin-bottom:5px;font-size:14px;line-height:1.5;color:var(--ink-2)}
+  .rem li:last-child{margin-bottom:0}
+  .rem li b{color:var(--ink);font-weight:600}
+
+  .cut{border:1px solid var(--rule-2);border-left:4px solid var(--warn);background:var(--warn-soft);padding:12px 18px;border-radius:0 4px 4px 0;margin:0 0 16px;font-size:14px;color:var(--ink-2)}
+  .cut b{color:var(--warn)}
+
+  .end{margin-top:56px;padding-top:24px;border-top:3px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+  .end a{color:var(--accent)}
+
+  @media (max-width:640px){
+    .wrap{padding:0 18px 70px}
+    .stop{grid-template-columns:1fr;gap:6px 0}
+    .stop .clock{padding-top:0}
+    .strip{flex-wrap:wrap}
+    .strip a{flex:1 1 30%}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">Presenter Script &middot; Speed Run</div>
+  <h1>QuantSim — 3-Minute Core Walkthrough</h1>
+  <p class="sub">A tight, timed script covering only the four modules that carry the product's
+  argument: Simulation, Trading, the three-lens Risk engine, and the Composite Risk decision. No
+  reference screens, no administration, no extended-scope detours.</p>
+  <div class="meta">
+    <div><b>Total runtime</b><br>3:00, ten fixed beats</div>
+    <div><b>Screens shown</b><br>9 of the 51 captures</div>
+    <div><b>Pace</b><br>~150 words / minute, spoken continuously</div>
+    <div><b>Full version</b><br>QuantSim-UI-Walkthrough-Script.html</div>
+  </div>
+</header>
+
+<div class="strip">
+  <a href="#s1"><b>0:00</b>Dashboard</a>
+  <a href="#s2"><b>0:15</b>Simulation</a>
+  <a href="#s3"><b>0:33</b>Trading</a>
+  <a href="#s4"><b>0:48</b>Stress</a>
+  <a href="#s5"><b>1:13</b>TDA</a>
+  <a href="#s6"><b>1:38</b>ML</a>
+  <a href="#s7"><b>1:58</b>Composite</a>
+  <a href="#s8"><b>2:23</b>Alert</a>
+  <a href="#s9"><b>2:35</b>Payoff</a>
+  <a href="#s10"><b>2:50</b>Close</a>
+</div>
+
+<div class="cut">
+  <b>Before you start:</b> have the app already signed in and sitting on the dashboard — do not
+  spend any of your three minutes on login or the sidebar. If you must sign in on camera, do it
+  before you start the clock. Say the sentence in §0.1 while the page is already loaded, not while
+  you wait for it.
+</div>
+
+<div class="timeline">
+
+  <div class="stop" id="s1">
+    <div class="clock">0:00<span class="dur">0:15</span></div>
+    <div class="body">
+      <div class="module">Landing &amp; framing</div>
+      <h3>The dashboard, cold</h3>
+      <p class="where"><b>Route</b> /dashboard &nbsp;·&nbsp; already loaded before you start talking</p>
+      <figure>
+        <img src="screenshots/02-dashboard-initial.png" alt="Dashboard before any analysis has run">
+        <figcaption><b>02</b> — Cold dashboard: four KPIs, equity curve, drawdown, two empty panels at the bottom.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 15 seconds, ~35 words</span>
+        <p>"This is QuantSim — an AI-assisted market simulation and portfolio risk platform. Real
+        interface, mock data underneath. Right now the risk status reads MODERATE, and these two
+        bottom panels are empty, because nothing has been analysed yet. Let's fix that."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>State "real interface, mock data" once, briefly, and never revisit it.</li>
+          <li>Point at the two empty panels — you're setting up the payoff at 2:35.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s2">
+    <div class="clock">0:15<span class="dur">0:18</span></div>
+    <div class="body">
+      <div class="module">Module 1 — Simulation</div>
+      <h3>10,000-path Monte Carlo ensemble</h3>
+      <p class="where"><b>Route</b> /simulation/results/1042</p>
+      <figure>
+        <img src="screenshots/20-flow-5-simulation-results.png" alt="Simulation results: fan chart, terminal price statistics, VaR and CVaR">
+        <figcaption><b>20</b> — Fan chart, terminal price percentiles, VaR/CVaR summary.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 18 seconds, ~45 words</span>
+        <p>"We define a market, pick a stochastic model — geometric Brownian motion, calibrated to
+        real data — and generate ten thousand simulated price paths. This fan chart is that
+        ensemble. It collapses into a distribution: mean, percentiles, and the two numbers that
+        matter — VaR at minus 8.7%, CVaR at minus 12.9%."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>One sentence covers environment + model + calibration — don't stop to explain each.</li>
+          <li>VaR and CVaR together, always — never quote one without the other.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s3">
+    <div class="clock">0:33<span class="dur">0:15</span></div>
+    <div class="body">
+      <div class="module">Module 2 — Trading</div>
+      <h3>Strategy executes inside the simulation</h3>
+      <p class="where"><b>Route</b> /trading/replay/1042</p>
+      <figure>
+        <img src="screenshots/23-flow-8-trade-replay-complete.png" alt="Trade replay complete: ten fills, final portfolio value">
+        <figcaption><b>23</b> — Ten fills complete. Portfolio value, fill count, and session window.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 15 seconds, ~38 words</span>
+        <p>"A momentum strategy trades inside that simulated market — real position weights, real
+        transaction costs and slippage declared up front. Ten fills later, the portfolio is up
+        8.3%, sitting at just over $1.08 million. That's the book we're about to stress."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Say "costs declared up front" — it's the one sophisticated detail worth a half-second.</li>
+          <li>End on "the book we're about to stress" — it's the pivot into Risk.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s4">
+    <div class="clock">0:48<span class="dur">0:25</span></div>
+    <div class="body">
+      <div class="module">Module 3 — Risk, lens 1</div>
+      <h3>Stress testing: what if disaster strikes?</h3>
+      <p class="where"><b>Route</b> /risk/stress-testing &nbsp;·&nbsp; Correlated Failure scenario</p>
+      <figure>
+        <img src="screenshots/27-flow-12-stress-complete.png" alt="Stress test complete: max loss, VaR, CVaR, recovery time, contribution bars">
+        <figcaption><b>27</b> — Correlated Failure scenario: −21.4% max loss, 47-day recovery, per-position attribution.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 25 seconds, ~62 words</span>
+        <p>"Now the risk engine — three independent lenses, starting with scenario stress. Under a
+        'Correlated Failure' — every position moving together, diversification gone — this
+        portfolio loses 21.4%, and takes 47 days to recover. That recovery number is what turns a
+        scary percentage into a business decision. And the chart underneath tells you exactly
+        which position did it: Nvidia, a third of the loss."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Numbers: <b>−21.4% max loss · 47-day recovery · NVDA 34% of the loss</b>.</li>
+          <li>"Recovery time turns a percentage into a business decision" is the one line worth memorising verbatim.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s5">
+    <div class="clock">1:13<span class="dur">0:25</span></div>
+    <div class="body">
+      <div class="module">Module 3 — Risk, lens 2</div>
+      <h3>TDA: is market structure changing?</h3>
+      <p class="where"><b>Route</b> /risk/tda-analysis &nbsp;·&nbsp; jump straight to the final stage — skip the six pipeline steps</p>
+      <figure>
+        <img src="screenshots/34-flow-19-tda-signal.png" alt="TDA topology risk signal: 84 out of 100, HIGH, with shift timeline">
+        <figcaption><b>34</b> — Topology risk signal: 84 / 100, HIGH, with the structural shift dated on a timeline.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 25 seconds, ~60 words</span>
+        <p>"Second lens — topological data analysis. Instead of scoring returns, it measures the
+        <em>shape</em> of how assets relate to each other, using persistent homology — a technique
+        borrowed from pure mathematics. It converts that shape into one number: 84 out of 100,
+        HIGH. Structural deformation detected — the market is moving as one thing, and
+        diversification is quietly failing."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li><b>Skip all seven pipeline stages</b> — land directly on this screen. Say "persistent homology" once, do not explain birth/death or the diagram.</li>
+          <li>Score: <b>84 / 100, HIGH</b>. One sentence on what it means: structure, not returns.</li>
+          <li>If asked for more, point to the full walkthrough script — this is the 3-minute cut.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s6">
+    <div class="clock">1:38<span class="dur">0:20</span></div>
+    <div class="body">
+      <div class="module">Module 3 — Risk, lens 3</div>
+      <h3>ML: what does the data suggest?</h3>
+      <p class="where"><b>Route</b> /ml/predictions</p>
+      <figure>
+        <img src="screenshots/35-flow-20-ml-prediction.png" alt="ML prediction: volatility forecast, drawdown probability, regime timeline, feature importance">
+        <figcaption><b>35</b> — Drawdown probability 63%, regime Stress, 87% confidence, feature attribution below.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 20 seconds, ~50 words</span>
+        <p>"Third lens — a trained model forecasting forward. 63% probability of a drawdown, market
+        regime classified as Stress, at 87% confidence — and it shows its work: the top driver is
+        correlation change. That's the same signal topology just flagged, found completely
+        independently."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Numbers: <b>63% drawdown probability · regime Stress · 87% confidence</b>.</li>
+          <li>The line that matters: <b>correlation change ranks top — same cause TDA found, independently.</b> This sets up the composite.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s7">
+    <div class="clock">1:58<span class="dur">0:25</span></div>
+    <div class="body">
+      <div class="module">Synthesis</div>
+      <h3>Composite risk — one governed score</h3>
+      <p class="where"><b>Route</b> /risk/composite &nbsp;·&nbsp; pause 1 second before speaking</p>
+      <figure>
+        <img src="screenshots/37-flow-22-composite-risk.png" alt="Composite risk score 76 out of 100 HIGH with component breakdown and radar chart">
+        <figcaption><b>37</b> — 76 / 100, HIGH. Stress 72, TDA 84, ML 68, shown beside the composite — never alone.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 25 seconds, ~58 words</span>
+        <p>"Three independent lenses — three different failure modes — come together into one
+        number: 76 out of 100, HIGH. And it's never shown alone: stress at 72, topology at 84, ML
+        at 68, always displayed beside it. When three different methods agree that something is
+        wrong, that's a signal worth acting on."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Score: <b>76 / 100 HIGH</b> — components <b>72 / 84 / 68</b>.</li>
+          <li>The one idea to leave behind: "<b>three lenses that fail differently — agreement is the signal.</b>"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s8">
+    <div class="clock">2:23<span class="dur">0:12</span></div>
+    <div class="body">
+      <div class="module">Outcome</div>
+      <h3>The alert fires</h3>
+      <p class="where"><b>Route</b> /alerts</p>
+      <figure>
+        <img src="screenshots/38-flow-23-alerts.png" alt="Active high-severity alert with source attribution and action buttons">
+        <figcaption><b>38</b> — HIGH alert: source TDA Analysis, threshold crossed 75 → 82, one-click into the source.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 12 seconds, ~30 words</span>
+        <p>"That composite score raises a HIGH alert automatically — with its source attached, so
+        whoever sees it at 8am knows exactly where to look first: topology."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Do not click Dismiss — you need the alert live for the next screen.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s9">
+    <div class="clock">2:35<span class="dur">0:15</span></div>
+    <div class="body">
+      <div class="module">Payoff</div>
+      <h3>Back to the same dashboard</h3>
+      <p class="where"><b>Route</b> /dashboard &nbsp;·&nbsp; the exact screen from 0:00, now populated</p>
+      <figure>
+        <img src="screenshots/39-dashboard-after-analysis.png" alt="Dashboard after analysis: HIGH risk badge, alert banner, populated panels">
+        <figcaption><b>39</b> — Same screen as the opening capture. Risk status now HIGH, alert banner live, both panels filled.</figcaption>
+      </figure>
+      <div class="vo">
+        <span class="lbl">Say this — 15 seconds, ~38 words</span>
+        <p>"Same dashboard I opened with. Risk status was MODERATE — now it's HIGH, with a live
+        alert and both panels filled in. Nothing about the portfolio's return changed. What
+        changed is that we now know what it costs us."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Say "same dashboard I opened with" — the comparison is the point, name it.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop" id="s10">
+    <div class="clock">2:50<span class="dur">0:10</span></div>
+    <div class="body">
+      <div class="module">Close</div>
+      <h3>Hand off</h3>
+      <div class="vo">
+        <span class="lbl">Say this — 10 seconds, ~25 words</span>
+        <p>"Simulation, trading, three independent risk lenses, one governed score, one alert.
+        That's QuantSim end to end. Happy to go deeper on any piece."</p>
+      </div>
+      <div class="rem">
+        <span class="lbl">Remember</span>
+        <ul>
+          <li>Do not ask "any questions?" — the line above already opens the floor.</li>
+          <li>For a deeper follow-up session, use <b>QuantSim-UI-Walkthrough-Script.html</b> — same screens, full detail, Q&amp;A bank included.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="end">
+  QuantSim — 3-Minute Core Walkthrough &middot; presenter speed-run script<br>
+  Companion to QuantSim-UI-Walkthrough-Script.html (the full 42-minute version) — same screenshots, same repo.<br>
+  Rehearse this out loud twice with a stopwatch before presenting; the word counts are calibrated to ~150 wpm but everyone's pace differs.
+</div>
+
+</div>
