@@ -31,3 +31,6 @@ ci/jenkins/secrets/*
 .idea/
 .DS_Store
 ~$*
+
+# CI scratch output
+.ci/
