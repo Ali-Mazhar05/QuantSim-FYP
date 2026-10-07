@@ -1,0 +1,148 @@
+# Jenkins configuration as code. Applied on every start; changes made in the UI are
+# overwritten, so change this file instead.
+#
+# ${name} values are read from Docker secrets mounted at /run/secrets/<name>
+# (see compose.yml and secrets/README.md).
+
+jenkins:
+  systemMessage: "QuantSim CI/CD. Configuration is managed in ci/jenkins/casc.yaml in the repository."
+  numExecutors: 3
+  mode: NORMAL
+  labelString: "docker"
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          name: "QuantSim Admin"
+          password: "${admin_password}"
+
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            description: "Full control"
+            permissions:
+              - "Overall/Administer"
+            entries:
+              - user: "admin"
+          - name: "developer"
+            description: "Every signed-in team member: view, build and cancel jobs"
+            permissions:
+              - "Overall/Read"
+              - "Job/Read"
+              - "Job/Build"
+              - "Job/Cancel"
+              - "Job/Workspace"
+              - "Run/Replay"
+              - "View/Read"
+            entries:
+              - group: "authenticated"
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "REGISTRY"
+            value: "ghcr.io"
+          - key: "IMAGE_PREFIX"
+            value: "ghcr.io/ali-mazhar05/quantsim"
+          - key: "GITHUB_REPO"
+            value: "Ali-Mazhar05/QuantSim-FYP"
+          # Jenkins user ids, comma separated, allowed to approve ACC and PROD
+          - key: "RELEASE_APPROVERS"
+            value: "admin"
+          # Known-good releases per environment, kept in the persistent volume
+          - key: "QS_RELEASES_DIR"
+            value: "/var/jenkins_home/releases"
+
+unclassified:
+  location:
+    url: "${JENKINS_URL:-http://localhost:8080/}"
+  timestamper:
+    allPipelines: true
+  lockableResourcesManager:
+    declaredResources:
+      - name: "env-dev"
+        description: "DEV environment: one deploy at a time"
+      - name: "env-test"
+        description: "TEST environment: one deploy at a time"
+      - name: "env-acc"
+        description: "ACC environment: one deploy at a time"
+      - name: "env-prod"
+        description: "PROD environment: one deploy at a time"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - gitHubApp:
+              id: "github-app"
+              description: "GitHub App quantsim-jenkins: repository access, commit statuses, release tags"
+              appID: "${github_app_id}"
+              privateKey: "${readFile:/run/secrets/github_app_key}"
+          - usernamePassword:
+              id: "ghcr-push"
+              description: "GitHub Container Registry: push and pull QuantSim images"
+              scope: GLOBAL
+              username: "${ghcr_user}"
+              password: "${ghcr_token}"
+          - string:
+              id: "cloudflare-api-token"
+              description: "Cloudflare API token with Pages edit permission"
+              scope: GLOBAL
+              secret: "${cloudflare_api_token}"
+          - string:
+              id: "cloudflare-account-id"
+              description: "Cloudflare account id"
+              scope: GLOBAL
+              secret: "${cloudflare_account_id}"
+          - file:
+              id: "sops-age-key"
+              description: "age private key that decrypts deploy/secrets"
+              scope: GLOBAL
+              fileName: "sops_age_key"
+              secretBytes: "${readFileBase64:/run/secrets/sops_age_key}"
+
+jobs:
+  - script: |
+      multibranchPipelineJob('quantsim') {
+        displayName('QuantSim')
+        description('Builds every branch and pull request of QuantSim-FYP. develop, test, acceptance and main deploy to DEV, TEST, ACC and PROD.')
+        branchSources {
+          branchSource {
+            source {
+              github {
+                id('quantsim-fyp')
+                repoOwner('Ali-Mazhar05')
+                repository('QuantSim-FYP')
+                repositoryUrl('https://github.com/Ali-Mazhar05/QuantSim-FYP')
+                configuredByUrl(true)
+                credentialsId('github-app')
+                traits {
+                  // 3 = build every branch, including ones that also have a pull request
+                  gitHubBranchDiscovery { strategyId(3) }
+                  // 1 = build pull requests merged with their target branch
+                  gitHubPullRequestDiscovery { strategyId(1) }
+                  // develop-poc and master are deliberately left out
+                  headWildcardFilter {
+                    includes('main acceptance test develop feature/* bugfix/* hotfix/* PR-*')
+                    excludes('')
+                  }
+                }
+              }
+            }
+          }
+        }
+        factory {
+          workflowBranchProjectFactory { scriptPath('Jenkinsfile') }
+        }
+        orphanedItemStrategy {
+          discardOldItems { daysToKeep(7) }
+        }
+        triggers {
+          // Fallback for when the GitHub webhook cannot reach Jenkins
+          periodicFolderTrigger { interval('2m') }
+        }
+      }
