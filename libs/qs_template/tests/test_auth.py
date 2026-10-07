@@ -147,7 +147,9 @@ async def test_rejects_a_forged_signature(auth: Authenticator, platform: FakePla
 
 
 async def test_rejects_tokens_not_signed_with_rs256(auth: Authenticator) -> None:
-    hs256 = jwt.encode({"sub": str(USER_ID)}, "shared-secret", algorithm="HS256")
+    hs256 = jwt.encode(
+        {"sub": str(USER_ID)}, "a-shared-secret-of-at-least-32-bytes", algorithm="HS256"
+    )
     unsigned = unsigned_token({"sub": str(USER_ID)})
 
     for token in (hs256, unsigned, "not-a-token"):
