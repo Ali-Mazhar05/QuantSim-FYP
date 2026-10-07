@@ -1,24 +1,49 @@
 #!/usr/bin/env bash
-# Lints, type checks and tests one backend service in a pinned uv + Python container.
-#   usage: python-ci.sh <service>
+# Lints, type checks and tests one Python project in a pinned uv + Python container.
+#   usage: python-ci.sh <project>
+#     <project> is a folder such as services/market or libs/qs_template; a bare name
+#     means services/<name>
 #
-# Service contract (services/<service>/pyproject.toml):
-#   - dependencies locked with uv (its own uv.lock, or the workspace uv.lock at the root)
-#   - ruff, mypy and pytest available in the dev dependency group
-#   - at least one test; a service with no tests fails CI
-# Test results land in services/<service>/reports/junit.xml.
+# Project contract (<project>/pyproject.toml):
+#   - dependencies locked in the workspace uv.lock at the repository root
+#   - ruff, mypy and pytest in the dev dependency group
+#   - at least one test; a project with no tests fails CI
+# Tests marked @pytest.mark.db get a throwaway PostgreSQL + TimescaleDB through
+# TEST_DATABASE_URL. Results land in <project>/reports/junit.xml.
 source "$(dirname "$0")/lib.sh"
 
-service="${1:?usage: python-ci.sh <service>}"
-[[ -f "$REPO_ROOT/services/$service/pyproject.toml" ]] || die "services/$service has no pyproject.toml"
+project="${1:?usage: python-ci.sh <project>}"
+[[ "$project" == */* ]] || project="services/$project"
+[[ -f "$REPO_ROOT/$project/pyproject.toml" ]] || die "$project has no pyproject.toml"
+name="$(basename "$project")"
 
-# Each service gets its own virtualenv so services can be checked in parallel
-# The command runs inside the container, so its variables must not expand here
+db_opts=()
+if grep -rqE "pytest\.mark\.db|mark\.db\b" "$REPO_ROOT/$project/tests" 2>/dev/null; then
+  id="qs-ci-$(build_id)-$name"
+  network="$id"
+  db="$id-db"
+  cleanup() {
+    docker rm -f "$db" >/dev/null 2>&1 || true
+    docker network rm "$network" >/dev/null 2>&1 || true
+  }
+  trap cleanup EXIT
+  docker network create "$network" >/dev/null
+  docker run -d --name "$db" --network "$network" \
+    -e POSTGRES_USER=qs -e POSTGRES_PASSWORD=qs -e POSTGRES_DB=qs \
+    "$TIMESCALE_IMAGE" >/dev/null
+  log "waiting for the test database"
+  retry 60 2 docker exec "$db" pg_isready -h 127.0.0.1 -U qs -d qs >/dev/null \
+    || die "test database did not start"
+  db_opts=(--network "$network" -e "TEST_DATABASE_URL=postgresql+asyncpg://qs:qs@$db:5432/qs")
+fi
+
+# Each project gets its own virtualenv so projects can be checked in parallel.
+# The command runs inside the container, so its variables must not expand here.
 # shellcheck disable=SC2016
-run_in_image "$UV_IMAGE" -e UV_LINK_MODE=copy -e SERVICE="$service" -- bash -ec '
+run_in_image "$UV_IMAGE" "${db_opts[@]}" -e UV_LINK_MODE=copy -e PROJECT="$project" -e NAME="$name" -- bash -ec '
   export UV_CACHE_DIR="$PWD/.ci/uv-cache"
-  export UV_PROJECT_ENVIRONMENT="$PWD/.ci/venv-$SERVICE"
-  cd "services/$SERVICE"
+  export UV_PROJECT_ENVIRONMENT="$PWD/.ci/venv-$NAME"
+  cd "$PROJECT"
   uv sync --frozen
   echo "--- ruff";   uv run --frozen ruff check .
   echo "--- format"; uv run --frozen ruff format --check .
