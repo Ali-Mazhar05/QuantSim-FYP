@@ -22,7 +22,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol
 
 import httpx
 import jwt
@@ -67,6 +67,28 @@ def _unauthenticated(detail: str) -> ServiceError:
         type_="urn:quantsim:problem:not-authenticated",
         extra={},
     )
+
+
+class KeySource(Protocol):
+    async def key(self, kid: str) -> PyJWK:
+        """The public key with id ``kid``; raises a 401 ServiceError when unknown."""
+
+
+class StaticKeys:
+    """Keys held in process, for the Platform service, which issues the tokens."""
+
+    def __init__(self, jwks: dict[str, Any]) -> None:
+        self._keys = {
+            entry["kid"]: PyJWK(entry, algorithm=ALGORITHM)
+            for entry in jwks.get("keys", [])
+            if entry.get("kid")
+        }
+
+    async def key(self, kid: str) -> PyJWK:
+        try:
+            return self._keys[kid]
+        except KeyError:
+            raise _unauthenticated("The token was signed with an unknown key.") from None
 
 
 class JwksCache:
@@ -142,7 +164,7 @@ class Authenticator:
         self,
         settings: ServiceSettings,
         *,
-        jwks: JwksCache | None = None,
+        jwks: KeySource | None = None,
         is_revoked: Callable[[Principal], Awaitable[bool]] | None = None,
     ) -> None:
         if jwks is None:
