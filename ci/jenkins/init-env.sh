@@ -40,11 +40,14 @@ if [[ ! -f "$secrets/agent_ssh_key" ]]; then
   echo "created the controller-to-agent SSH key"
 fi
 pubkey="$(cat "$secrets/agent_ssh_key.pub")"
+# Names this machine in the shared host lease (host.sh status)
+host_id="${USER:-${USERNAME:-user}}@$(hostname)"
 
 if [[ "$mode" == "server" ]]; then
   cat > "$here/.env" <<EOF
 # Written by init-env.sh --server. Re-run it to change these values.
 COMPOSE_FILE=compose.yml:compose.server.yml
+HOST_ID=$host_id
 AGENT_SSH_PUBKEY=$pubkey
 JENKINS_AUTH=github
 JENKINS_BIND=127.0.0.1
@@ -60,6 +63,7 @@ EOF
 else
   cat > "$here/.env" <<EOF
 # Written by init-env.sh (laptop host). Re-run it to change these values.
+HOST_ID=$host_id
 AGENT_SSH_PUBKEY=$pubkey
 JENKINS_AUTH=local
 JENKINS_BIND=0.0.0.0

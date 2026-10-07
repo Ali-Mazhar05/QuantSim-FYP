@@ -7,8 +7,9 @@
 #   docker compose -f ci/jenkins/compose.yml logs -f
 #   docker compose -f ci/jenkins/compose.yml down          (data is kept)
 #
-# Optional public link for a laptop host (logs, approvals for the whole team):
-#   docker compose -f ci/jenkins/compose.yml --profile tunnel up -d
+# Team members who take turns hosting use ci/jenkins/host.sh instead, which hands
+# Jenkins' state over through Cloudflare R2 and adds the "shared" and "tunnel"
+# profiles below (host lease and public link).
 #
 # On the CI server .env also sets COMPOSE_FILE, which adds compose.server.yml (HTTPS
 # with Caddy and GitHub sign-in).
@@ -84,10 +85,31 @@ services:
   tunnel:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:2025.9.1@sha256:4604b477520dc8322af5427da68b44f0bf814938e9d2e4814f2249ee4b03ffdf
-    command: ["tunnel", "--no-autoupdate", "--url", "http://jenkins:8080"]
+    # The metrics port publishes the current address at /quicktunnel for the lease
+    # HTTP/2 over TCP 443 works on networks that block the default QUIC (UDP)
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--metrics", "0.0.0.0:2000", "--url", "http://jenkins:8080"]
     restart: unless-stopped
     depends_on:
       - jenkins
+    logging: *logging
+
+  # Shared hosting: records in R2 every 2 minutes that this machine hosts Jenkins
+  lease:
+    profiles: ["shared"]
+    image: rclone/rclone:1.71@sha256:3103526c506266a9ecdf064efe99bf3677d92ef6407af124d8c56b4f49cbaa51
+    entrypoint: ["/bin/sh", "/lease.sh"]
+    restart: unless-stopped
+    environment:
+      HOST_ID: ${HOST_ID:?run ci/jenkins/init-env.sh first}
+      QS_STATE_BUCKET: ${QS_STATE_BUCKET:-quantsim-ci}
+      QS_STATE_ENDPOINT: ${QS_STATE_ENDPOINT:-}
+      QS_STATE_PROVIDER: ${QS_STATE_PROVIDER:-Cloudflare}
+    volumes:
+      - ./lease.sh:/lease.sh:ro
+    secrets:
+      - r2_access_key_id
+      - r2_secret_access_key
+      - cloudflare_account_id
     logging: *logging
 
 volumes:
@@ -113,3 +135,8 @@ secrets:
     file: ./secrets/cloudflare_account_id
   sops_age_key:
     file: ./secrets/sops_age_key
+  # Only needed for shared hosting (host.sh)
+  r2_access_key_id:
+    file: ./secrets/r2_access_key_id
+  r2_secret_access_key:
+    file: ./secrets/r2_secret_access_key
