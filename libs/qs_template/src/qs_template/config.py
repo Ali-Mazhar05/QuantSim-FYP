@@ -33,6 +33,9 @@ class ServiceSettings(BaseSettings):
     # Schema search path, when a service keeps its tables outside "public"
     db_search_path: str | None = Field(default=None, pattern=SEARCH_PATH_PATTERN)
 
+    # Event backbone (Redpanda, Kafka protocol), e.g. redpanda:9092
+    kafka_bootstrap_servers: str | None = None
+
     # Token verification (qs_template.auth). The Platform service publishes its public
     # signing keys at the JWKS URL; every other service verifies tokens against them.
     auth_jwks_url: str | None = None

@@ -13,6 +13,7 @@ dependencies = [
   "uvicorn[standard]>=0.32",
   "httpx>=0.27",
   "pyjwt[crypto]>=2.10",
+  "aiokafka>=0.12",
 ]
 
 [dependency-groups]
@@ -35,7 +36,10 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
-markers = ["db: needs a PostgreSQL database (TEST_DATABASE_URL)"]
+markers = [
+  "db: needs a PostgreSQL database (TEST_DATABASE_URL)",
+  "kafka: needs a Redpanda broker (TEST_KAFKA_BOOTSTRAP)",
+]
 filterwarnings = [
   "error",
   # FastAPI's TestClient still wraps httpx; harmless until FastAPI moves on
@@ -46,3 +50,8 @@ filterwarnings = [
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# aiokafka ships without type information
+module = ["aiokafka", "aiokafka.*"]
+ignore_missing_imports = true
