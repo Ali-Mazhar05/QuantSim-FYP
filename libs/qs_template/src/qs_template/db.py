@@ -22,12 +22,15 @@ from qs_template.config import ServiceSettings
 
 class Database:
     def __init__(self, settings: ServiceSettings) -> None:
+        server_settings = {"application_name": settings.service_name}
+        if settings.db_search_path:
+            server_settings["search_path"] = settings.db_search_path
         self.engine: AsyncEngine = create_async_engine(
             settings.database_url.get_secret_value(),
             pool_size=settings.db_pool_size,
             pool_timeout=settings.db_pool_timeout_seconds,
             pool_pre_ping=True,
-            connect_args={"server_settings": {"application_name": settings.service_name}},
+            connect_args={"server_settings": server_settings},
         )
         self._sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 

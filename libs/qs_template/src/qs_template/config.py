@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "dev", "test", "acc", "prod"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+SEARCH_PATH_PATTERN = r"^[a-z_][a-z0-9_]*(,[a-z_][a-z0-9_]*)*$"
 
 
 class ServiceSettings(BaseSettings):
@@ -29,6 +30,8 @@ class ServiceSettings(BaseSettings):
     database_url: SecretStr
     db_pool_size: int = Field(default=5, ge=1, le=50)
     db_pool_timeout_seconds: float = Field(default=5.0, gt=0)
+    # Schema search path, when a service keeps its tables outside "public"
+    db_search_path: str | None = Field(default=None, pattern=SEARCH_PATH_PATTERN)
 
     # Token verification (qs_template.auth). The Platform service publishes its public
     # signing keys at the JWKS URL; every other service verifies tokens against them.
