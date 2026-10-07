@@ -1,9 +1,24 @@
-# Runs the QuantSim Jenkins controller.
-#   start:    docker compose -f ci/jenkins/compose.yml up -d --build
-#   logs:     docker compose -f ci/jenkins/compose.yml logs -f
-#   stop:     docker compose -f ci/jenkins/compose.yml down        (data is kept)
-# Fill ci/jenkins/secrets/ first; see secrets/README.md.
+# Runs QuantSim Jenkins: a controller that schedules and a build agent that builds.
+# The same files run on a laptop and on the CI server; ci/jenkins/.env (written by
+# init-env.sh) says which. From the repository root:
+#
+#   ci/jenkins/init-env.sh                      once, on a new host
+#   docker compose -f ci/jenkins/compose.yml up -d --build
+#   docker compose -f ci/jenkins/compose.yml logs -f
+#   docker compose -f ci/jenkins/compose.yml down          (data is kept)
+#
+# Optional public link for a laptop host (logs, approvals for the whole team):
+#   docker compose -f ci/jenkins/compose.yml --profile tunnel up -d
+#
+# On the CI server .env also sets COMPOSE_FILE, which adds compose.server.yml (HTTPS
+# with Caddy and GitHub sign-in).
 name: quantsim-jenkins
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   jenkins:
@@ -11,21 +26,19 @@ services:
     image: quantsim-jenkins:2.580.1
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # 127.0.0.1 on the CI server, where Caddy is the only way in
+      - "${JENKINS_BIND:-0.0.0.0}:${JENKINS_PORT:-8080}:8080"
     environment:
       JENKINS_URL: ${JENKINS_URL:-http://localhost:8080/}
-    # The Docker socket is owned by group 0 on Docker Desktop. On a Linux host set
-    # DOCKER_GID to the gid of the docker group (getent group docker).
-    group_add:
-      - "${DOCKER_GID:-0}"
+      CASC_JENKINS_CONFIG: /usr/share/jenkins/casc/jenkins.yaml,/usr/share/jenkins/casc/security/${JENKINS_AUTH:-local}.yaml
+      QS_RELEASE_APPROVERS: ${QS_RELEASE_APPROVERS:-admin}
+      QS_PLATFORMS: ${QS_PLATFORMS:-linux/amd64}
+      QS_SCAN_INTERVAL: ${QS_SCAN_INTERVAL:-2m}
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
-    # Deployed environments are smoke tested through the host's published ports
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     secrets:
       - admin_password
+      - agent_ssh_key
       - github_app_id
       - github_app_key
       - ghcr_user
@@ -33,6 +46,8 @@ services:
       - cloudflare_api_token
       - cloudflare_account_id
       - sops_age_key
+    depends_on:
+      - agent
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/login"]
       interval: 30s
@@ -43,18 +58,47 @@ services:
       resources:
         limits:
           memory: 2g
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *logging
+
+  # Every build runs here. It uses the host's Docker for builds and deploys, so DEV
+  # and TEST run on whichever machine hosts Jenkins.
+  agent:
+    build: ./agent
+    image: quantsim-jenkins-agent:jdk21
+    restart: unless-stopped
+    environment:
+      JENKINS_AGENT_SSH_PUBKEY: ${AGENT_SSH_PUBKEY:?run ci/jenkins/init-env.sh first}
+    volumes:
+      - agent_home:/home/jenkins/agent
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    logging: *logging
+
+  # Free public https://<random>.trycloudflare.com link to Jenkins; the address is
+  # printed in this service's log and changes every time it restarts.
+  tunnel:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:2025.9.1@sha256:4604b477520dc8322af5427da68b44f0bf814938e9d2e4814f2249ee4b03ffdf
+    command: ["tunnel", "--no-autoupdate", "--url", "http://jenkins:8080"]
+    restart: unless-stopped
+    depends_on:
+      - jenkins
+    logging: *logging
 
 volumes:
   jenkins_home:
+  agent_home:
 
 secrets:
   admin_password:
     file: ./secrets/admin_password
+  agent_ssh_key:
+    file: ./secrets/agent_ssh_key
   github_app_id:
     file: ./secrets/github_app_id
   github_app_key:
