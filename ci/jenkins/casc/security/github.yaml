@@ -1,0 +1,40 @@
+# Login for the shared CI server: team members sign in with their GitHub accounts.
+# Selected with JENKINS_AUTH=github. Only the GitHub usernames listed below get any
+# access; signing in with any other GitHub account shows nothing.
+#
+# To add a team member: add their GitHub username under "developer", rebuild and
+# restart (docker compose ... up -d --build). To let them approve ACC and PROD, also
+# add them to QS_RELEASE_APPROVERS in ci/jenkins/.env.
+
+jenkins:
+  securityRealm:
+    github:
+      githubWebUri: "https://github.com"
+      githubApiUri: "https://api.github.com"
+      clientID: "${github_oauth_client_id}"
+      clientSecret: "${github_oauth_client_secret}"
+      oauthScopes: "read:user,user:email"
+
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            description: "Full control"
+            permissions:
+              - "Overall/Administer"
+            entries:
+              - user: "Ali-Mazhar05"
+          - name: "developer"
+            description: "Team members: view, build, cancel and replay jobs"
+            permissions:
+              - "Overall/Read"
+              - "Job/Read"
+              - "Job/Build"
+              - "Job/Cancel"
+              - "Job/Workspace"
+              - "Run/Replay"
+              - "View/Read"
+            entries:
+              - user: "Ali-Mazhar05"
+              # - user: "teammate-github-username"
