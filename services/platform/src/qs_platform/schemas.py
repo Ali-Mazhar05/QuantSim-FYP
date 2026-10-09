@@ -1,0 +1,65 @@
+"""Request and response bodies of the Platform API (the published contract)."""
+
+import uuid
+from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from qs_template.auth import Role
+
+USERNAME_PATTERN = r"^[a-z0-9._-]{3,40}$"
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["Bearer"] = "Bearer"
+    expires_in: int
+    user: "UserOut"
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    username: str
+    email: str
+    display_name: str
+    role: Role
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+    deactivated_at: datetime | None
+
+
+class CreateUserRequest(BaseModel):
+    username: str = Field(pattern=USERNAME_PATTERN, description="lowercase, 3-40 characters")
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=12, max_length=1024)
+    role: Role
+
+
+class ChangeRoleRequest(BaseModel):
+    role: Role
+
+
+class UserList(BaseModel):
+    items: list[UserOut]
+    total: int
+
+
+class AuditEntryOut(BaseModel):
+    operation: str
+    changed_by: str | None
+    request_id: str | None
+    changed_at: datetime
+    changes: dict[str, Any]
+
+
+TokenResponse.model_rebuild()
