@@ -111,3 +111,29 @@ async def test_audit_log_is_append_only(db: Database, statement: str) -> None:
 def test_refuses_table_names_that_are_not_plain_identifiers() -> None:
     with pytest.raises(ValueError, match="identifier"):
         audit_table_statements("instrument; DROP TABLE audit_log")
+
+
+@pytest.mark.db
+async def test_excluded_columns_never_reach_the_log(database: Database) -> None:
+    async with database.engine.begin() as connection:
+        await connection.execute(
+            text("CREATE TABLE account (id int PRIMARY KEY, name text, password_hash text)")
+        )
+        statements = (
+            *AUDIT_SETUP_STATEMENTS,
+            *audit_table_statements("account", exclude=("password_hash",)),
+        )
+        for statement in statements:
+            await connection.exec_driver_sql(statement)
+
+    async with database.transaction() as session:
+        await session.execute(text("INSERT INTO account VALUES (1, 'ali', 'argon2-hash-1')"))
+        await session.execute(text("UPDATE account SET password_hash = 'argon2-hash-2'"))
+
+    async with database.transaction() as session:
+        history = await record_history(session, "account", "1")
+        raw = (await session.execute(text("SELECT old_data, new_data FROM audit_log"))).all()
+
+    assert [h.operation for h in history] == ["INSERT", "UPDATE"]
+    assert history[0].new_data == {"id": 1, "name": "ali"}
+    assert "argon2-hash" not in str(raw)

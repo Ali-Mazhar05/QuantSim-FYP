@@ -50,6 +50,11 @@ AUDIT_SETUP_STATEMENTS: tuple[str, ...] = (
         old_row   jsonb := CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN to_jsonb(OLD) END;
         new_row   jsonb := CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN to_jsonb(NEW) END;
     BEGIN
+        -- Arguments after the id column name columns never written to the log (secrets)
+        FOR i IN 1 .. TG_NARGS - 1 LOOP
+            old_row := old_row - TG_ARGV[i];
+            new_row := new_row - TG_ARGV[i];
+        END LOOP;
         INSERT INTO audit_log (table_name, operation, row_id, old_data, new_data,
                                changed_by, request_id)
         VALUES (TG_TABLE_NAME, TG_OP, COALESCE(new_row, old_row) ->> id_column,
@@ -78,15 +83,21 @@ AUDIT_SETUP_STATEMENTS: tuple[str, ...] = (
 )
 
 
-def audit_table_statements(table: str, id_column: str = "id") -> tuple[str, ...]:
-    """Statements that start auditing ``table``; ``id_column`` identifies each row."""
-    for name in (table, id_column):
+def audit_table_statements(
+    table: str, id_column: str = "id", *, exclude: tuple[str, ...] = ()
+) -> tuple[str, ...]:
+    """Statements that start auditing ``table``; ``id_column`` identifies each row.
+
+    Columns in ``exclude`` (password hashes, tokens) are never written to the log.
+    """
+    for name in (table, id_column, *exclude):
         if not name.replace("_", "").isalnum():
             raise ValueError(f"not a plain SQL identifier: {name!r}")
+    arguments = ", ".join(f"'{name}'" for name in (id_column, *exclude))
     return (
         f"DROP TRIGGER IF EXISTS {table}_audit ON {table}",
         f"CREATE TRIGGER {table}_audit AFTER INSERT OR UPDATE OR DELETE ON {table}"
-        f" FOR EACH ROW EXECUTE FUNCTION qs_audit_row('{id_column}')",
+        f" FOR EACH ROW EXECUTE FUNCTION qs_audit_row({arguments})",
     )
 
 
