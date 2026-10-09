@@ -64,7 +64,8 @@ ci/jenkins/host.sh stop      # hand over: stop Jenkins here and upload its state
   and `test` so DEV and TEST come up on this laptop from the same images.
 - Always `stop` before closing the laptop for the day, so the next person gets your
   latest state.
-- Everyone signs in as `admin` (password in `secrets/admin_password`).
+- Everyone signs in with their own account from `secrets/team_users` (below); the
+  built-in `admin` account remains as a break-glass login.
 
 ### One-time setup per laptop
 Needs Docker Desktop with about 10 GB free disk and 4 GB memory for Docker.
@@ -73,6 +74,29 @@ Needs Docker Desktop with about 10 GB free disk and 4 GB memory for Docker.
    `ci/jenkins/secrets/` (see `secrets/README.md`), including the two R2 keys.
 2. From the repository root: `ci/jenkins/init-env.sh`
 3. In Docker Desktop turn on **Start Docker Desktop when you sign in**.
+
+### Team accounts
+Each member gets their own Jenkins login on every laptop host, with their own
+permissions. Add one line per person to `secrets/team_users` and share the file with
+the other secrets:
+
+```
+# username:password:role
+ali.mazhar:<a long password>:admin
+sara:<a long password>:approver
+bilal:<a long password>:developer
+```
+
+| Role | Can |
+|---|---|
+| `admin` | Everything, including Jenkins settings |
+| `approver` | Build, cancel and replay jobs, see logs, and approve ACC and PROD |
+| `developer` | Build, cancel and replay jobs and see logs |
+
+`init-env.sh` turns the file into Jenkins accounts (`ci/jenkins/.state/`, never
+committed) and makes `approver` and `admin` users the release approvers. After changing
+it, run `ci/jenkins/init-env.sh` and restart Jenkins (`host.sh stop`, `host.sh start`).
+On the CI server team members sign in with GitHub instead.
 
 ### One-time setup for the team (Cloudflare R2, free)
 1. Cloudflare dashboard → R2 → create a bucket named `quantsim-ci`.

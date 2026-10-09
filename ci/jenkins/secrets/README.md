@@ -17,6 +17,7 @@ no trailing spaces.
 | `agent_ssh_key` (+ `.pub`) | Key the controller uses to reach the build agent | Created by `init-env.sh`; copy it along with the others when moving hosts |
 | `github_oauth_client_id`, `github_oauth_client_secret` | **CI server only:** GitHub sign-in for Jenkins | The OAuth App described in `ci/jenkins/README.md` |
 | `r2_access_key_id`, `r2_secret_access_key` | **Shared hosting only:** access to the `quantsim-ci` R2 bucket that holds the hand-over state and the host lease | Cloudflare → R2 → Manage API tokens (see `ci/jenkins/README.md`) |
+| `team_users` | **Laptop hosts:** one Jenkins account per team member, `username:password:role` per line (role `admin`, `approver` or `developer`); passwords at least 12 characters | Agreed by the team; see `ci/jenkins/README.md` |
 
 ## GitHub App
 

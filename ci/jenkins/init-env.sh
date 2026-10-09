@@ -43,6 +43,9 @@ pubkey="$(cat "$secrets/agent_ssh_key.pub")"
 # Names this machine in the shared host lease (host.sh status)
 host_id="${USER:-${USERNAME:-user}}@$(hostname)"
 
+# Per-person Jenkins accounts for laptop hosts, from secrets/team_users
+laptop_approvers="$("$here/team-accounts.sh")"
+
 if [[ "$mode" == "server" ]]; then
   cat > "$here/.env" <<EOF
 # Written by init-env.sh --server. Re-run it to change these values.
@@ -50,6 +53,7 @@ COMPOSE_FILE=compose.yml:compose.server.yml
 HOST_ID=$host_id
 AGENT_SSH_PUBKEY=$pubkey
 JENKINS_AUTH=github
+JENKINS_SECURITY_CASC=/usr/share/jenkins/casc/security/github.yaml
 JENKINS_BIND=127.0.0.1
 JENKINS_URL=https://ci.$domain/
 QS_RELEASE_APPROVERS=$approvers
@@ -66,9 +70,10 @@ else
 HOST_ID=$host_id
 AGENT_SSH_PUBKEY=$pubkey
 JENKINS_AUTH=local
+JENKINS_SECURITY_CASC=/usr/share/jenkins/casc-team/security-local.yaml
 JENKINS_BIND=0.0.0.0
 JENKINS_URL=http://localhost:8080/
-QS_RELEASE_APPROVERS=admin
+QS_RELEASE_APPROVERS=$laptop_approvers
 QS_PLATFORMS=linux/amd64
 QS_SCAN_INTERVAL=2m
 EOF
