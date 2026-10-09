@@ -36,14 +36,16 @@ class RevocationList:
         return cls(Redis.from_url(url, socket_timeout=2, socket_connect_timeout=2), **kwargs)
 
     async def revoke_user(self, user_id: uuid.UUID) -> int:
-        """Invalidate every token issued to ``user_id`` up to now; returns the cut-off.
+        """Invalidate every token issued to ``user_id`` up to now; returns the cut-off in
+        milliseconds since the epoch.
 
-        The cut-off is the next whole second, because token issue times are whole
-        seconds: a token issued in the same second as the revocation is also refused.
+        Tokens carry their issue time in milliseconds ("iat_ms"), so a user who signs in
+        again right after the change gets a token that works. Tokens without it are
+        compared at whole-second precision, which errs on the side of refusing them.
         """
-        cutoff = int(time.time()) + 1
-        await self._redis.set(f"{KEY_PREFIX}{user_id}", cutoff, ex=self._ttl)
-        return cutoff
+        cutoff_ms = int(time.time() * 1000)
+        await self._redis.set(f"{KEY_PREFIX}{user_id}", cutoff_ms, ex=self._ttl)
+        return cutoff_ms
 
     async def is_revoked(self, principal: Principal) -> bool:
         try:
@@ -56,7 +58,7 @@ class RevocationList:
                 "Tokens cannot be checked right now.",
                 type_="urn:quantsim:problem:auth-unavailable",
             ) from exc
-        return raw is not None and principal.issued_at < int(raw)
+        return raw is not None and principal.issued_at_ms < int(raw)
 
     async def ping(self) -> None:
         await self._redis.ping()
