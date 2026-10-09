@@ -65,7 +65,8 @@ def test_rejects_weak_signing_keys() -> None:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
 
-    weak = rsa.generate_private_key(public_exponent=65537, key_size=1024).private_bytes(
+    # Deliberately weak: the test checks that such keys are refused
+    weak = rsa.generate_private_key(public_exponent=65537, key_size=1024).private_bytes(  # noqa: S505
         serialization.Encoding.PEM,
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),

@@ -1,9 +1,9 @@
 """Command line of the Platform service image.
 
-    qs-platform serve                 HTTP API on port 8000
-    qs-platform relay                 publish outbox events to Redpanda
-    qs-platform bootstrap-admin       create the first admin if there is none
-    qs-platform generate-signing-key  print a new QS_SIGNING_KEY value
+qs-platform serve                 HTTP API on port 8000
+qs-platform relay                 publish outbox events to Redpanda
+qs-platform bootstrap-admin       create the first admin if there is none
+qs-platform generate-signing-key  print a new QS_SIGNING_KEY value
 """
 
 import argparse
@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> None:
 
 
 async def _relay() -> None:
-    settings = PlatformSettings()  # type: ignore[call-arg]
+    settings = PlatformSettings()
     configure_logging(
         service=f"{settings.service_name}-relay",
         environment=settings.environment,
@@ -76,13 +76,13 @@ async def _relay() -> None:
 async def _bootstrap_admin() -> int:
     """Uses QS_BOOTSTRAP_ADMIN_USERNAME, _EMAIL and _PASSWORD; does nothing once any
     active admin exists, so it is safe to run on every deploy."""
-    settings = PlatformSettings()  # type: ignore[call-arg]
+    settings = PlatformSettings()
     configure_logging(
         service=settings.service_name, environment=settings.environment, level=settings.log_level
     )
     log = get_logger(__name__)
     username = os.environ.get("QS_BOOTSTRAP_ADMIN_USERNAME", "admin")
-    email = os.environ.get("QS_BOOTSTRAP_ADMIN_EMAIL", "admin@quantsim.local")
+    email = os.environ.get("QS_BOOTSTRAP_ADMIN_EMAIL", "admin@quantsim.dev")
     password = os.environ.get("QS_BOOTSTRAP_ADMIN_PASSWORD", "")
     database = Database(settings)
     try:

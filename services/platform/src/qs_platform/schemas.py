@@ -18,7 +18,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: Literal["Bearer"] = "Bearer"
+    token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 - a scheme name, not a secret
     expires_in: int
     user: "UserOut"
 

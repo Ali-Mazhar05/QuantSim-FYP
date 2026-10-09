@@ -30,9 +30,7 @@ def build_app(
         settings.signing_key_pem, settings.signing_key_id, settings.retired_public_keys
     )
     # The Platform service verifies its own tokens with the keys it holds
-    auth = Authenticator(
-        settings, jwks=StaticKeys(keys.jwks()), is_revoked=revocations.is_revoked
-    )
+    auth = Authenticator(settings, jwks=StaticKeys(keys.jwks()), is_revoked=revocations.is_revoked)
     service = UserService(settings, keys, revocations)
     return create_app(
         settings,
@@ -44,4 +42,4 @@ def build_app(
 
 
 def create() -> FastAPI:
-    return build_app(PlatformSettings())  # type: ignore[call-arg]
+    return build_app(PlatformSettings())

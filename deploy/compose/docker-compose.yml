@@ -275,7 +275,7 @@ services:
     environment:
       <<: *platform-env
       QS_BOOTSTRAP_ADMIN_USERNAME: admin
-      QS_BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@quantsim.local}
+      QS_BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@quantsim.dev}
       QS_BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD comes from the environment's secrets}
     networks:
       - backend

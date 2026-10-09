@@ -25,7 +25,7 @@ async def create_user(
 ) -> dict[str, Any]:
     body = {
         "username": username,
-        "email": f"{username}@quantsim.test",
+        "email": f"{username}@quantsim.dev",
         "display_name": username.title(),
         "password": f"{username}-password-123",
         "role": role,
@@ -92,9 +92,11 @@ async def test_a_successful_login_resets_the_failure_count(
     await admin_token(client)
     await client.post(f"{API}/auth/login", json={"username": "admin", "password": "nope"})
 
-    assert (await client.post(
-        f"{API}/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD}
-    )).status_code == 200
+    assert (
+        await client.post(
+            f"{API}/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD}
+        )
+    ).status_code == 200
 
 
 async def test_me_returns_the_signed_in_user(client: httpx.AsyncClient) -> None:
@@ -136,8 +138,8 @@ async def test_duplicate_username_or_email_is_a_conflict(client: httpx.AsyncClie
     await create_user(client, token, "sara")
 
     for body in (
-        {"username": "SARA".lower(), "email": "other@quantsim.test"},
-        {"username": "sara2", "email": "SARA@quantsim.test"},
+        {"username": "SARA".lower(), "email": "other@quantsim.dev"},
+        {"username": "sara2", "email": "SARA@quantsim.dev"},
     ):
         response = await client.post(
             f"{API}/users",
@@ -150,17 +152,19 @@ async def test_duplicate_username_or_email_is_a_conflict(client: httpx.AsyncClie
 @pytest.mark.parametrize(
     "body",
     [
-        {"username": "No Spaces", "email": "a@quantsim.test", "password": "long-enough-pass"},
-        {"username": "ok", "email": "a@quantsim.test", "password": "long-enough-pass"},
+        {"username": "No Spaces", "email": "a@quantsim.dev", "password": "long-enough-pass"},
+        {"username": "ok", "email": "a@quantsim.dev", "password": "long-enough-pass"},
         {"username": "okay", "email": "not-an-email", "password": "long-enough-pass"},
-        {"username": "okay", "email": "a@quantsim.test", "password": "short"},
-        {"username": "okay", "email": "a@quantsim.test", "password": "long-enough-pass",
-         "role": "superuser"},
+        {"username": "okay", "email": "a@quantsim.dev", "password": "short"},
+        {
+            "username": "okay",
+            "email": "a@quantsim.dev",
+            "password": "long-enough-pass",
+            "role": "superuser",
+        },
     ],
 )
-async def test_invalid_users_are_rejected(
-    client: httpx.AsyncClient, body: dict[str, str]
-) -> None:
+async def test_invalid_users_are_rejected(client: httpx.AsyncClient, body: dict[str, str]) -> None:
     token = await admin_token(client)
     payload = {"display_name": "x", "role": "viewer", **body}
 
@@ -243,9 +247,7 @@ async def test_reactivation_restores_access(client: httpx.AsyncClient) -> None:
     assert await login(client, "sara", "sara-password-123")
 
 
-async def test_role_change_applies_at_once(
-    client: httpx.AsyncClient, database: Database
-) -> None:
+async def test_role_change_applies_at_once(client: httpx.AsyncClient, database: Database) -> None:
     token = await admin_token(client)
     sara = await create_user(client, token, "sara", role="viewer")
     old_token = await login(client, "sara", "sara-password-123")
@@ -296,9 +298,7 @@ async def test_history_shows_who_changed_what_without_secrets(
     )
     await client.post(f"{API}/users/{sara['id']}/deactivate", headers=bearer(token))
 
-    history = (
-        await client.get(f"{API}/users/{sara['id']}/history", headers=bearer(token))
-    ).json()
+    history = (await client.get(f"{API}/users/{sara['id']}/history", headers=bearer(token))).json()
 
     assert [h["operation"] for h in history] == ["INSERT", "UPDATE", "UPDATE"]
     assert {h["changed_by"] for h in history} == {admin_id}
@@ -318,7 +318,7 @@ async def test_the_database_itself_rejects_unknown_roles(database: Database) -> 
             await session.execute(
                 users.insert().values(
                     username="rogue",
-                    email="rogue@quantsim.test",
+                    email="rogue@quantsim.dev",
                     display_name="Rogue",
                     password_hash="x",
                     role="superuser",

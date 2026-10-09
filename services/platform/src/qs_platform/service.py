@@ -127,7 +127,8 @@ class UserService:
         await session.execute(update(users).where(users.c.id == row.id).values(**values))
 
     def _issue_token(self, user: UserOut) -> TokenResponse:
-        now = int(time.time())
+        now_ms = int(time.time() * 1000)
+        now = now_ms // 1000
         ttl = self._settings.access_token_ttl_seconds
         claims = {
             "iss": self._settings.auth_issuer,
@@ -138,6 +139,7 @@ class UserService:
             "role": user.role.value,
             "jti": uuid.uuid4().hex,
             "iat": now,
+            "iat_ms": now_ms,
             "exp": now + ttl,
         }
         return TokenResponse(access_token=self._keys.sign(claims), expires_in=ttl, user=user)
@@ -242,7 +244,9 @@ class UserService:
         await self._revocations.revoke_user(user_id)
         previous = user.role
         await session.execute(
-            update(users).where(users.c.id == user_id).values(role=role.value, updated_at=func.now())
+            update(users)
+            .where(users.c.id == user_id)
+            .values(role=role.value, updated_at=func.now())
         )
         user = await self._get(session, user_id)
         await self._publish(

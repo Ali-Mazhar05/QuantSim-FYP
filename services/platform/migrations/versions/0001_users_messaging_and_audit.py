@@ -48,9 +48,7 @@ def upgrade() -> None:
             name="users_deactivation_consistent",
         ),
     )
-    op.create_index(
-        "users_username_unique", "users", [sa.text("lower(username)")], unique=True
-    )
+    op.create_index("users_username_unique", "users", [sa.text("lower(username)")], unique=True)
     op.create_index("users_email_unique", "users", [sa.text("lower(email)")], unique=True)
 
     op.create_table(

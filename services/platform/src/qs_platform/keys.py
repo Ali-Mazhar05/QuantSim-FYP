@@ -34,7 +34,9 @@ class SigningKeys:
             self._retired = [k for k in document.get("keys", []) if k.get("kid") != key_id]
 
     def sign(self, claims: dict[str, Any]) -> str:
-        return jwt.encode(claims, self._private_key, algorithm=ALGORITHM, headers={"kid": self.key_id})
+        return jwt.encode(
+            claims, self._private_key, algorithm=ALGORITHM, headers={"kid": self.key_id}
+        )
 
     def jwks(self) -> dict[str, Any]:
         """Public keys only: the current one first, then retired ones."""

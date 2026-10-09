@@ -81,7 +81,7 @@ async def database() -> AsyncIterator[Database]:
             await connection.exec_driver_sql(statement)
     async with db.transaction() as session:
         await create_first_admin(
-            session, username="admin", email="admin@quantsim.test", password=ADMIN_PASSWORD
+            session, username="admin", email="admin@quantsim.dev", password=ADMIN_PASSWORD
         )
     try:
         yield db
