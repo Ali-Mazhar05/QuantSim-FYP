@@ -4,6 +4,29 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-10-09
+
+**Delivered (committed, tests pending)**
+- **I1-16 Platform service (M0)** on `feature/platform-service`: users with a database
+  role constraint, Argon2id passwords, sign-in with lockout and uniform failure responses,
+  RS256 tokens and a JWKS endpoint with key rotation, admin user management, deactivation
+  and role changes that revoke existing tokens everywhere, a last-admin guard that holds
+  under concurrent requests, events through the outbox, per-user audit history, Alembic
+  migrations, container image, first-admin bootstrap. 30 API and unit tests written.
+- **I1-15 Deployment stack**: PostgreSQL + TimescaleDB with one database and role per
+  service, Redis with append-only persistence, Redpanda, the Platform API, relay and
+  migration containers, all on an internal network behind the gateway.
+- **Audit trail** can exclude secret columns; password hashes never reach the log.
+- **Jenkins team accounts** (`feature/centralized-jenkins`): each member gets their own
+  login and role (admin, approver, developer) on whichever laptop hosts Jenkins, from
+  `secrets/team_users`; approvers become the release approvers automatically.
+
+**Blocked**
+- The development laptop is down to about 1 GB free and Docker Desktop has stopped
+  responding, so the new tests, the lockfile update, the per-environment secrets for the
+  stack and the Jenkins configuration cannot be run or verified. These run first once
+  space is freed; nothing is pushed until they pass.
+
 ## 2026-10-07
 
 **Delivered**
