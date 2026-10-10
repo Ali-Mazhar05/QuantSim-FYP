@@ -7,12 +7,12 @@ Maintains the admin-curated Instrument master of US-listed equities and ETFs tha
 ## ADDED Requirements
 
 ### Requirement: Admin adds an Instrument
-The system SHALL let an admin add an Instrument with symbol, name, listing exchange, currency, asset class (`equity` or `etf`), optional Vendor symbol and notes, creating it as `active`, publishing `instrument.created` and recording an Audit entry. (PRD FR-20; SPEC FR-MKT-001, FR-PLT-006, NFR-AUD-001)
+The system SHALL let an admin add an Instrument through the market API with symbol, name, sector, listing exchange, currency, asset class (`equity` or `etf`), optional Vendor symbol and notes, creating it as `active`, publishing `instrument.created` and recording an Audit entry. Adding is API-only; the POC Instruments page stays read-only. (PRD FR-20; SPEC FR-MKT-001, FR-PLT-006, NFR-AUD-001)
 
 #### Scenario: Admin adds a new Instrument
 - **GIVEN** an admin and a symbol and exchange not yet in the Instrument master
 - **WHEN** the admin adds the Instrument
-- **THEN** it is created with status `active`
+- **THEN** it is created with status `active` and its sector
 - **AND** an `instrument.created` Event is published and one Audit entry is recorded
 
 #### Scenario: Duplicate symbol and exchange is refused
@@ -26,7 +26,7 @@ The system SHALL let an admin add an Instrument with symbol, name, listing excha
 - **THEN** the database refuses it
 
 ### Requirement: Admin annotates and retires Instruments
-The system SHALL let an admin change an Instrument's name and notes and retire it. Retiring MUST be non-destructive and idempotent, MUST publish `instrument.retired`, and every change MUST be audited. Re-activation is out of scope for Iteration 1. (PRD FR-20; SPEC FR-MKT-001, FR-PLT-006)
+The system SHALL let an admin change an Instrument's name, sector and notes and retire it, through the market API only. Retiring MUST be non-destructive and idempotent, MUST publish `instrument.retired`, and every change MUST be audited. Re-activation is out of scope for Iteration 1. (PRD FR-20; SPEC FR-MKT-001, FR-PLT-006)
 
 #### Scenario: Retire keeps history and excludes future runs
 - **GIVEN** an active Instrument with stored Bars
@@ -41,7 +41,7 @@ The system SHALL let an admin change an Instrument's name and notes and retire i
 
 #### Scenario: Annotation is audited
 - **GIVEN** an active Instrument
-- **WHEN** an admin changes its name or notes
+- **WHEN** an admin changes its name, sector or notes
 - **THEN** the change is saved and one Audit entry holds the before and after state
 
 ### Requirement: Only admins change the Instrument master
@@ -62,13 +62,21 @@ The system MUST refuse add, annotate and retire for quant, analyst and viewer Us
 - **WHEN** it lists Instruments
 - **THEN** it gets HTTP 401
 
+### Requirement: Instrument administration is API-only
+Adding, annotating and retiring Instruments, and Symbol directory validation, SHALL be available only through the market API (its interactive docs at `/api/market/docs`). The change MUST NOT add any screen, field, column or control to the POC frontend. (PRD FR-20, Conventions; addendum section G)
+
+#### Scenario: Admin works through the API docs
+- **GIVEN** a signed-in admin on `/api/market/docs`
+- **WHEN** they add an Instrument there
+- **THEN** it is created and appears on the POC Instruments page with no change to that page's layout or controls
+
 ### Requirement: Seed the starting universe
 The system SHALL provide a seed command that loads the 40-Instrument starting universe (30 large-cap equities, 10 ETFs). Running it again MUST add nothing, and it MUST NOT depend on the Symbol directory. (PRD FR-20; addendum D5)
 
 #### Scenario: Seed loads 40 Instruments
 - **GIVEN** an empty Instrument master
 - **WHEN** the seed command runs
-- **THEN** 40 Instruments exist: 30 equities and 10 ETFs
+- **THEN** 40 Instruments exist: 30 equities and 10 ETFs, each with a name and sector
 
 #### Scenario: Seed is idempotent
 - **GIVEN** the seed has already run

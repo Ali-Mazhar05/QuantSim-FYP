@@ -2,9 +2,23 @@
 
 ## Purpose
 
-Lets signed-in Users read Instruments, exact Bars and the Return series, and lets admins, quants and analysts read run history, Rejected bars and data quality, through a role-checked, documented HTTP API. Realizes PRD FR-29 (SPEC FR-MKT-001..003, FR-MKT-011, NFR-PERF-002).
+Lets signed-in Users read Instruments, exact Bars and the Return series, and lets admins, quants and analysts read run history, Rejected bars and data quality, through a role-checked, documented HTTP API shaped to the POC frontend; operational reads are API-only, and each finished run contributes one event to the audit feed behind the POC Audit Log page. Realizes PRD FR-29 (SPEC FR-MKT-001..003, FR-MKT-011, NFR-PERF-002; addendum section G).
 
 ## ADDED Requirements
+
+### Requirement: Instrument list matches the POC Instruments page
+The Instrument list SHALL return, for each Instrument, exactly what the POC Instruments page shows: `symbol`, `name`, `sector`, `price` (the latest clean close, as an 8-decimal string) and `change_pct` (the change from the previous clean close), to any signed-in User. An Instrument with fewer than two clean Bars MUST return no price or change. (PRD FR-29, FR-20; addendum section G)
+
+#### Scenario: Price and change from the last two clean closes
+- **GIVEN** an Instrument whose last two clean closes are 200.00000000 and 214.32000000
+- **WHEN** a viewer lists Instruments
+- **THEN** it is returned with its symbol, name, sector, `price` 214.32000000 and `change_pct` 7.16
+
+#### Scenario: Too few clean Bars
+- **GIVEN** an Instrument with one clean Bar
+- **WHEN** Instruments are listed
+- **THEN** it is returned with symbol, name and sector and no price or change
+
 
 ### Requirement: Read Bars in Session order
 The system SHALL return an Instrument's Bars for a date range, raw or adjusted, paginated, in Session order, with exact decimal prices, revision numbers and Quality flags, to any signed-in User. (PRD FR-29; SPEC FR-MKT-001, FR-MKT-002, NFR-INT-001; MID FR-03, TC-04)
@@ -12,7 +26,7 @@ The system SHALL return an Instrument's Bars for a date range, raw or adjusted, 
 #### Scenario: One clean Bar per Session
 - **GIVEN** a quant and an Instrument ingested from 2015-01-02
 - **WHEN** they request Bars from 2015-01-02 to today
-- **THEN** they receive one Bar per trading Session in order, with no weekends or holidays, and prices as exact decimals with 8 decimal places
+- **THEN** they receive one Bar per trading Session in order, with no weekends or holidays, and prices as exact decimals with 8 decimal places, which the POC Market Data page draws for the last 90 sessions
 
 #### Scenario: Revised Bar shows its revision
 - **GIVEN** a Bar corrected once by the Vendor
@@ -46,7 +60,7 @@ The system SHALL return the Return series for an Instrument and date range in Se
 - **THEN** they receive log return, adjusted log return and both volatilities per Session
 
 ### Requirement: Operational reads restricted
-Run history, run detail with its Reconciliation report, Rejected bars with reasons, and the data-quality summary SHALL be readable by admins, quants and analysts, and MUST return HTTP 403 to viewers. (PRD FR-29, FR-16; SPEC FR-MKT-011, NFR-SEC-001)
+Run history, run detail with its Reconciliation report, Rejected bars with reasons, and the data-quality summary SHALL be readable by admins, quants and analysts, and MUST return HTTP 403 to viewers. They are API-only: no POC screen shows them and none is added. (PRD FR-29, FR-16; SPEC FR-MKT-011, NFR-SEC-001)
 
 #### Scenario: Analyst reads Rejected bars
 - **GIVEN** an analyst and a run with rejections
@@ -70,6 +84,24 @@ The data-quality summary SHALL show, for each real Instrument, its last clean Se
 - **GIVEN** planted fixture Instruments with rejections
 - **WHEN** the real-Instrument totals are read
 - **THEN** the planted Instruments' counts are not included
+
+### Requirement: One audit feed event per Ingestion run
+When an Ingestion run reaches a final status, the system SHALL add exactly one event to the platform audit feed read by the POC Audit Log page: user (requester or `System`), service `Market Data`, action `Ingestion run completed`, `partially succeeded` or `failed`, severity `Info`, `Warning` (rejections, gaps or deferrals) or `Critical` (failed), and a one-line detail with counts and rejecting rules. (PRD FR-29, UJ-1)
+
+#### Scenario: Planted-fault run produces a Warning event
+- **GIVEN** an admin-triggered run over the Planted-fault dataset that rejects records
+- **WHEN** it finishes
+- **THEN** one event is added with the admin as user, service `Market Data`, action `Ingestion run completed`, severity `Warning`, and a detail line with received, passed untouched, corrected and rejected counts and the rejecting rules
+
+#### Scenario: Scheduled clean run produces an Info event
+- **GIVEN** a scheduled `daily` run with no rejections, gaps or deferrals
+- **WHEN** it finishes
+- **THEN** one event is added with user `System` and severity `Info`
+
+#### Scenario: Failed run produces a Critical event
+- **GIVEN** a run that ends `failed` on `vendor_auth`
+- **WHEN** it finishes
+- **THEN** one event is added with action `Ingestion run failed` and severity `Critical`
 
 ### Requirement: Published API contract
 The API contract SHALL be exported as an OpenAPI document on every build, and the frontend's typed client SHALL be generated from it so an incompatible change breaks the frontend type check. (PRD FR-29; SPEC NFR-MNT-005 partial)

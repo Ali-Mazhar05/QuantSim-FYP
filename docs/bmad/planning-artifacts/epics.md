@@ -29,6 +29,8 @@ Conventions used in every story:
 - **Branch:** the `feature/*` branch that delivers the story through one pull request into `develop`. Market branches follow `docs/ingestion-plan.md` section 10; where that plan bundles work that falls into different epics, the bundle is split and the new branch is marked *(new)*. Several stories in the same epic may share one branch (one pull request).
 - **Done when:** the condition that closes the story, in addition to every acceptance criterion passing.
 
+**UI contract.** The POC frontend (`frontend/` on `develop`, identical to `develop-poc`) is the single source of truth for every screen (PRD Conventions, "The POC is the UI contract"). No story adds a screen, field, column or control. A story that serves a POC page shapes its API to that page's types; wiring a POC page to the real API replaces its mock data only. A capability with no POC screen is API-only, used through the service's interactive API docs at `/api/<service>/docs`. Addendum section G maps each POC page to its API.
+
 ## Requirements Inventory
 
 ### Functional Requirements
@@ -60,7 +62,7 @@ Platform foundation (PRD section 4.2)
 
 Market data ingestion engine M1 (PRD section 4.3)
 
-- FR-20: Instrument master: add, annotate, retire, list; seed universe of 40. *(SPEC FR-MKT-001; FR-PLT-006)*
+- FR-20: Instrument master (symbol, name, sector, listing exchange, currency, asset class, optional Vendor symbol, notes): add, annotate, retire (API-only; the POC Instruments page is read-only), list; seed universe of 40. *(SPEC FR-MKT-001; FR-PLT-006)*
 - FR-21: Instrument validation against the Nasdaq Trader Symbol directory, refreshed daily. *(new; strengthens SPEC FR-MKT-001)*
 - FR-22: Scheduled (`daily` 22:30 UTC, `catchup` 06:00 UTC) and on-demand (`manual`, `backfill`) Ingestion runs. *(SPEC FR-MKT-002; NFR-PERF-004; MID FR-01)*
 - FR-23: Idempotent ingestion with Revisions and `bar.corrected`. *(SPEC FR-MKT-002; NFR-REL-005, NFR-REL-008; MID TC-01)*
@@ -69,8 +71,8 @@ Market data ingestion engine M1 (PRD section 4.3)
 - FR-26: Reconciliation report per run and per Instrument; received = passed untouched + corrected + duplicates removed + rejected. *(SPEC FR-MKT-011, FR-MKT-002; MID FR-02)*
 - FR-27: Returns and volatility (log, adjusted log, 20- and 60-session annualised volatility). *(SPEC FR-MKT-003)*
 - FR-28: Corporate actions and adjusted prices; raw and adjusted series kept. *(SPEC FR-MKT-010, Extended)*
-- FR-29: Market read API: Instruments, Bars, Return series for all signed-in Users; run history, run detail, Rejected bars, data quality for admin, quant, analyst. *(SPEC FR-MKT-001..003, FR-MKT-011; NFR-PERF-002; MID FR-03, TC-04)*
-- FR-30: Replay session creation and Market environment interface (tick Event schema). *(SPEC FR-MKT-007 create, FR-MKT-008, FR-MKT-009 partial; NFR-INT-003)*
+- FR-29: Market read API: Instruments (symbol, name, sector, price, change_pct, as the POC Instruments page shows), Bars, Return series for all signed-in Users; run history, run detail, Rejected bars, data quality for admin, quant, analyst (API-only); one Audit Log event per finished Ingestion run. *(SPEC FR-MKT-001..003, FR-MKT-011; NFR-PERF-002; MID FR-03, TC-04)*
+- FR-30: Market environments shaped like the POC (name, type `Historical Replay` or `Synthetic Market`, universe, Instruments, start and end date, frequency `Daily`, `Hourly` or `Tick`, status `Draft`, `Ready` or `Active`): create, list, read; and the Market environment interface (tick Event schema). *(SPEC FR-MKT-007 create, FR-MKT-008, FR-MKT-009 partial; NFR-INT-003)*
 - FR-31: Market data observability: structured logs, metrics, health and ready. *(SPEC NFR-OBS-002, NFR-OBS-003)*
 
 ### NonFunctional Requirements
@@ -83,7 +85,7 @@ Cross-cutting (PRD section 5)
 - NFR-PERF-005: Every synchronous dependency call has a timeout (FR-24, JWKS fetch timeouts).
 - NFR-REL-005, NFR-REL-007, NFR-REL-008: Idempotent, reclaimable jobs; atomic commit-and-publish; idempotent consumers (FR-19, FR-23).
 - NFR-REL-006: Declared degraded behaviour per dependency: Platform down, tokens still verify; Vendor down, deferral; broker down, outbox backlog.
-- NFR-INT-001, NFR-INT-002, NFR-INT-003, NFR-INT-005: Decimals; Role constraint; replay window check; append-only audit (FR-14, FR-18, FR-25, FR-30).
+- NFR-INT-001, NFR-INT-002, NFR-INT-003, NFR-INT-005: Decimals; Role constraint; Market environment window check; append-only audit (FR-14, FR-18, FR-25, FR-30).
 - NFR-SEC-001, NFR-SEC-003, NFR-SEC-004, NFR-SEC-007: Authorization in the owning service; no secrets in source or Images; hashed passwords; one database role per service (FR-9, FR-14, FR-16).
 - NFR-AUD-001, NFR-AUD-002: Audit coverage and history reconstruction (FR-18).
 - NFR-OBS-002, NFR-OBS-003: Structured logs and metrics; outbox backlog (FR-19, FR-31).
@@ -121,7 +123,7 @@ From the addendum and PRD constraints (no separate architecture document exists 
 
 ### UX Design Requirements
 
-None for Iteration 1. PRD section 7 excludes frontend pages beyond the demo minimum (sign-in, Instruments, market data views); those pages are specified in the iteration-plan frontend tasks, not in this PRD.
+No new UX. The POC frontend is the UI contract (see the UI contract note above and PRD section 7): no screen, field, column or control is added. Iteration 1 wires these POC pages to real APIs, replacing mock data only: sign-in, Instruments, Market Data, Market Environments (list and create), Users, Audit Log and System health (addendum section G). Every other POC page keeps its mock data until its iteration.
 
 ### FR Coverage Map
 
@@ -170,7 +172,7 @@ Admins control who can do what; every User signs in once and is recognised by ev
 **FRs covered:** FR-13 (platform), FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-1 (backend checks).
 
 ### Epic 3: Trustworthy Instrument master
-Admins keep a validated list of tracked Instruments, seeded with the 40-Instrument universe and checked against official exchange listings, with every change audited and published.
+Admins keep a validated list of tracked Instruments, seeded with the 40-Instrument universe and checked against official exchange listings, with every change audited and published. Changes are API-only; the POC Instruments page lists the result.
 **FRs covered:** FR-20, FR-21 (and FR-16, FR-18, FR-19, FR-31 health for the market service).
 
 ### Epic 4: Ingestion runs that survive the Vendor
@@ -182,11 +184,11 @@ Only records that pass the Cleaning gate become Bars; rejected records are kept 
 **FRs covered:** FR-25, FR-26, FR-23.
 
 ### Epic 6: Returns, corporate actions and the market read API
-Quants read exact, session-ordered, optionally adjusted Bars and a single published Return series; analysts see run history, Rejected bars and data quality; operators see failures and staleness through logs and metrics.
+Quants read exact, session-ordered, optionally adjusted Bars and a single published Return series; the POC Instruments and Market Data pages read the same API; analysts read run history, Rejected bars and data quality through the API; every finished run appears on the POC Audit Log page; operators see failures and staleness through logs and metrics.
 **FRs covered:** FR-27, FR-28, FR-29, FR-31.
 
-### Epic 7: Market environment and replay sessions
-Admins and quants create validated Replay sessions, and the Market environment interface's tick Event schema is published so Iteration 2 can bind portfolios to replayed or simulated markets.
+### Epic 7: Market environments
+Admins and quants create validated Market environments shaped exactly like the POC Market Environments pages, and the Market environment interface's tick Event schema is published so Iteration 2 can bind portfolios to replayed or simulated markets.
 **FRs covered:** FR-30.
 
 ### Epic 8: Mid demo evidence
@@ -798,7 +800,7 @@ So that it gets the same checks, build-once deploys and migration safety as the 
 
 ## Epic 3: Trustworthy Instrument master
 
-Admins maintain the Instrument master in the market service: add, annotate, retire and list Instruments, seed the 40-Instrument universe, and validate symbols against the Nasdaq Trader Symbol directory. The market schema is its own story (addendum section B).
+Admins maintain the Instrument master in the market service: add, annotate, retire and list Instruments, seed the 40-Instrument universe, and validate symbols against the Nasdaq Trader Symbol directory. Adding, annotating and retiring are API-only (addendum section G); the POC Instruments page stays read-only. The market schema is its own story (addendum section B).
 
 ### Story 3.1: Market service skeleton and schema 0001_market_schema
 
@@ -806,14 +808,14 @@ As a developer,
 I want the market service skeleton and its first numbered, reversible migration,
 So that every later market story builds on a database that comes from migrations alone and refuses impossible data.
 
-- **Requirements:** enables FR-20 to FR-30; FR-25 (database refuses bad Bars), FR-30 (database refuses inverted replay window), FR-31 (health and ready); SPEC NFR-INT-001, NFR-INT-003, NFR-REC-001, NFR-MNT-002, NFR-SEC-007; NFR-MKT-DECIMAL, NFR-MKT-MIGRATIONS, NFR-MKT-OWNERSHIP; addendum B (all items), C (market service shape)
+- **Requirements:** enables FR-20 to FR-30; FR-25 (database refuses bad Bars), FR-30 (database refuses an inverted Market environment window and values outside the POC's type, frequency and status), FR-31 (health and ready); SPEC NFR-INT-001, NFR-INT-003, NFR-REC-001, NFR-MNT-002, NFR-SEC-007; NFR-MKT-DECIMAL, NFR-MKT-MIGRATIONS, NFR-MKT-OWNERSHIP; addendum B (all items), C (market service shape)
 - **Priority:** Must
 - **Status:** Draft code only (to be split per D9)
 - **Owner:**
 - **Depends on:** 2.1, 2.2, 2.3 (template merged), 2.4 (platform merged, per ingestion plan section 10 row 1)
 - **Branch:** feature/market-schema
 
-Scope: service skeleton on `libs/qs_template`, settings (`QS_*`), SQLAlchemy models, Alembic revision `0001_market_schema` creating `instrument`, `ingestion_run`, `ingestion_run_item`, `staging_bar`, `bar` (hypertable), `bar_revision`, `rejected_bar`, `data_gap`, `corporate_action`, `return_series` (hypertable), `replay_session`, `outbox`, `processed_events`, `audit_log`; `db-init` changes (database, `market` role, TimescaleDB extension). Provenance on `bar` and `bar_revision` (run id, Vendor, Ruleset version), Run item deferral reason, and planted-Instrument marking are included because later stories need them (see gaps in the final section).
+Scope: service skeleton on `libs/qs_template`, settings (`QS_*`), SQLAlchemy models, Alembic revision `0001_market_schema` creating `instrument`, `ingestion_run`, `ingestion_run_item`, `staging_bar`, `bar` (hypertable), `bar_revision`, `rejected_bar`, `data_gap`, `corporate_action`, `return_series` (hypertable), `market_environment` and its Instrument membership, `outbox`, `processed_events`, `audit_log` (with `sector` on `instrument`); `db-init` changes (database, `market` role, TimescaleDB extension). Provenance on `bar` and `bar_revision` (run id, Vendor, Ruleset version), Run item deferral reason, and planted-Instrument marking are included because later stories need them (see gaps in the final section).
 
 **Acceptance Criteria:**
 
@@ -833,8 +835,8 @@ Scope: service skeleton on `libs/qs_template`, settings (`QS_*`), SQLAlchemy mod
 **When** its columns are inspected
 **Then** prices are `NUMERIC(23,8)` and volume is `NUMERIC(28,8)`, and no price column is a float type
 
-**Given** the `replay_session` table
-**When** a row whose end time is not after its start time, or whose speed is not greater than 0 and at most 1000, is inserted directly
+**Given** the `market_environment` table
+**When** a row whose end date is not after its start date, or whose type is not `historical_replay` or `synthetic_market`, frequency not `daily`, `hourly` or `tick`, or status not `draft`, `ready` or `active`, is inserted directly
 **Then** the database refuses it
 
 **Given** the `instrument` table
@@ -855,7 +857,7 @@ Scope: service skeleton on `libs/qs_template`, settings (`QS_*`), SQLAlchemy mod
 ### Story 3.2: Admin adds, annotates, retires and lists Instruments
 
 As an admin,
-I want to add, annotate and retire Instruments, and every signed-in User to list them,
+I want to add, annotate and retire Instruments through the market API, and every signed-in User to list them,
 So that the system tracks exactly the Instruments I choose, with every change audited.
 
 - **Requirements:** FR-20; FR-16, FR-18, FR-19 (market routes, Instrument audit, Instrument Events); SPEC FR-MKT-001, FR-PLT-006; MID section 6.2
@@ -865,10 +867,12 @@ So that the system tracks exactly the Instruments I choose, with every change au
 - **Depends on:** 3.1
 - **Branch:** feature/market-instruments
 
+Add, annotate and retire are API-only (used through `/api/market/docs`); the POC Instruments page is read-only and gains no button or form (addendum section G).
+
 **Acceptance Criteria:**
 
 **Given** an admin
-**When** they add an Instrument with symbol, name, listing exchange, currency, asset class (`equity` or `etf`), optional Vendor symbol and notes
+**When** they add an Instrument with symbol, name, sector, listing exchange, currency, asset class (`equity` or `etf`), optional Vendor symbol and notes
 **Then** the Instrument is created as `active`
 **And** `instrument.created` is published and an Audit entry is recorded
 
@@ -877,7 +881,7 @@ So that the system tracks exactly the Instruments I choose, with every change au
 **Then** the response is HTTP 409 naming the existing Instrument id and status (re-activating a retired Instrument is out of scope)
 
 **Given** an active Instrument
-**When** an admin annotates its name or notes
+**When** an admin annotates its name, sector or notes
 **Then** the change is saved and audited
 
 **Given** an active Instrument
@@ -920,7 +924,7 @@ So that a fresh Environment is ready for ingestion without typing 40 symbols.
 
 **Given** an empty Instrument master
 **When** the seed command runs
-**Then** 40 Instruments exist: 30 large-cap equities and 10 ETFs
+**Then** 40 Instruments exist: 30 large-cap equities and 10 ETFs, each with its name and sector so the POC Instruments page can show them
 
 **Given** the seed has already run
 **When** it runs again
@@ -1166,6 +1170,8 @@ So that I can fetch data on demand without waiting for the work to finish.
 - **Owner:**
 - **Depends on:** 4.3
 - **Branch:** feature/market-api-and-scheduler
+
+Triggering is API-only (through `/api/market/docs` or the command line); no POC page has a trigger control (addendum section G).
 
 **Acceptance Criteria:**
 
@@ -1458,11 +1464,18 @@ So that I can pull ten years of history for a backtest with exact values and pro
 - **Depends on:** 6.1
 - **Branch:** feature/market-read-api *(new; split from ingestion plan row 6)*
 
+This API feeds the POC Instruments page (Symbol, Name, Sector, Price, Chg %) and the POC Market Data page (daily candles for the last 90 sessions); wiring those pages replaces their mock data only (addendum section G).
+
 **Acceptance Criteria:**
 
 **Given** any signed-in User
+**When** they list Instruments
+**Then** each Instrument returns `symbol`, `name`, `sector`, `price` (the latest clean close) and `change_pct` (the change from the previous clean close)
+**And** an Instrument with fewer than two clean Bars returns no price or change, and the POC page shows it without them
+
+**Given** any signed-in User
 **When** they request Bars for an Instrument and window
-**Then** Bars are returned in Session order with exact decimal prices, revision numbers and Quality flags, paginated
+**Then** Bars are returned in Session order with exact decimal prices, revision numbers and Quality flags, paginated, which is what the POC Market Data page draws for the last 90 sessions
 
 **Given** a Bar
 **When** it is returned
@@ -1489,15 +1502,17 @@ So that I can pull ten years of history for a backtest with exact values and pro
 ### Story 6.4: Run history, Rejected bars and data-quality summary
 
 As an analyst,
-I want run history, run detail with its report, Rejected bars with reasons and a data-quality summary,
+I want run history, run detail with its report, Rejected bars with reasons and a data-quality summary through the market API, and each finished run on the Audit Log page,
 So that I can judge data quality before relying on it.
 
-- **Requirements:** FR-29; FR-21 (`delisted_candidate`, `stale_directory` shown), FR-24 (deferral count shown), FR-16; SPEC FR-MKT-011, FR-MKT-002
+- **Requirements:** FR-29; FR-18 (audit feed); FR-21 (`delisted_candidate`, `stale_directory` shown), FR-24 (deferral count shown), FR-16; SPEC FR-MKT-011, FR-MKT-002
 - **Priority:** Must
 - **Status:** Draft schemas only
 - **Owner:**
-- **Depends on:** 5.3 (and 3.5, 4.3 for the extra data-quality fields)
+- **Depends on:** 5.3 (and 3.5, 4.3 for the extra data-quality fields); the platform's readable activity feed for the Audit Log page (PRD Open Question 14)
 - **Branch:** feature/market-read-api *(new)*
+
+Run history, run detail, Rejected bars and the data-quality summary are API-only (used through `/api/market/docs`); no POC screen shows them and none is added (addendum section G).
 
 **Acceptance Criteria:**
 
@@ -1519,7 +1534,11 @@ So that I can judge data quality before relying on it.
 **When** they read run history, Rejected bars or data quality
 **Then** they get HTTP 403
 
-**Done when:** API tests pass including the viewer 403 cases.
+**Given** an Ingestion run that finishes
+**When** its final status is recorded
+**Then** exactly one event is added to the platform audit feed that the POC Audit Log page reads: user (the requesting User, or `System` for scheduled runs), service `Market Data`, action `Ingestion run completed`, `Ingestion run partially succeeded` or `Ingestion run failed`, severity `Info` (nothing rejected), `Warning` (rejections, gaps or deferrals) or `Critical` (failed), and a one-line detail with the counts and the rejecting rules
+
+**Done when:** API tests pass including the viewer 403 cases, and a test asserts one audit feed event per finished run with the fields above.
 
 ### Story 6.5: Market data observability
 
@@ -1546,40 +1565,46 @@ So that I can see failures and staleness without reading code.
 
 **Done when:** a test asserts the log fields and the absence of the key, and each metric name is present after a test run.
 
-## Epic 7: Market environment and replay sessions
+## Epic 7: Market environments
 
-Admins and quants create Replay sessions that the API and the database both validate, and the tick Event schema of the Market environment interface is published for Iteration 2. Playback is out of scope.
+Admins and quants create Market environments that the API and the database both validate, with exactly the fields of the POC Market Environments and Create Market Environment pages, and the tick Event schema of the Market environment interface is published for Iteration 2. Replay playback (the POC Replay page stays on mock data) and synthetic generation are out of scope.
 
-### Story 7.1: Create and read Replay sessions
+### Story 7.1: Create, list and read Market environments
 
 As a quant,
-I want to create a named Replay session over existing Instruments, a time window and a playback speed,
-So that Iteration 2 can replay it without redefining the request.
+I want to create a named Market environment over existing Instruments, a date window and a frequency, and see it on the POC Market Environments page,
+So that Iteration 2 can replay or simulate it without redefining it.
 
 - **Requirements:** FR-30; FR-16; SPEC FR-MKT-007 (create), FR-MKT-008, NFR-INT-003
 - **Priority:** Must
 - **Status:** Draft schemas only
 - **Owner:**
 - **Depends on:** 3.2
-- **Branch:** feature/market-replay *(new; split from ingestion plan row 6)*
+- **Branch:** feature/market-environments *(new; split from ingestion plan row 6)*
+
+The API serves the POC Create Market Environment page (type, universe Instruments, data window, frequency) and the POC Market Environments page (Environment, Type, Universe, Window, Frequency, Status); wiring them replaces their mock data only. The API uses lower-case values (`historical_replay`, `daily`, `draft`) that the frontend client maps to the POC labels (addendum section G).
 
 **Acceptance Criteria:**
 
 **Given** an admin or quant
-**When** they create a Replay session with a name, 1 to 100 existing Instruments, a start time, an end time after it, and a speed greater than 0 and at most 1000
-**Then** it is created and any signed-in User can read it
+**When** they create a Market environment with a name, a type (`historical_replay` or `synthetic_market`), a universe name, 1 to 100 existing Instruments, a start date, an end date after it, and a frequency (`daily`, `hourly` or `tick`)
+**Then** it is created with status `draft`
 
-**Given** an end time that is not after the start time
-**When** the session is created through the API
+**Given** any signed-in User
+**When** they list or read Market environments
+**Then** each returns its name, type, universe, Instruments, start and end date, frequency and status
+
+**Given** an end date that is not after the start date
+**When** the Market environment is created through the API
 **Then** it is refused with HTTP 422
 **And** a direct database insert of the same row is also refused
 
-**Given** zero Instruments, more than 100, an unknown Instrument, or a speed outside (0, 1000]
-**When** the session is created
-**Then** it is refused with HTTP 422
+**Given** zero Instruments, more than 100, an unknown Instrument, or a type, frequency or status outside the POC's values
+**When** the Market environment is created
+**Then** it is refused with HTTP 422, and the database refuses the same type, frequency or status when inserted directly
 
 **Given** an analyst or viewer
-**When** they create a Replay session
+**When** they create a Market environment
 **Then** they get HTTP 403
 
 **Done when:** API tests pass, including the inverted-window case used in the demo spine.
@@ -1595,7 +1620,7 @@ So that replayed and simulated markets share one contract a portfolio can bind t
 - **Status:** Draft schemas only
 - **Owner:**
 - **Depends on:** 3.1
-- **Branch:** feature/market-replay *(new)*
+- **Branch:** feature/market-environments *(new)*
 
 **Acceptance Criteria:**
 
@@ -1626,7 +1651,7 @@ So that it ships through the same gates as every other Component.
 - **Depends on:** 2.7, 4.5, 6.3, 6.4, 7.1
 - **Branch:** feature/market-deployment
 
-Scope: Dockerfile, compose entries `market`, `market-worker`, `market-scheduler`, `market-relay`, `market-migrate`; `db-init` market database and role; `ci/components.conf` entry; `TIINGO_API_KEY` and `MARKET_DB_PASSWORD` in the encrypted files; README and runbook (re-run a window, backfill an Instrument, retire a delisted symbol, read a run report).
+Scope: Dockerfile, compose entries `market`, `market-worker`, `market-scheduler`, `market-relay`, `market-migrate`; `db-init` market database and role; `ci/components.conf` entry; `TIINGO_API_KEY` and `MARKET_DB_PASSWORD` in the encrypted files; README and runbook (re-run a window, backfill an Instrument, retire a delisted symbol, read a run report through the API docs).
 
 **Acceptance Criteria:**
 
@@ -1702,17 +1727,20 @@ So that the Mid-I demo passes the same way every time.
 
 **Given** a fresh TEST deploy
 **When** the script is followed
-**Then** an admin signs in, adds three Instruments (confirmed against the Symbol directory when story 3.4 is delivered), triggers a run and gets HTTP 202 at once, and opens the run report showing received, passed untouched, corrected and rejected per Instrument with every planted defect under its rule
+**Then** an admin signs in on the POC sign-in page, adds three Instruments through the market service's API docs (confirmed against the Symbol directory when story 3.4 is delivered), and sees them listed on the POC Instruments page
+**And** the admin triggers a run through the API docs and gets HTTP 202 at once
+**And** when the run finishes, the POC Audit Log page shows a Market Data event "Ingestion run completed" with severity Warning and a detail line counting received, passed untouched, corrected and rejected and naming the rules that rejected the planted defects
+**And** the full Reconciliation report, read through the API docs, adds up exactly, and the POC Market Data page draws the clean Bars
 
 **Given** the same window
 **When** it is triggered again
-**Then** the report shows zero new Bars and zero new Events
+**Then** the new Audit Log event reports zero new Bars, and no new Events are published
 
 **Given** a viewer account
 **When** it tries to add an Instrument
 **Then** it is refused with HTTP 403
 
-**Given** an inverted Replay session
+**Given** a Market environment whose end date is not after its start date
 **When** it is created
 **Then** it is refused with HTTP 422
 
@@ -1788,7 +1816,7 @@ So that each claim in the Mid report rests on observable evidence.
 | FR-26 | 5.2, 5.3, 8.2 | Must |
 | FR-27 | 6.1 | Must |
 | FR-28 | 6.2 | Could |
-| FR-29 | 6.3, 6.4, 8.4 | Must |
+| FR-29 | 6.3, 6.4 (incl. Audit Log event per run), 8.4 | Must |
 | FR-30 | 3.1, 7.1, 7.2 | Must |
 | FR-31 | 3.1 (health, ready), 3.5 (directory age), 6.5, 8.1 | Should (full metrics Could) |
 
@@ -1826,7 +1854,7 @@ So that each claim in the Mid report rests on observable evidence.
 | 4 Ingestion runs and Vendor access | 5 (4.1 to 4.5) |
 | 5 Cleaning gate and reconciliation | 3 (5.1 to 5.3) |
 | 6 Returns, corporate actions, read API | 5 (6.1 to 6.5) |
-| 7 Market environment and replay | 2 (7.1 to 7.2) |
+| 7 Market environments | 2 (7.1 to 7.2) |
 | 8 Mid demo evidence | 4 (8.1 to 8.4) |
 | **Total** | **43** |
 
@@ -1835,5 +1863,6 @@ So that each claim in the Mid report rests on observable evidence.
 - Every FR-1 to FR-31 maps to at least one story; every cross-cutting NFR in PRD section 5 maps to at least one story; deferred Core NFRs are listed and intentionally have no story.
 - No story depends on a later story in its epic, and no epic depends on a later epic. FR-13 is placed in stories 2.7 and 8.1 rather than Epic 1 for that reason.
 - Deliberate exception to "create tables only when needed": story 3.1 creates the whole Iteration 1 market schema in `0001_market_schema`, because the ingestion plan and addendum section B make the schema its own reviewed branch. The Could-tier Symbol directory adds its own revision `0002_symbol_directory` (story 3.4).
-- Branches split from the ingestion plan's section 10 rows (marked *(new)*): `feature/market-publishing`, `feature/market-returns`, `feature/market-corporate-actions`, `feature/market-read-api`, `feature/market-replay`, `feature/market-observability`, plus `feature/market-symbol-directory`, `feature/release-tagging`, `feature/environment-secrets` and `feature/mid-evidence`. `feature/market-pipeline` and `feature/market-api-and-scheduler` keep their names with narrower scope.
+- Branches split from the ingestion plan's section 10 rows (marked *(new)*): `feature/market-publishing`, `feature/market-returns`, `feature/market-corporate-actions`, `feature/market-read-api`, `feature/market-environments`, `feature/market-observability`, plus `feature/market-symbol-directory`, `feature/release-tagging`, `feature/environment-secrets` and `feature/mid-evidence`. `feature/market-pipeline` and `feature/market-api-and-scheduler` keep their names with narrower scope.
+- UI contract check (2026-10-11): no story adds a POC screen, field, column or control; Instrument changes, run triggers, run history, Rejected bars and data quality are API-only; Replay session was replaced by Market environment as the POC models it (PRD glossary, FR-30).
 - Status stays `draft` until the team reviews this document.

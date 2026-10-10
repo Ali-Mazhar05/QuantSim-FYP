@@ -7,28 +7,29 @@ Every later QuantSim module (simulator, trading, risk, TDA, ML, dashboard) consu
 ## What Changes
 
 - New `market` service (one image, processes `serve`, `scheduler`, `worker`, `relay`, plus `market-migrate`) built on `libs/qs_template`, owning `market_db` (PostgreSQL 17 + TimescaleDB) exclusively.
-- Instrument master: admins add, annotate and retire Instruments; a seed loads the 40-Instrument universe; symbols are validated against the Nasdaq Trader Symbol directory (PRD FR-20, FR-21; SPEC FR-MKT-001, FR-PLT-006).
+- Instrument master: admins add, annotate and retire Instruments (symbol, name, sector, exchange and the other master fields) through the API only; a seed loads the 40-Instrument universe; symbols are validated against the Nasdaq Trader Symbol directory (PRD FR-20, FR-21; SPEC FR-MKT-001, FR-PLT-006).
 - Ingestion runs: `daily` (22:30 UTC) and `catchup` (06:00 UTC) schedules plus admin `manual` and `backfill` runs, executed from a PostgreSQL job queue by one worker at a time (PRD FR-22; SPEC FR-MKT-002, NFR-PERF-004).
 - Resilient Vendor access to Tiingo: 30 s timeout, retries with backoff, a shared hourly Vendor budget, a circuit that defers instead of hanging, and a fixture Vendor for recorded responses (PRD FR-24; SPEC NFR-PERF-005, NFR-REL-006).
 - Cleaning gate with ten named Cleaning rules, Rejected bars kept with reasons, Data gaps, UTC session-close timestamps and a stored Ruleset version (PRD FR-25; SPEC FR-MKT-011).
 - Idempotent publication with Revisions and `bar.corrected`, and a Reconciliation report that always adds up (PRD FR-23, FR-26; SPEC FR-MKT-002, FR-MKT-011, NFR-REL-005, NFR-REL-008).
 - Return series (log, adjusted log, 20- and 60-session volatility) and Corporate actions with raw and adjusted series (PRD FR-27, FR-28; SPEC FR-MKT-003, FR-MKT-010).
-- Market read API for Instruments, Bars, returns, run history, Rejected bars and data quality (PRD FR-29; SPEC FR-MKT-001..003, FR-MKT-011, NFR-PERF-002, NFR-MNT-005 partial).
-- Replay session creation and the published tick Event schema of the Market environment interface (PRD FR-30; SPEC FR-MKT-007 create, FR-MKT-008, FR-MKT-009 partial, NFR-INT-003).
+- Market read API for Instruments (symbol, name, sector, price, change_pct, as the POC Instruments page shows), Bars, returns, and API-only run history, Rejected bars and data quality; one event per finished Ingestion run for the platform audit feed behind the POC Audit Log page (PRD FR-29; SPEC FR-MKT-001..003, FR-MKT-011, NFR-PERF-002, NFR-MNT-005 partial).
+- Market environments shaped exactly like the POC (name, type `historical_replay` or `synthetic_market`, universe, Instruments, start and end date, frequency `daily`, `hourly` or `tick`, status `draft`, `ready` or `active`): create, list and read, plus the published tick Event schema of the Market environment interface (PRD FR-30; SPEC FR-MKT-007 create, FR-MKT-008, FR-MKT-009 partial, NFR-INT-003).
 - Structured logs, metrics, health and ready endpoints (PRD FR-31; SPEC NFR-OBS-002, NFR-OBS-003).
 - Deployment as a pipeline Component with migrate-before-start, and the Planted-fault dataset with its exact expected report (PRD FR-13 market part, SM-2).
+- UI contract: the POC frontend (`frontend/` on `develop`, identical to `develop-poc`) is the single source of truth for every screen. This change adds no screen, field, column or control; APIs are shaped to the POC's types, and capabilities with no POC screen are API-only (PRD Conventions; addendum section G).
 - Cross-cutting NFRs honoured: NFR-INT-001 (8-decimal fixed precision: prices `NUMERIC(23,8)`, volume `NUMERIC(28,8)`), NFR-REC-001 (schema from migrations only, addendum section B), NFR-MNT-002 and NFR-SEC-007 (database per service), NFR-SEC-001 (role checks in the owning service), NFR-SEC-003 (no secrets in source or Images), NFR-AUD-001/002 (Instruments audited), NFR-REL-007 (outbox).
 
 ## Capabilities
 
 ### New Capabilities
 
-- `market-instruments`: the Instrument master, its seed universe and Symbol directory validation (FR-20, FR-21).
+- `market-instruments`: the Instrument master (API-only changes), its seed universe and Symbol directory validation (FR-20, FR-21).
 - `market-ingestion`: Ingestion run scheduling, triggering, execution, Vendor resilience, idempotent publication with Revisions, and ingestion observability (FR-22, FR-23, FR-24, FR-31).
 - `market-cleaning`: the Cleaning gate, Rejected bars, Data gaps and the Reconciliation report (FR-25, FR-26).
 - `market-returns`: the Return series and Corporate actions with raw and adjusted prices (FR-27, FR-28).
-- `market-read-api`: read access to Instruments, Bars, returns, run history, Rejected bars and data quality (FR-29).
-- `market-replay`: Replay session creation and the Market environment tick Event schema (FR-30).
+- `market-read-api`: read access to Instruments, Bars, returns, run history, Rejected bars and data quality, and the per-run audit feed event (FR-29).
+- `market-environments`: Market environment create, list and read as the POC models them, and the Market environment tick Event schema (FR-30).
 
 ### Modified Capabilities
 
@@ -38,13 +39,14 @@ None. No main specs exist yet under `openspec/specs/`. Platform identity, audit,
 
 - Rolling correlation series (SPEC FR-MKT-004): stretch in Iteration 1, otherwise Iteration 3 with TDA.
 - News ingestion (SPEC FR-MKT-006): Iteration 2.
-- Replay playback, pause, speed change and tick streaming (SPEC FR-MKT-007 play), and the portfolio binding operations of FR-MKT-009: Iteration 2 with the simulator.
+- Replay playback, pause, speed change and tick streaming (SPEC FR-MKT-007 play; the POC Replay page stays on mock data), synthetic market generation, and the portfolio binding operations of FR-MKT-009: Iteration 2 with the simulator.
 - Versioned baskets (SPEC FR-MKT-005): Extended, later iteration.
 - A second Vendor or cross-vendor outlier confirmation: not in Iteration 1.
 - Re-activating a retired Instrument: not in Iteration 1.
 - End-to-end tracing (NFR-OBS-001), TLS on internal hops (NFR-SEC-002), audit-index Events (NFR-AUD-003): deferred Core NFRs (Iterations 2 and 4).
 - Market service on ACC and PROD: only once a backend server exists (PRD section 8.2); the Mid demo runs on TEST.
-- Frontend pages: specified in the iteration-plan frontend tasks, not here.
+- Any new or changed frontend screen, field, column or control. Wiring the POC pages to these APIs replaces their mock data only and is frontend work outside this change.
+- The platform's readable activity feed that the POC Audit Log page reads (PRD Open Question 14): a platform task; this change only emits the market events for it.
 
 Iteration: 1 (Sep to Oct 2026, gate Mid-I). If time runs short, cut in PRD section 8.1 order: Symbol directory (FR-21), Corporate actions (FR-28), full backfill and the `catchup` run, the full metrics list, then backend on ACC and PROD.
 

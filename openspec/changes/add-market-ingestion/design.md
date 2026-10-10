@@ -21,6 +21,29 @@ Binding constraints: free services only; prices are fixed-precision decimals end
 
 ## Decisions
 
+### The POC is the UI contract (PRD Conventions; addendum G)
+The POC frontend (`frontend/` on `develop`, identical to `develop-poc`) is the single source of truth for every screen, with no deviation. The market API is shaped to the POC's TypeScript types; nothing in this change adds a screen, field, column or control, and wiring a page replaces its mock data only. Capabilities with no POC screen are API-only, used through `/api/market/docs`. *Alternative:* add admin and data-quality screens; rejected by the team's ruling that the POC is not to be changed.
+
+POC page to market API mapping:
+
+| POC page (route) | Market API | Notes |
+|---|---|---|
+| Instruments (`/market/instruments`) | `GET /api/market/instruments` | returns `symbol`, `name`, `sector`, `price` (latest clean close), `change_pct` (from the previous clean close); no price or change with fewer than two clean Bars |
+| Market Data (`/market/data`) | `GET /api/market/instruments`, `GET /api/market/instruments/{id}/bars?from&to` | daily candles for the last 90 sessions |
+| Market Environments (`/market/environments`) | `GET /api/market/environments` | Environment, Type, Universe, Window, Frequency, Status |
+| Create Market Environment (`/market/environments/new`) | `POST /api/market/environments` | admin, quant; created as `draft` |
+| Replay (`/market/replay`) | none | playback is Iteration 2; stays on mock data |
+| Audit Log (`/audit-log`) | one event per finished Ingestion run, sent to the platform audit feed | user, service `Market Data`, action, severity `Info`/`Warning`/`Critical`, one-line detail |
+| System (`/admin/system`) | `/api/market/ready`, `/api/market/health` | health tile and version |
+
+API-only: Instrument add, annotate and retire, Symbol directory validation, manual and backfill run triggers, run history and detail with the Reconciliation report, Rejected bars, the data-quality summary and the Return series. The API uses lower-case values (`historical_replay`, `daily`, `draft`); the frontend's typed client maps them to the POC's display labels. Prices travel as 8-decimal strings and are formatted exactly as the POC does.
+
+### Market environments replace Replay sessions (PRD FR-30 glossary)
+The `market_environment` table holds name, type, universe, start and end date, frequency and status, with a membership table for its 1 to 100 Instruments. CHECK constraints refuse an end date not after the start date and any type, frequency or status outside the POC's values, so the API's HTTP 422 is backed by the database. The earlier playback speed field is dropped because the POC create page has no such field; speed belongs to Iteration 2 playback.
+
+### Per-run audit feed event
+When an Ingestion run reaches a final status the worker writes one outbox event for the platform's readable activity feed (PRD FR-29, Open Question 14): severity `Info` when nothing was rejected, `Warning` for rejections, gaps or deferrals, `Critical` for a failed run, with a detail line of counts and rejecting rules. It travels through the same outbox as other Events, so it is published exactly once.
+
 ### Service shape: one image, four processes (addendum C)
 The container starts as `serve` (FastAPI), `scheduler`, `worker` or `relay` (outbox to Redpanda); a one-off `market-migrate` container runs Alembic before each deploy. *Alternative:* separate images per process; rejected because versions could drift between processes and the pipeline builds one image per Component.
 
@@ -61,7 +84,7 @@ Splits and dividends from the Tiingo payload are stored in `corporate_action`; r
 Every route declares its Roles through the template; the service verifies JWTs locally against the Platform's public keys and checks the shared Redis revocation list (fail closed). Traefik only routes and rate-limits.
 
 ### Branch and pull request order (ingestion plan section 10, refined)
-`market-schema` → `market-instruments` → (`market-tiingo-adapter`, `market-cleaning-gate`, `market-symbol-directory` in parallel) → `market-pipeline` → `market-publishing` → (`market-returns`, `market-corporate-actions`) → `market-api-and-scheduler` → `market-read-api` → `market-replay` → `market-observability` → `market-deployment` → `market-planted-faults`. Rows 5 and 6 of the plan are split so each pull request maps to one epic in `docs/bmad/planning-artifacts/epics.md`.
+`market-schema` → `market-instruments` → (`market-tiingo-adapter`, `market-cleaning-gate`, `market-symbol-directory` in parallel) → `market-pipeline` → `market-publishing` → (`market-returns`, `market-corporate-actions`) → `market-api-and-scheduler` → `market-read-api` → `market-environments` → `market-observability` → `market-deployment` → `market-planted-faults`. Rows 5 and 6 of the plan are split so each pull request maps to one epic in `docs/bmad/planning-artifacts/epics.md`.
 
 ## Risks / Trade-offs
 

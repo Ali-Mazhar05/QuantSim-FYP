@@ -43,7 +43,7 @@ These are the PRD FRs, the SPEC requirements and Mid report draft (MID) requirem
 | FR-27 Returns and volatility | FR-MKT-003 | — | I1-25 | Draft code only |
 | FR-28 Corporate actions | FR-MKT-010 (Ext) | — | I1-20, I1-25 | Draft code only |
 | FR-29 Market read API | FR-MKT-001..003, -011, NFR-PERF-002 | FR-03, TC-04, §6.2 (4) | I1-27 | Draft schemas only |
-| FR-30 Replay session and interface | FR-MKT-007 (create), -008, -009, NFR-INT-003 | — | I1-30 | Draft schemas only |
+| FR-30 Market environments and interface | FR-MKT-007 (create), -008, -009, NFR-INT-003 | — | I1-30 | Draft schemas only |
 | FR-31 Observability | NFR-OBS-002/003 | — | I1-11, market branches | Template logging done; market not started |
 
 These MID requirements are later work and are **not** in Iteration 1: FR-04…FR-06 (simulation, Iteration 2), FR-07…FR-10 (trading, Iteration 2), FR-11…FR-14 (risk, TDA, ML, alerts, Iterations 2–3) and FR-15/16 (visualization, Iterations 2–4).
@@ -155,3 +155,30 @@ The inputs disagree in several places. The PRD position is:
 | §6.8 Table 6 | Jenkins 2.580.1 LTS, Docker Compose, Traefik v3.6, PostgreSQL 17 + TimescaleDB 2.22.1, Redis 8.2, Redpanda v25.2.9, Python 3.12, FastAPI, SQLAlchemy 2 async, Alembic, uv, React + TypeScript, Vitest, SOPS 3.13.3, Cloudflare Pages |
 | §7.3 Table 7 | TC-01 → FR-23, TC-02 → FR-25 (duplicates), TC-03 → FR-25, TC-04 → FR-29, TC-05 → FR-16, TC-06 → FR-15. Add TCs for the re-run (zero rows), the planted-fault exact match and the inverted replay window |
 | §8.3 Table 8 | Owners from the iteration plan (A platform and CI/CD, B market data, C frontend and schemas). Names to be filled by the team |
+
+## G. POC screens and the APIs behind them
+
+The POC (`frontend/` on `develop`, imported unchanged from `develop-poc`) is the UI contract: wiring a page replaces its mock data only. Iteration 1 wires the pages below; every other page keeps its mock data until its iteration.
+
+| POC page (route) | What the page shows or sends | API (Iteration 1) | PRD |
+|---|---|---|---|
+| Sign-in (`/login`) | Email or username, password, role picker | `POST /api/platform/auth/login`. The role comes from the account (see PRD Open Question 15) | FR-15 |
+| Instruments (`/market/instruments`) | Table: Symbol, Name, Sector, Price, Chg % | `GET /api/market/instruments`, returning `symbol`, `name`, `sector`, `price` (latest clean close) and `change_pct` (from the previous clean close) | FR-20, FR-29 |
+| Market Data (`/market/data`) | Symbol buttons; daily candles for the last 90 sessions | `GET /api/market/instruments`, then `GET /api/market/instruments/{id}/bars?from&to` | FR-29 |
+| Market Environments (`/market/environments`) | Table: Environment, Type, Universe, Window, Frequency, Status | `GET /api/market/environments` | FR-30 |
+| Create Market Environment (`/market/environments/new`) | Type, universe instruments, data window, frequency | `POST /api/market/environments` (admin, quant) | FR-30 |
+| Replay (`/market/replay`) | Play/pause, session position | none in Iteration 1 (playback is Iteration 2); stays on mock data | — |
+| Users (`/admin/users`) | Table: Name, Email, Role, Status, Last Active; "add user" button | `GET` and `POST /api/platform/users`. Status mapping is open (PRD Open Question 13) | FR-14 |
+| Roles (`/admin/roles`) | Static capability matrix | none (static, matches SPEC §1) | FR-16 |
+| Audit Log (`/audit-log`) | Table: Time, User, Service, Action, Severity, Detail | platform activity feed (PRD Open Question 14); the market service contributes one event per Ingestion run | FR-18, FR-29 |
+| System (`/admin/system`) | Service health tiles; environment, version | each service's `/api/<service>/ready`; version from `/api/<service>/health` | FR-31 |
+
+**API-only capabilities** (no POC screen; used through each service's interactive API docs at `/api/<service>/docs`):
+- adding, annotating and retiring Instruments, and Symbol directory validation (FR-20, FR-21)
+- triggering manual and backfill Ingestion runs (FR-22)
+- run history, run detail with the Reconciliation report, Rejected bars and the data-quality summary (FR-29)
+- the Return series (FR-27, consumed by later modules)
+
+**Field mapping rules:**
+- The API uses lower-case values (`admin`, `historical_replay`, `daily`, `draft`). The frontend's typed client maps them to the POC's display values (`Admin`, `Historical Replay`, `Daily`, `Draft`). No label on screen changes.
+- Prices travel as decimal strings with 8 places. The client converts them to numbers only for display, and the page formats them exactly as the POC does (for example `$214.32`).

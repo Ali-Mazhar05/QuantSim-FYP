@@ -6,15 +6,15 @@ Each numbered group is one `feature/*` branch and one pull request into `develop
 
 - [ ] 1.1 Create the `services/market` skeleton on `libs/qs_template` with `QS_*` settings and `/api/market/health` (build Content hash) and `/api/market/ready` (503 when the database or Redis is down); verify with an API test for both endpoints
 - [ ] 1.2 Add `db-init` steps for the `market` database, the `market` role and the TimescaleDB extension; verify `db-init` runs twice without error on a fresh stack
-- [ ] 1.3 Write Alembic revision `0001_market_schema` and matching models for `instrument`, `ingestion_run`, `ingestion_run_item`, `staging_bar`, `bar` and `return_series` (hypertables), `bar_revision`, `rejected_bar`, `data_gap`, `corporate_action`, `replay_session`, `outbox`, `processed_events`, `audit_log`, with prices `NUMERIC(23,8)`, volume `NUMERIC(28,8)`, provenance columns, Run item deferral fields and a planted-Instrument marker; verify `ci/scripts/migration-check.sh market` (upgrade head, downgrade base, upgrade head) passes locally
-- [ ] 1.4 Add the model-matches-migration test and database-rule tests (refuse non-positive price, `low > high`, open or close outside range, negative volume, duplicate symbol and exchange, unknown status, inverted replay window, speed outside (0, 1000], split factor not above 0); verify all pass
+- [ ] 1.3 Write Alembic revision `0001_market_schema` and matching models for `instrument`, `ingestion_run`, `ingestion_run_item`, `staging_bar`, `bar` and `return_series` (hypertables), `bar_revision`, `rejected_bar`, `data_gap`, `corporate_action`, `market_environment` and its Instrument membership, `outbox`, `processed_events`, `audit_log`, with `sector` on `instrument`, prices `NUMERIC(23,8)`, volume `NUMERIC(28,8)`, provenance columns, Run item deferral fields and a planted-Instrument marker; verify `ci/scripts/migration-check.sh market` (upgrade head, downgrade base, upgrade head) passes locally
+- [ ] 1.4 Add the model-matches-migration test and database-rule tests (refuse non-positive price, `low > high`, open or close outside range, negative volume, duplicate symbol and exchange, unknown status, inverted Market environment window, Market environment type, frequency or status outside the POC's values, split factor not above 0); verify all pass
 - [ ] 1.5 Done when: the migration check passes in Jenkins on the pull request and every database-rule test is green
 
 ## 2. Instrument master (feature/market-instruments; stories 3.2, 3.3)
 
-- [ ] 2.1 Implement add, annotate, retire and list routes with declared Roles, HTTP 409 naming the existing id and status, idempotent retire, Audit entries and `instrument.created` / `instrument.retired` outbox Events; verify with API tests for success, 409, 403 for quant, analyst and viewer, 401 without a token, and retire twice
+- [ ] 2.1 Implement add (with `sector`), annotate (name, sector, notes), retire and list routes with declared Roles, as API-only operations (no POC screen change), HTTP 409 naming the existing id and status, idempotent retire, Audit entries and `instrument.created` / `instrument.retired` outbox Events; verify with API tests for success, 409, 403 for quant, analyst and viewer, 401 without a token, and retire twice
 - [ ] 2.2 Add the role-by-route matrix test for market routes (every route, four Roles, expected 2xx or 403) and the route-declaration test; verify both fail when a route lacks a declaration
-- [ ] 2.3 Implement the idempotent seed command for the 40-Instrument universe (30 equities, 10 ETFs) that does not read the Symbol directory; verify a test seeds 40 and a second run adds 0
+- [ ] 2.3 Implement the idempotent seed command for the 40-Instrument universe (30 equities, 10 ETFs, each with name and sector) that does not read the Symbol directory; verify a test seeds 40 and a second run adds 0
 - [ ] 2.4 Done when: API and seed tests pass in CI and the event schemas for `instrument.created` and `instrument.retired` are in `contracts/events/`
 
 ## 3. Vendor adapter and budget (feature/market-tiingo-adapter; stories 4.1, 4.2)
@@ -65,22 +65,24 @@ Each numbered group is one `feature/*` branch and one pull request into `develop
 
 ## 10. Run trigger and scheduler (feature/market-api-and-scheduler; stories 4.4, 4.5)
 
-- [ ] 10.1 Implement `POST /ingestion-runs` (manual and backfill, default start 2015-01-02, default window 5 Sessions before the last Bar to the latest closed Session in America/New_York), HTTP 202 within 800 ms, HTTP 409 with the active run id on overlap, HTTP 403 for non-admins, and a command-line trigger; verify API tests including a timing assertion
+- [ ] 10.1 Implement the API-only trigger `POST /ingestion-runs` (manual and backfill, default start 2015-01-02, default window 5 Sessions before the last Bar to the latest closed Session in America/New_York), HTTP 202 within 800 ms, HTTP 409 with the active run id on overlap, HTTP 403 for non-admins, and a command-line trigger; verify API tests including a timing assertion
 - [ ] 10.2 Implement the scheduler process (`daily` 22:30 UTC, `catchup` 06:00 UTC, per-day idempotency keys, enabled by configuration in one Environment only, daily directory refresh when group 5 is merged); verify tests that duplicate firing creates one run and the daily run starts within 15 minutes during a backfill
 - [ ] 10.3 Done when: trigger and scheduler tests pass in CI
 
 ## 11. Market read API (feature/market-read-api; stories 6.3, 6.4)
 
-- [ ] 11.1 Implement Bars (raw or adjusted, paginated, Session order, decimals as strings, revision, flags, provenance on current and previous revisions) and Return series routes for all signed-in Users; verify API tests including 401 and 404
-- [ ] 11.2 Implement run history, run detail with report, Rejected bars, and the data-quality summary (last Session, Bar count, open gaps, flagged Bars, deferral counts, `delisted_candidate`, `stale_directory`, planted Instruments excluded) for admin, quant and analyst; verify API tests including viewer 403 on each route
-- [ ] 11.3 Export the OpenAPI document in CI and generate the frontend typed client from it; verify the pipeline publishes the document and a renamed field breaks the frontend type check
-- [ ] 11.4 Done when: read API tests and the role matrix pass
+- [ ] 11.1 Implement the Instrument list for the POC Instruments page returning `symbol`, `name`, `sector`, `price` (latest clean close) and `change_pct` (from the previous clean close), with no price or change for an Instrument with fewer than two clean Bars; verify API tests for both cases
+- [ ] 11.2 Implement Bars (raw or adjusted, paginated, Session order, decimals as strings, revision, flags, provenance on current and previous revisions) and Return series routes for all signed-in Users; verify API tests including 401 and 404
+- [ ] 11.3 Implement the API-only run history, run detail with report, Rejected bars, and the data-quality summary (last Session, Bar count, open gaps, flagged Bars, deferral counts, `delisted_candidate`, `stale_directory`, planted Instruments excluded) for admin, quant and analyst; verify API tests including viewer 403 on each route
+- [ ] 11.4 Emit one platform audit feed event per finished Ingestion run (user or `System`, service `Market Data`, action by final status, severity `Info`, `Warning` or `Critical`, one-line detail with counts and rejecting rules) through the outbox; verify a test that each final status produces exactly one event with those fields
+- [ ] 11.5 Export the OpenAPI document in CI and generate the frontend typed client from it; verify the pipeline publishes the document and a renamed field breaks the frontend type check
+- [ ] 11.6 Done when: read API tests and the role matrix pass
 
-## 12. Replay sessions and tick schema (feature/market-replay; stories 7.1, 7.2)
+## 12. Market environments and tick schema (feature/market-environments; stories 7.1, 7.2)
 
-- [ ] 12.1 Implement Replay session create (admin, quant) and read (all signed-in) with 1 to 100 existing Instruments, end after start, speed in (0, 1000]; verify API tests for success, HTTP 422 for each invalid input including the inverted window, and 403 for analyst and viewer
+- [ ] 12.1 Implement Market environment create (admin, quant; name, type, universe, 1 to 100 existing Instruments, start and end date, frequency; created as `draft`) and list and read (all signed-in) with the fields of the POC Market Environments page; verify API tests for success, HTTP 422 for each invalid input including the inverted window and an unknown type, frequency or status, 403 for analyst and viewer, 401 without a token and 404 for an unknown id
 - [ ] 12.2 Publish the versioned tick Event schema under `contracts/events/`; verify a test that valid samples pass and invalid samples fail
-- [ ] 12.3 Done when: replay and schema tests pass
+- [ ] 12.3 Done when: Market environment and schema tests pass
 
 ## 13. Observability (feature/market-observability; story 6.5)
 
@@ -91,7 +93,7 @@ Each numbered group is one `feature/*` branch and one pull request into `develop
 ## 14. Deployment (feature/market-deployment; story 8.1)
 
 - [ ] 14.1 Add the Dockerfile, compose entries `market`, `market-worker`, `market-scheduler` (enabled on TEST only), `market-relay`, `market-migrate`, the `ci/components.conf` entry, and `TIINGO_API_KEY` and `MARKET_DB_PASSWORD` in the SOPS files; verify the pull request check runs the market lint, format, type check, tests and migration check
-- [ ] 14.2 Write the service README and runbook (re-run a window, backfill an Instrument, retire a delisted symbol, read a run report); verify each documented command runs on DEV
+- [ ] 14.2 Write the service README and runbook (re-run a window, backfill an Instrument, retire a delisted symbol, read a run report, all through `/api/market/docs` or the command line); verify each documented command runs on DEV
 - [ ] 14.3 Verify on DEV and TEST: Smoke test on `/api/market/health` reports the deployed Content hash, a forced migration failure leaves the previous version running and fails the build, a token of a User deactivated in the Platform is refused by market within 5 seconds, and the key appears in no Image or log
 - [ ] 14.4 Done when: `market` is green in DEV and TEST with `quantsim/test-verified`
 
@@ -99,7 +101,7 @@ Each numbered group is one `feature/*` branch and one pull request into `develop
 
 - [ ] 15.1 Build the Planted-fault dataset (bad OHLC order, negative price, weekend date, identical and conflicting duplicates, a 60% jump, zero volume, a missing Session) for dedicated planted Instruments and its stored expected report; verify the CI test that the produced report equals the expected report field for field and a re-run adds zero Bars and Events
 - [ ] 15.2 Run the planted-fault window through the fixture source on DEV and TEST and a real-key run on 3 symbols on DEV; verify the report matches exactly on both and real Bars, report and Events land in DEV
-- [ ] 15.3 Write the demo spine script (sign in, add three Instruments, trigger, report, re-run zero, viewer 403, inverted replay 422); verify it passes twice in a row at the rehearsal on a fresh TEST deploy
+- [ ] 15.3 Write the demo spine script following PRD UJ-1 (sign in on the POC sign-in page, add three Instruments through the API docs and see them on the POC Instruments page, trigger, see the run event on the POC Audit Log page and the Bars on the POC Market Data page, read the Reconciliation report through the API docs, re-run zero, viewer 403, inverted Market environment window 422); verify it passes twice in a row at the rehearsal on a fresh TEST deploy
 - [ ] 15.4 Done when: SM-1 and SM-2 hold
 
 ## Workflow follow-up

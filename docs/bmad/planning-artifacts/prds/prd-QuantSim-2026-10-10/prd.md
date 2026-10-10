@@ -23,6 +23,7 @@ Conventions:
 - **Glossary terms (§3)** are used exactly; no synonyms.
 - **Requirement IDs.** FRs are numbered FR-1 to FR-N for this PRD. Each FR cites the SPEC IDs it realizes (for example FR-MKT-011) and the MID IDs (FR-01 to FR-16) where they apply. That way the Mid report, the SPEC and the stories all trace to the same statements.
 - **Assumptions** are tagged inline as `[ASSUMPTION: …]` and listed again in §11.
+- **The POC is the UI contract.** The frontend imported from `develop-poc` (`frontend/` on `develop`) is the single source of truth for every screen. No requirement in this PRD adds a screen, field, column or control the POC does not have. Backend APIs are shaped to the POC's types, and a capability with no POC screen is API-only (reachable through each service's interactive API docs). Addendum §G maps each POC screen to its API.
 - **Technical choices** (vendor, queue design, column types, tooling) live in `addendum.md`, together with the requirement crosswalk and the reconciliation of conflicting sources. This PRD states capabilities and testable consequences.
 
 ## 1. Vision
@@ -65,9 +66,9 @@ At Mid-I the team demonstrates the two foundations together. An admin signs in, 
 - **UJ-1. Zara runs the Mid demo from a clean environment.**
   - **Persona + context:** Zara is the admin and is running the demo spine for the panel on TEST.
   - **Entry state:** signed out; TEST is running the release that passed DEV.
-  - **Path:** Zara signs in. Zara adds three instruments; for each, the system confirms the symbol against the official exchange listings and fills in the listing exchange. Zara triggers an ingestion run and gets an acknowledgement at once. When the run finishes, Zara opens the run report.
-  - **Climax:** the report shows how many bars were received, passed untouched, corrected and rejected for each instrument. Every planted defect appears under the rule that caught it, and the counts add up exactly.
-  - **Resolution:** Zara triggers the same window again and the report shows zero new bars and zero new events. A viewer account then tries to add an instrument and is refused.
+  - **Path:** Zara signs in on the POC sign-in page. Through the market service's API docs, Zara adds three instruments; for each, the system confirms the symbol against the official exchange listings and fills in the listing exchange. The POC Instruments page now lists them. Zara triggers an ingestion run and gets an acknowledgement at once. When the run finishes, Zara opens the POC Audit Log page.
+  - **Climax:** the Audit Log shows a Market Data event for the run: "Ingestion run completed", severity Warning, with a detail line counting what was received, passed untouched, corrected and rejected, and naming the rules that rejected the planted defects. The full Reconciliation report, read through the API docs, adds up exactly. The POC Market Data page draws the clean bars.
+  - **Resolution:** Zara triggers the same window again; the new Audit Log event reports zero new bars, and no new Events are published. A viewer account then tries to add an instrument and is refused.
   - **Edge case:** the vendor is unreachable during the demo. The run ends `partially_succeeded` with deferred instruments named, and the catch-up run picks them up later. The planted-fault demo uses recorded vendor responses, so the demo itself never depends on the vendor (FR-24).
 
 - **UJ-2. Bilal pulls ten years of adjusted history for a backtest.**
@@ -81,7 +82,7 @@ At Mid-I the team demonstrates the two foundations together. An admin signs in, 
 - **UJ-3. Hina checks data quality before a stress test.**
   - **Persona + context:** Hina is an analyst about to run correlation-based analysis in a later iteration.
   - **Entry state:** signed in as an analyst.
-  - **Path:** Hina opens the data-quality summary, sorts by open gaps, then opens the rejected bars for the latest run.
+  - **Path:** Through the market API, Hina reads the data-quality summary, sorts by open gaps, then reads the rejected bars for the latest run. (No POC screen shows these; they are API-only.)
   - **Climax:** Hina sees each instrument's last clean session, its bar count, its open gaps and its flagged bars, plus every rejected record with the rules it broke and the raw payload.
   - **Resolution:** Hina excludes one instrument with an unresolved gap from the analysis basket.
 
@@ -136,7 +137,7 @@ At Mid-I the team demonstrates the two foundations together. An admin signs in, 
 - **Ruleset version** — The identifier of the Cleaning gate rules applied, stored on each Ingestion run.
 - **Return series** — Per-Instrument, per-Session log return, split/dividend-adjusted log return, and 20- and 60-session annualised volatility.
 - **Corporate action** — A split or cash dividend recorded for an Instrument on a Session.
-- **Replay session** — A named request to replay historical Bars for a set of Instruments over a time window at a playback speed. Iteration 1 creates and validates Replay sessions; playback is Iteration 2.
+- **Market environment** — A named market a simulation or portfolio runs inside, exactly as the POC models it: type `Historical Replay` or `Synthetic Market`, a universe name, a set of Instruments, a start and end date, a frequency (`Daily`, `Hourly`, `Tick`) and a status (`Draft`, `Ready`, `Active`). Iteration 1 creates, lists and validates Market environments; replay playback and synthetic generation are Iteration 2.
 - **Market environment interface** — The published contract (tick event schema plus operations) shared by replayed and simulated markets, so a portfolio can bind to either.
 - **Event** — A fact published to the event backbone after its change is committed, for example `bar.ingested`, `bar.corrected`, `instrument.created`, `instrument.retired` or `user.deactivated`.
 - **Planted-fault dataset** — A fixed set of vendor records with known defects, plus the exact Reconciliation report the Cleaning gate must produce for it.
@@ -359,7 +360,7 @@ A state change and the Events it produces are committed together. A broker outag
 **Functional Requirements:**
 
 #### FR-20: Instrument master
-An admin can add an Instrument (symbol, name, listing exchange, currency, asset class `equity` or `etf`, optional Vendor symbol, notes), annotate its name and notes, and retire it. Retiring is non-destructive and repeating it has no further effect. All signed-in Users can list Instruments, filtered by status. Realizes UJ-1. *(SPEC FR-MKT-001; FR-PLT-006)*
+An admin can add an Instrument (symbol, name, sector, listing exchange, currency, asset class `equity` or `etf`, optional Vendor symbol, notes), annotate its name, sector and notes, and retire it. Adding, annotating and retiring are API-only; the POC Instruments page is read-only. Retiring is non-destructive and repeating it has no further effect. All signed-in Users can list Instruments, filtered by status. Realizes UJ-1. *(SPEC FR-MKT-001; FR-PLT-006)*
 
 **Consequences (testable):**
 - Adding an Instrument whose symbol and exchange already exist returns HTTP 409, even if the existing Instrument is retired. The response names the existing Instrument id and status. Re-activating a retired Instrument is out of scope for Iteration 1.
@@ -479,17 +480,21 @@ The engine records splits and cash dividends from Vendor data and keeps both raw
 Signed-in Users can read Instruments, Bars (raw or adjusted, by Instrument and date range, paginated) and the Return series. Admins, quants and analysts can also read the run history, run detail with its Reconciliation report, Rejected bars with reasons, and the data-quality summary (last Session, Bar count, open Data gaps and flagged Bars for each Instrument). Realizes UJ-2 and UJ-3. *(SPEC FR-MKT-001..003, FR-MKT-011; MID FR-03, TC-04)*
 
 **Consequences (testable):**
-- Bars for an Instrument and window are returned in Session order, with exact decimal prices, revision numbers and Quality flags.
+- The Instrument list returns exactly what the POC Instruments page shows for each Instrument: symbol, name, sector, the latest clean close as price, and the change percentage from the previous clean close. An Instrument with fewer than two clean Bars returns no price or change, and the page shows it without them.
+- Bars for an Instrument and window are returned in Session order, with exact decimal prices, revision numbers and Quality flags. The POC Market Data page draws the last 90 sessions from this.
+- Each finished Ingestion run adds one event to the platform audit feed that the POC Audit Log page reads: user (the requesting User, or `System` for scheduled runs), service `Market Data`, action `Ingestion run completed`, `Ingestion run partially succeeded` or `Ingestion run failed`, severity `Info` (nothing rejected), `Warning` (rejections, gaps or deferrals) or `Critical` (failed), and a one-line detail with the counts and the rejecting rules.
+- Run history, run detail, Rejected bars and the data-quality summary are API-only; no POC screen shows them.
 - Each Bar carries its provenance: the Ingestion run that published its current revision, the Vendor, and the Ruleset version. Previous revisions carry the same fields.
 - A viewer gets HTTP 403 on run history, Rejected bars and data quality.
 - The API contract is exported as an OpenAPI document on every build, and the frontend's typed client is generated from it.
 - Standard reads complete within 800 ms at p95 for a 1-year window of one Instrument: 200 sequential requests from one client, measured through the gateway on TEST. *(SPEC NFR-PERF-002)*
 
-#### FR-30: Replay session creation and market environment interface
-Admins and quants can create a Replay session (name, 1–100 existing Instruments, start time, end time, speed greater than 0 and at most 1000), and all signed-in Users can read it. Analyst and viewer Users get HTTP 403 on create. The tick Event schema of the Market environment interface is published in the repository. Playback is out of scope (Iteration 2). *(SPEC FR-MKT-007 create, FR-MKT-008, FR-MKT-009; NFR-INT-003)*
+#### FR-30: Market environments and the market environment interface
+Admins and quants can create a Market environment with the fields the POC Create Market Environment page collects (name, type, universe, 1–100 existing Instruments, start date, end date, frequency); it starts as `Draft`. All signed-in Users can list and read Market environments with the fields the POC Market Environments page shows (name, type, universe, window, frequency, status). Analyst and viewer Users get HTTP 403 on create. The tick Event schema of the Market environment interface is published in the repository. Replay playback (play, pause, speed and session position, as on the POC Replay page) and synthetic generation are out of scope (Iteration 2). *(SPEC FR-MKT-007 create, FR-MKT-008, FR-MKT-009; NFR-INT-003)*
 
 **Consequences (testable):**
-- A Replay session whose end time is not after its start time is refused by the API (HTTP 422) and also by the database when inserted directly.
+- A Market environment whose end date is not after its start date is refused by the API (HTTP 422) and also by the database when inserted directly.
+- A type, frequency or status outside the POC's values is refused by the API (HTTP 422) and by the database.
 - The tick Event schema exists under `contracts/events/` with a schema version, and an automated test validates sample Events against it.
 - Coverage of FR-MKT-009 in Iteration 1 is partial: only the schema is delivered. The operations that bind a portfolio to a market come in Iteration 2 with the simulator.
 
@@ -561,7 +566,7 @@ Every run, Vendor call and outbox drain emits structured logs and metrics, so th
 - Iteration 1 does not run a second Vendor or cross-check outliers between vendors.
 - Market data does not include asset classes other than US-listed equities and ETFs (MID §1.6.3).
 - Iteration 1 includes no simulation, trading, risk, ML, TDA or alerting features.
-- Iteration 1 includes no frontend pages beyond what the demo needs (sign-in, Instruments, market data views). Those pages are specified in the frontend tasks of the iteration plan, not in this PRD.
+- No screen, field, column or control is added to the POC UI. Wiring POC pages to the real APIs (sign-in, Instruments, Market Data, Market Environments, Users, Audit Log, System health) replaces mock data only; layout and content stay as the POC defines them.
 
 ## 8. Iteration 1 Scope
 
@@ -589,7 +594,7 @@ All FRs below are planned for Iteration 1. If time runs short, cut from the bott
 ## 9. Success Metrics
 
 **Primary**
-- **SM-1: The demo spine passes on TEST.** The UJ-1 sequence runs end to end on TEST from a fresh deploy: sign in, add instruments, trigger a run, view the report, re-run with zero additions, viewer refused, inverted Replay session refused. Target: passes twice in a row at the rehearsal (I1-52). Validates FR-14 to FR-16, FR-20 to FR-26, FR-29 and FR-30.
+- **SM-1: The demo spine passes on TEST.** The UJ-1 sequence runs end to end on TEST from a fresh deploy: sign in, add instruments, trigger a run, see the run on the Audit Log page and the bars on the Market Data page, re-run with zero additions, viewer refused, inverted Market environment window refused. Target: passes twice in a row at the rehearsal (I1-52). Validates FR-14 to FR-16, FR-20 to FR-26, FR-29 and FR-30.
 - **SM-2: The Planted-fault report matches exactly.** The run report equals the expected report field for field on DEV and TEST. Target: 100% match. Validates FR-25 and FR-26.
 - **SM-3: The first Release is complete.** `v0.1.0` is tagged on `main`. For every Component that ACC and PROD host (at least the frontend), they serve the Content hash TEST verified. `quantsim/acceptance-signoff` was posted by a Pipeline approver. Target: by Mid-I. Validates FR-3 to FR-7.
 - **SM-4: Daily ingestion is reliable.** Over the last 5 trading days before Mid-I, the scheduled `daily` runs on TEST end `succeeded` for all 40 real Instruments on at least 4 days, and no day is missing a run. Requires an always-on CI host for those days: the Oracle server, or a named team member's machine left on. If neither exists, SM-4 is replaced by a log of manual runs on those days. Validates FR-22 to FR-24.
@@ -620,6 +625,9 @@ All FRs below are planned for Iteration 1. If time runs short, cut from the bott
 10. **Contribution evidence:** all Iteration 1 work so far is committed by one member. Task owners will be assigned by the team later; SM-6 needs merged pull requests from every member.
 11. **Tiingo key sharing:** does the free personal licence allow one key to be used by a team server? If not, each Environment that ingests needs its own key, and the shared budget (FR-24) applies per key.
 12. **Sensitive files in the working tree:** an untracked `admin_password` file and `ci/jenkins/.state/` must be git-ignored before anyone runs `git add .` (FR-9).
+13. **POC Users page status `Invited`:** the POC shows `Active`, `Invited` and `Disabled`; the platform service has active and deactivated only. Either the platform adds an invitation state or the API maps deactivated to `Disabled` and never returns `Invited`. Owner: platform. Decide before the Users page is wired.
+14. **Audit feed for the POC Audit Log page:** the POC shows readable events (time, user, service, action, severity, detail), while each service's audit log stores row-level before and after values. The platform needs a readable activity feed, fed by events from every service, that the Audit Log page reads. FR-29 defines the market service's events for it; the feed itself is a platform task.
+15. **POC sign-in role picker:** the POC sign-in page lets the user pick a role. With real sign-in the account's role decides what a User can do. Keeping the picker unchanged means it can only preselect; a mismatch with the account's role must not grant anything. Decide whether the page shows an error on mismatch or silently uses the account's role. Owner: frontend.
 
 ## 11. Assumptions Index
 
