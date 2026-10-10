@@ -4,6 +4,7 @@ must never exist (NFR-INT-001, NFR-INT-003, FR-26, FR-PLT-006, NFR-INT-005)."""
 
 import uuid
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import pytest
@@ -102,6 +103,7 @@ async def _insert_instrument(connection: AsyncConnection, **overrides: Any) -> u
         "id": uuid.uuid4(),
         "symbol": "AAPL",
         "name": "Apple Inc.",
+        "sector": "Technology",
         "exchange": "XNAS",
         "calendar": "XNYS",
         "currency": "USD",
@@ -111,9 +113,9 @@ async def _insert_instrument(connection: AsyncConnection, **overrides: Any) -> u
     values.update(overrides)
     await connection.execute(
         text(
-            "INSERT INTO instrument (id, symbol, name, exchange, calendar, currency,"
+            "INSERT INTO instrument (id, symbol, name, sector, exchange, calendar, currency,"
             " asset_class, vendor_symbol)"
-            " VALUES (:id, :symbol, :name, :exchange, :calendar, :currency, :asset_class,"
+            " VALUES (:id, :symbol, :name, :sector, :exchange, :calendar, :currency, :asset_class,"
             " :vendor_symbol)"
         ),
         values,
@@ -200,18 +202,63 @@ def test_impossible_bars_are_refused(
 
 
 @pytest.mark.db
-def test_an_inverted_replay_window_is_refused(migrated_database_url: str) -> None:
+async def _insert_environment(connection: AsyncConnection, **overrides: Any) -> None:
+    values: dict[str, Any] = {
+        "type": "historical_replay",
+        "frequency": "daily",
+        "status": "draft",
+        "start": "2020-02-01",
+        "end": "2020-04-30",
+        "instruments": '["00000000-0000-0000-0000-000000000001"]',
+    }
+    values.update(overrides)
+    values["start"] = date.fromisoformat(values["start"])
+    values["end"] = date.fromisoformat(values["end"])
+    await connection.execute(
+        text(
+            "INSERT INTO market_environment (name, type, universe, instrument_ids, start_date,"
+            " end_date, frequency, status, created_by)"
+            " VALUES ('COVID crash', :type, 'US Technology Basket', CAST(:instruments AS jsonb),"
+            " :start, :end, :frequency, :status, gen_random_uuid())"
+        ),
+        values,
+    )
+
+
+@pytest.mark.db
+def test_a_market_environment_shaped_like_the_poc_is_accepted(migrated_database_url: str) -> None:
+    async def work(connection: AsyncConnection) -> int:
+        transaction = await connection.begin()
+        try:
+            await _insert_environment(connection)
+            count: int = await connection.scalar(text("SELECT count(*) FROM market_environment"))
+            return count
+        finally:
+            await transaction.rollback()
+
+    assert run(_with_connection(migrated_database_url, work)) == 1
+
+
+@pytest.mark.db
+@pytest.mark.parametrize(
+    ("overrides", "constraint"),
+    [
+        ({"start": "2020-03-20", "end": "2020-03-01"}, "market_environment_window_valid"),
+        ({"start": "2020-03-01", "end": "2020-03-01"}, "market_environment_window_valid"),
+        ({"type": "Historical Replay"}, "market_environment_type_valid"),
+        ({"frequency": "weekly"}, "market_environment_frequency_valid"),
+        ({"status": "Active"}, "market_environment_status_valid"),
+        ({"instruments": "[]"}, "market_environment_instrument_count"),
+    ],
+)
+def test_invalid_market_environments_are_refused(
+    migrated_database_url: str, overrides: dict[str, str], constraint: str
+) -> None:
     async def attempt(connection: AsyncConnection) -> None:
-        await connection.execute(
-            text(
-                "INSERT INTO replay_session (name, instrument_ids, start_time, end_time,"
-                " created_by) VALUES ('crash', '[]', TIMESTAMPTZ '2020-03-20 00:00+00',"
-                " TIMESTAMPTZ '2020-03-01 00:00+00', gen_random_uuid())"
-            )
-        )
+        await _insert_environment(connection, **overrides)
 
     error = _refused(migrated_database_url, attempt)
-    assert "replay_session_window_valid" in str(error)
+    assert constraint in str(error)
 
 
 @pytest.mark.db
@@ -243,6 +290,7 @@ def test_a_run_report_that_does_not_add_up_is_refused(migrated_database_url: str
         ({"asset_class": "crypto"}, "instrument_asset_class_valid"),
         ({"symbol": "aapl"}, "instrument_symbol_format"),
         ({"exchange": "NASDAQ"}, "instrument_exchange_format"),
+        ({"sector": ""}, "instrument_sector_length"),
     ],
 )
 def test_invalid_instruments_are_refused(

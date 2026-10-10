@@ -41,7 +41,10 @@ ASSET_CLASSES = ("equity", "etf")
 RUN_MODES = ("daily", "catchup", "manual", "backfill")
 RUN_STATUSES = ("pending", "running", "succeeded", "partially_succeeded", "failed")
 RUN_ITEM_STATUSES = ("succeeded", "no_data", "deferred", "failed")
-REPLAY_STATUSES = ("created", "playing", "paused", "finished")
+# Market environments use exactly the POC's values (lower-case in the API and database)
+ENVIRONMENT_TYPES = ("historical_replay", "synthetic")
+ENVIRONMENT_FREQUENCIES = ("daily", "hourly", "tick")
+ENVIRONMENT_STATUSES = ("draft", "ready", "active")
 
 
 def _one_of(column: str, values: tuple[str, ...]) -> str:
@@ -54,6 +57,7 @@ instrument = Table(
     Column("id", Uuid, primary_key=True, server_default=text("gen_random_uuid()")),
     Column("symbol", Text, nullable=False),
     Column("name", Text, nullable=False),
+    Column("sector", Text, nullable=False),  # shown on the POC Instruments page
     Column("exchange", Text, nullable=False),  # ISO 10383 MIC, e.g. XNAS
     Column("calendar", Text, nullable=False),  # trading calendar code, e.g. XNYS
     Column("currency", Text, nullable=False),
@@ -75,6 +79,7 @@ instrument = Table(
     CheckConstraint("symbol ~ '^[A-Z0-9.-]{1,15}$'", name="instrument_symbol_format"),
     CheckConstraint("exchange ~ '^[A-Z0-9]{4}$'", name="instrument_exchange_format"),
     CheckConstraint("currency ~ '^[A-Z]{3}$'", name="instrument_currency_format"),
+    CheckConstraint("char_length(sector) BETWEEN 1 AND 80", name="instrument_sector_length"),
     CheckConstraint(_one_of("asset_class", ASSET_CLASSES), name="instrument_asset_class_valid"),
     UniqueConstraint("symbol", "exchange", name="instrument_symbol_exchange_unique"),
 )
@@ -268,23 +273,41 @@ return_series = Table(
     PrimaryKeyConstraint("instrument_id", "session_date"),
 )
 
-replay_session = Table(
-    "replay_session",
+# A market a simulation or portfolio runs inside, shaped like the POC's Market
+# Environments pages (FR-30). Replay playback state arrives with Iteration 2.
+market_environment = Table(
+    "market_environment",
     metadata,
     Column("id", Uuid, primary_key=True, server_default=text("gen_random_uuid()")),
     Column("name", Text, nullable=False),
+    Column("type", Text, nullable=False),
+    Column("universe", Text, nullable=False),
     Column("instrument_ids", JSONB, nullable=False),
-    Column("start_time", DateTime(timezone=True), nullable=False),
-    Column("end_time", DateTime(timezone=True), nullable=False),
-    Column("speed", Float, nullable=False, server_default=text("1")),
-    Column("status", Text, nullable=False, server_default="created"),
+    Column("start_date", Date, nullable=False),
+    Column("end_date", Date, nullable=False),
+    Column("frequency", Text, nullable=False, server_default="daily"),
+    Column("status", Text, nullable=False, server_default="draft"),
     Column("created_by", Uuid, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     # FR-MKT-008 / NFR-INT-003: the database itself refuses an inverted window
-    CheckConstraint("end_time > start_time", name="replay_session_window_valid"),
-    CheckConstraint("speed > 0 AND speed <= 1000", name="replay_session_speed_valid"),
-    CheckConstraint(_one_of("status", REPLAY_STATUSES), name="replay_session_status_valid"),
-    CheckConstraint("char_length(name) BETWEEN 1 AND 120", name="replay_session_name_length"),
+    CheckConstraint("end_date > start_date", name="market_environment_window_valid"),
+    CheckConstraint(_one_of("type", ENVIRONMENT_TYPES), name="market_environment_type_valid"),
+    CheckConstraint(
+        _one_of("frequency", ENVIRONMENT_FREQUENCIES), name="market_environment_frequency_valid"
+    ),
+    CheckConstraint(
+        _one_of("status", ENVIRONMENT_STATUSES), name="market_environment_status_valid"
+    ),
+    CheckConstraint("char_length(name) BETWEEN 1 AND 120", name="market_environment_name_length"),
+    CheckConstraint(
+        "char_length(universe) BETWEEN 1 AND 120", name="market_environment_universe_length"
+    ),
+    CheckConstraint(
+        "jsonb_typeof(instrument_ids) = 'array'"
+        " AND jsonb_array_length(instrument_ids) BETWEEN 1 AND 100",
+        name="market_environment_instrument_count",
+    ),
 )
 
 # Tables whose every change is written to the audit log (FR-PLT-006)

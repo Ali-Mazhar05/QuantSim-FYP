@@ -8,7 +8,7 @@ Owns `market_db`. In Iteration 1 it holds the instrument master and ingests end-
 
 | Table | Purpose |
 |---|---|
-| `instrument` | Instrument master (audited). Retiring is non-destructive |
+| `instrument` | Instrument master (audited), with the sector the POC Instruments page shows. Retiring is non-destructive |
 | `ingestion_run`, `ingestion_run_item` | One row per run and per instrument in the run. The database refuses an item whose counts do not add up |
 | `staging_bar` | Raw vendor records, kept for 90 days |
 | `bar` (hypertable) | Published clean bars. Prices are `NUMERIC(23,8)`. The database refuses non-positive prices, `low > high`, open or close outside the range, and negative volume |
@@ -17,7 +17,7 @@ Owns `market_db`. In Iteration 1 it holds the instrument master and ingests end-
 | `data_gap` | Expected sessions with no clean bar |
 | `corporate_action` | Splits and cash dividends |
 | `return_series` (hypertable) | Log returns, adjusted log returns, and 20- and 60-session volatility |
-| `replay_session` | Replay windows. The database refuses `end_time <= start_time` |
+| `market_environment` | Market environments shaped like the POC pages (type, universe, instruments, window, frequency, status). The database refuses `end_date <= start_date` and values the POC does not have |
 | `outbox`, `processed_events`, `audit_log` | From the service template |
 
 ## Migrations

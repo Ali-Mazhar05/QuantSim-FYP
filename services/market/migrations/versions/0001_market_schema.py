@@ -1,4 +1,4 @@
-"""Instrument master, ingestion runs, bars, quality records, returns, replay sessions,
+"""Instrument master, ingestion runs, bars, quality records, returns, market environments,
 event outbox, processed events and the audit trail.
 
 Revision ID: 0001
@@ -41,6 +41,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("symbol", sa.Text(), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
+        sa.Column("sector", sa.Text(), nullable=False),
         sa.Column("exchange", sa.Text(), nullable=False),
         sa.Column("calendar", sa.Text(), nullable=False),
         sa.Column("currency", sa.Text(), nullable=False),
@@ -61,6 +62,7 @@ def upgrade() -> None:
         sa.CheckConstraint("symbol ~ '^[A-Z0-9.-]{1,15}$'", name="instrument_symbol_format"),
         sa.CheckConstraint("exchange ~ '^[A-Z0-9]{4}$'", name="instrument_exchange_format"),
         sa.CheckConstraint("currency ~ '^[A-Z]{3}$'", name="instrument_currency_format"),
+        sa.CheckConstraint("char_length(sector) BETWEEN 1 AND 80", name="instrument_sector_length"),
         sa.CheckConstraint("asset_class IN ('equity', 'etf')", name="instrument_asset_class_valid"),
         sa.UniqueConstraint("symbol", "exchange", name="instrument_symbol_exchange_unique"),
     )
@@ -291,24 +293,39 @@ def upgrade() -> None:
     )
 
     op.create_table(
-        "replay_session",
+        "market_environment",
         sa.Column("id", sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("name", sa.Text(), nullable=False),
+        sa.Column("type", sa.Text(), nullable=False),
+        sa.Column("universe", sa.Text(), nullable=False),
         sa.Column("instrument_ids", postgresql.JSONB(), nullable=False),
-        sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("end_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("speed", sa.Float(), nullable=False, server_default=sa.text("1")),
-        sa.Column("status", sa.Text(), nullable=False, server_default="created"),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("end_date", sa.Date(), nullable=False),
+        sa.Column("frequency", sa.Text(), nullable=False, server_default="daily"),
+        sa.Column("status", sa.Text(), nullable=False, server_default="draft"),
         sa.Column("created_by", sa.Uuid(), nullable=False),
         _created_at(),
-        sa.CheckConstraint("end_time > start_time", name="replay_session_window_valid"),
-        sa.CheckConstraint("speed > 0 AND speed <= 1000", name="replay_session_speed_valid"),
+        _created_at("updated_at"),
+        sa.CheckConstraint("end_date > start_date", name="market_environment_window_valid"),
         sa.CheckConstraint(
-            "status IN ('created', 'playing', 'paused', 'finished')",
-            name="replay_session_status_valid",
+            "type IN ('historical_replay', 'synthetic')", name="market_environment_type_valid"
         ),
         sa.CheckConstraint(
-            "char_length(name) BETWEEN 1 AND 120", name="replay_session_name_length"
+            "frequency IN ('daily', 'hourly', 'tick')", name="market_environment_frequency_valid"
+        ),
+        sa.CheckConstraint(
+            "status IN ('draft', 'ready', 'active')", name="market_environment_status_valid"
+        ),
+        sa.CheckConstraint(
+            "char_length(name) BETWEEN 1 AND 120", name="market_environment_name_length"
+        ),
+        sa.CheckConstraint(
+            "char_length(universe) BETWEEN 1 AND 120", name="market_environment_universe_length"
+        ),
+        sa.CheckConstraint(
+            "jsonb_typeof(instrument_ids) = 'array'"
+            " AND jsonb_array_length(instrument_ids) BETWEEN 1 AND 100",
+            name="market_environment_instrument_count",
         ),
     )
 
@@ -357,7 +374,7 @@ def downgrade() -> None:
     for table in (
         "processed_events",
         "outbox",
-        "replay_session",
+        "market_environment",
         "return_series",
         "corporate_action",
         "data_gap",
