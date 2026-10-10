@@ -43,10 +43,16 @@ else
     hotfix/*)           base="main";    method="--merge --delete-branch" ;;
     *) fail "run from a feature/, bugfix/ or hotfix/ branch, or use: pr.sh promote <from> <to>" ;;
   esac
-  git ls-remote --exit-code --heads origin "$head" >/dev/null 2>&1 \
+  # Ask the GitHub API (retried: home connections drop git traffic now and then)
+  remote_sha=""
+  for _ in 1 2 3; do
+    remote_sha="$(gh api "repos/$repo/branches/$head" --jq .commit.sha 2>/dev/null)" && break
+    sleep 3
+  done
+  [[ -n "$remote_sha" ]] \
     || fail "$head is not on GitHub yet; run preflight.sh, then git push -u origin $head"
-  [[ "$(git rev-parse HEAD)" == "$(git rev-parse "origin/$head" 2>/dev/null)" ]] \
-    || fail "local $head differs from origin/$head; push your latest commits first"
+  [[ "$(git rev-parse HEAD)" == "$remote_sha" ]] \
+    || fail "local $head differs from GitHub; push your latest commits first"
   fork="$(git merge-base "origin/$base" HEAD)"
   [[ -n "$title" ]] || title="$(git log --reverse --format=%s "$fork..HEAD" | head -1)"
   commits="$(git log --reverse --format='- %s' "$fork..HEAD")"

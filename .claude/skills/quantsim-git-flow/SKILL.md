@@ -108,6 +108,7 @@ scripts/pr.sh promote main develop           # bring the fix back; merge with --
 | Conflict on a promotion PR | Stop and tell the user: environment branches must only ever receive promotions |
 | Wrong commit message, not pushed | `git commit --amend -m "<fixed message>"` (or rebase for older commits) |
 | Wrong commit message, already pushed | On your own feature branch: amend or rebase, then `--force-with-lease`. On a shared branch: leave it and tell the user |
+| Push or fetch fails with "remote end hung up" or "Could not read from remote" once | Transient network drop; retry the same command up to 3 times before investigating |
 | `gh` or `git` cannot reach the repo | `gh auth status`; the active account must be `Ali-Mazhar05` or a collaborator. Fix with `gh auth login` / `gh auth switch`; do not change remotes |
 | Disk nearly full (preflight warns) | Tests run in Docker and fail or hang below about 5 GB free; tell the user before running them |
 
