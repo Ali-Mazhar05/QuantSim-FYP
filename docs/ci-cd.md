@@ -19,8 +19,8 @@ hotfix/*      branched from main, checked and built, merged into main and back i
 
 | Environment | Branch | Where it runs | Address |
 |---|---|---|---|
-| DEV | `develop` | Jenkins host, compose project `qs-dev` | http://localhost:8081 |
-| TEST | `test` | Jenkins host, compose project `qs-test` | http://localhost:8082 |
+| DEV | `develop` | Frontend on Cloudflare Pages, branch `develop`; backend on the Jenkins host, compose project `qs-dev` | `https://develop.<project>.pages.dev`; backend http://localhost:8081 |
+| TEST | `test` | Frontend on Cloudflare Pages, branch `test`; backend on the Jenkins host, compose project `qs-test` | `https://test.<project>.pages.dev`; backend http://localhost:8082 |
 | ACC | `acceptance` | Cloudflare Pages, branch `acceptance` | `https://acceptance.<project>.pages.dev` |
 | PROD | `main` | Cloudflare Pages, production branch | `https://<project>.pages.dev` |
 
@@ -200,7 +200,8 @@ When the Oracle Cloud (or Hetzner) server exists:
 - Jenkins can use the host's Docker socket, which is equivalent to root on that host, and
   builds run on the controller. Acceptable for one machine; a separate build agent is the
   next step.
-- DEV, TEST and Jenkins share one machine and stop when it is off.
+- The DEV and TEST frontends stay up on Cloudflare Pages, but their backend services
+  and Jenkins share one machine and stop when it is off.
 - Without a public URL, GitHub webhooks cannot reach Jenkins; it scans the repository
   every 2 minutes instead.
 - The frontend was imported from `develop-poc` with a subtree merge. `git log` shows the
