@@ -40,11 +40,10 @@ pipeline {
 
   stages {
     stage('Build') {
-      agent any
+      agent { label 'docker' }
       environment {
         // Registry login lives in the workspace and is deleted with it
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
-        BUILDX_CONFIG = "${JENKINS_HOME}/.buildx"
       }
       options { timeout(time: 45, unit: 'MINUTES') }
 
@@ -173,7 +172,7 @@ pipeline {
 
     stage('Deploy') {
       when { beforeAgent true; expression { env.QS_ENV != 'none' } }
-      agent any
+      agent { label 'docker' }
       environment {
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
       }
@@ -233,7 +232,7 @@ pipeline {
           } catch (err) {
             accepted = false
           }
-          node {
+          node('docker') {
             checkout scm
             withGitHub {
               def state = accepted ? 'success' : 'failure'
@@ -252,7 +251,7 @@ pipeline {
 
     stage('Release') {
       when { beforeAgent true; branch 'main' }
-      agent any
+      agent { label 'docker' }
       environment {
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
       }
