@@ -10,6 +10,8 @@
   be left without an administrator.
 """
 
+import hashlib
+import secrets
 import time
 import uuid
 from dataclasses import dataclass
@@ -21,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_platform.keys import SigningKeys
-from qs_platform.models import users
+from qs_platform.models import refresh_tokens, users
 from qs_platform.passwords import hash_password, needs_rehash, verify_password
 from qs_platform.schemas import (
     AuditEntryOut,
@@ -40,6 +42,13 @@ from qs_template.messaging import add_event
 from qs_template.revocation import RevocationList
 
 log = get_logger(__name__)
+
+INVALID_REFRESH = ServiceError(
+    401,
+    "Session expired",
+    "The session is no longer valid. Sign in again.",
+    type_="urn:quantsim:problem:invalid-refresh-token",
+)
 
 INVALID_CREDENTIALS = ServiceError(
     401,
@@ -114,7 +123,81 @@ class UserService:
             changes["password_hash"] = hash_password(password)
         await session.execute(update(users).where(users.c.id == row.id).values(**changes))
         user = await self._get(session, row.id)
-        return LoginOutcome(token=self._issue_token(user))
+        return LoginOutcome(token=await self._issue_tokens(session, user, uuid.uuid4()))
+
+    # Sessions ------------------------------------------------------------------------
+
+    async def refresh(self, session: AsyncSession, token: str) -> TokenResponse | None:
+        """A new access and refresh token for a valid refresh token, or None.
+
+        The caller commits before reporting None, so a detected reuse stays revoked.
+        """
+        now = datetime.now(UTC)
+        row = (
+            await session.execute(
+                select(refresh_tokens)
+                .where(refresh_tokens.c.token_hash == _hash_token(token))
+                .with_for_update()
+            )
+        ).one_or_none()
+        if row is None or row.revoked_at is not None:
+            return None
+        if row.used_at is not None:
+            # A rotated token came back: someone else holds a copy, end the whole session
+            log.warning("refresh token reused; session revoked", user_id=str(row.user_id))
+            await self._revoke_family(session, row.family_id)
+            return None
+        if row.expires_at <= now:
+            return None
+        user = await self._get(session, row.user_id)
+        if not user.is_active:
+            await self._revoke_family(session, row.family_id)
+            return None
+        await session.execute(
+            update(refresh_tokens).where(refresh_tokens.c.id == row.id).values(used_at=now)
+        )
+        return await self._issue_tokens(session, user, row.family_id)
+
+    async def logout(self, session: AsyncSession, token: str) -> None:
+        """End the session the refresh token belongs to; unknown tokens are ignored."""
+        family = (
+            await session.execute(
+                select(refresh_tokens.c.family_id).where(
+                    refresh_tokens.c.token_hash == _hash_token(token)
+                )
+            )
+        ).scalar_one_or_none()
+        if family is not None:
+            await self._revoke_family(session, family)
+
+    async def _revoke_family(self, session: AsyncSession, family_id: uuid.UUID) -> None:
+        await session.execute(
+            update(refresh_tokens)
+            .where(refresh_tokens.c.family_id == family_id, refresh_tokens.c.revoked_at.is_(None))
+            .values(revoked_at=func.now())
+        )
+
+    async def _revoke_user_sessions(self, session: AsyncSession, user_id: uuid.UUID) -> None:
+        await session.execute(
+            update(refresh_tokens)
+            .where(refresh_tokens.c.user_id == user_id, refresh_tokens.c.revoked_at.is_(None))
+            .values(revoked_at=func.now())
+        )
+
+    async def _issue_tokens(
+        self, session: AsyncSession, user: UserOut, family_id: uuid.UUID
+    ) -> TokenResponse:
+        refresh = secrets.token_urlsafe(32)
+        ttl = self._settings.refresh_token_ttl_seconds
+        await session.execute(
+            insert(refresh_tokens).values(
+                user_id=user.id,
+                family_id=family_id,
+                token_hash=_hash_token(refresh),
+                expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
+            )
+        )
+        return self._issue_token(user, refresh)
 
     async def _record_failure(self, session: AsyncSession, row: Row[Any], now: datetime) -> None:
         failures = row.failed_logins + 1
@@ -126,7 +209,7 @@ class UserService:
             values = {"failed_logins": failures}
         await session.execute(update(users).where(users.c.id == row.id).values(**values))
 
-    def _issue_token(self, user: UserOut) -> TokenResponse:
+    def _issue_token(self, user: UserOut, refresh: str) -> TokenResponse:
         now_ms = int(time.time() * 1000)
         now = now_ms // 1000
         ttl = self._settings.access_token_ttl_seconds
@@ -142,7 +225,13 @@ class UserService:
             "iat_ms": now_ms,
             "exp": now + ttl,
         }
-        return TokenResponse(access_token=self._keys.sign(claims), expires_in=ttl, user=user)
+        return TokenResponse(
+            access_token=self._keys.sign(claims),
+            expires_in=ttl,
+            refresh_token=refresh,
+            refresh_expires_in=self._settings.refresh_token_ttl_seconds,
+            user=user,
+        )
 
     # Users ---------------------------------------------------------------------------
 
@@ -202,6 +291,7 @@ class UserService:
             await self._ensure_other_admin(session, user_id)
         # Revoke first: if Redis is down this fails closed and nothing changes
         await self._revocations.revoke_user(user_id)
+        await self._revoke_user_sessions(session, user_id)
         await session.execute(
             update(users)
             .where(users.c.id == user_id)
@@ -242,6 +332,7 @@ class UserService:
             await self._ensure_other_admin(session, user_id)
         # Existing tokens carry the old role; cut them off so the change applies at once
         await self._revocations.revoke_user(user_id)
+        await self._revoke_user_sessions(session, user_id)
         previous = user.role
         await session.execute(
             update(users)
@@ -336,6 +427,10 @@ class UserService:
                 },
             ),
         )
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 async def has_active_admin(session: AsyncSession) -> bool:
