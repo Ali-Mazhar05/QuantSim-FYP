@@ -180,14 +180,20 @@ One Jenkins serves the whole team; pushes from anyone, anywhere, are built by it
 
 | Host | When | Builds while… | Team access |
 |---|---|---|---|
-| **CI server** (Oracle Cloud Always Free, `ci/jenkins/bootstrap-server.sh`) | The target setup | always | `https://ci.<ci-domain>`, GitHub sign-in; webhooks start builds within seconds |
-| **Team members' laptops, taking turns** (`ci/jenkins/host.sh start / stop`) | Until the server exists | the current host's laptop is on and awake | Results on every pull request; `host.sh status` gives anyone the current Jenkins link |
+| **Team members' laptops, taking turns** (`ci/jenkins/host.sh start / stop`) | **Current setup** | the current host's laptop is on and awake | Results and log links on every pull request; `host.sh status` gives anyone the current public Jenkins link; each member signs in with their GitHub username |
+| **CI server** (any always-on Ubuntu machine, `ci/jenkins/bootstrap-server.sh`) | Optional, if a free server becomes available (Oracle Cloud sign-up failed at card verification) | always | `https://ci.<ci-domain>`, GitHub sign-in; webhooks start builds within seconds |
 
 Only one may run at a time. On laptops `host.sh` enforces that with a lease and hands
 Jenkins' history and recorded releases from one host to the next through Cloudflare R2,
 so Jenkins stays the same whoever runs it; its configuration always comes from
 `ci/jenkins/`. Builds run on a dedicated agent container,
-never on the Jenkins controller. Setup and handover steps are in `ci/jenkins/README.md`.
+never on the Jenkins controller. Setup and handover steps are in `ci/jenkins/README.md`; the team's day-to-day guide is
+[`docs/ci-cd-team-guide.md`](ci-cd-team-guide.md).
+
+Laptop hosts need disk and memory headroom: Docker's disk file on Windows grows but never
+shrinks by itself (`ci/jenkins/compact-docker-disk.ps1` compacts it), and a `.wslconfig`
+that caps Docker's memory and raises `fs.aio-max-nr` keeps Windows' page file small and
+lets several Redpanda brokers run at once (see the team guide, section 5).
 
 ## One-time setup
 
@@ -242,7 +248,12 @@ never on the Jenkins controller. Setup and handover steps are in `ci/jenkins/REA
 - The build agent can use the host's Docker, which is equivalent to root on that host;
   keep the host dedicated to CI. The controller itself has no Docker access.
 - The DEV and TEST frontends stay up on Cloudflare Pages, but their backend services
-  and Jenkins share the Jenkins host. On a laptop host they stop when the laptop is off.
+  and Jenkins share the Jenkins host. On a laptop host they stop when the laptop is off,
+  and nothing builds while nobody hosts.
+- ACC and PROD run the frontend only; their backend needs an always-on server (see
+  [Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
+- The public Jenkins link is a free Cloudflare quick tunnel, so its address changes every
+  time someone starts hosting.
 - On a laptop host GitHub webhooks cannot reach Jenkins, so it scans the repository every
   2 minutes instead.
 - The frontend was imported from `develop-poc` with a subtree merge. `git log` shows the
