@@ -171,14 +171,20 @@ start() {
   log "starting the tunnel"
   "${compose[@]}" up -d tunnel >/dev/null
   url=""
-  for _ in $(seq 1 30); do
+  # Right after Docker starts, the first request to trycloudflare.com can time out;
+  # restart the tunnel once if no address has appeared after a minute
+  for attempt in $(seq 1 60); do
     url="$(dk run --rm --network "${project}_default" --entrypoint sh "$rclone_image" \
       -c 'wget -qO- http://tunnel:2000/quicktunnel 2>/dev/null' \
       | sed -n 's/.*"hostname":"\([^"]*\)".*/https:\/\/\1\//p' || true)"
     [[ -n "$url" ]] && break
+    if (( attempt == 30 )); then
+      log "no public address yet; restarting the tunnel"
+      "${compose[@]}" restart tunnel >/dev/null
+    fi
     sleep 2
   done
-  [[ -n "$url" ]] || url="http://localhost:8080/"
+  [[ -n "$url" ]] || { url="http://localhost:8080/"; log "WARNING: no public link; Jenkins is only reachable on this machine. Run host.sh start again to retry"; }
   # Build links posted to GitHub point at this host's public address
   sed -i.bak "s#^JENKINS_URL=.*#JENKINS_URL=$url#" "$here/.env" && rm -f "$here/.env.bak"
 
