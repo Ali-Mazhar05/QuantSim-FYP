@@ -1,0 +1,654 @@
+<title>QuantSim System Blueprint</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --ink:#12171c; --ink-2:#3f4a55; --ink-3:#717d89; --rule:#e3e8ec; --rule-2:#cbd3da;
+    --paper:#ffffff; --paper-2:#f6f8f9;
+
+    --c1-bg:#e9eff8; --c1-ln:#4a6fa5; --c1-tx:#23405f;
+    --c2-bg:#e2f1ed; --c2-ln:#0b6f5b; --c2-tx:#0a4c3f;
+    --c3-bg:#f8f0e2; --c3-ln:#b07d2a; --c3-tx:#6d4a12;
+    --c4-bg:#f1eaf5; --c4-ln:#7a5290; --c4-tx:#4d3161;
+    --c5-bg:#e9eef0; --c5-ln:#5a7182; --c5-tx:#2e4351;
+    --flag:#b03a2e; --flag-bg:#fbeeec;
+
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e7edf2; --ink-2:#b4c0ca; --ink-3:#7f8b97; --rule:#242b32; --rule-2:#39434d;
+      --paper:#11151a; --paper-2:#0c1013;
+      --c1-bg:#161f2c; --c1-ln:#6d92c9; --c1-tx:#b6cdea;
+      --c2-bg:#0f2320; --c2-ln:#4fc0a3; --c2-tx:#8fdcc7;
+      --c3-bg:#241d10; --c3-ln:#d09a45; --c3-tx:#e8c68a;
+      --c4-bg:#1f172a; --c4-ln:#a882c0; --c4-tx:#cdb4de;
+      --c5-bg:#181d21; --c5-ln:#8ba3b4; --c5-tx:#bdcdd8;
+      --flag:#e08277; --flag-bg:#2a1613;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e7edf2; --ink-2:#b4c0ca; --ink-3:#7f8b97; --rule:#242b32; --rule-2:#39434d;
+    --paper:#11151a; --paper-2:#0c1013;
+    --c1-bg:#161f2c; --c1-ln:#6d92c9; --c1-tx:#b6cdea;
+    --c2-bg:#0f2320; --c2-ln:#4fc0a3; --c2-tx:#8fdcc7;
+    --c3-bg:#241d10; --c3-ln:#d09a45; --c3-tx:#e8c68a;
+    --c4-bg:#1f172a; --c4-ln:#a882c0; --c4-tx:#cdb4de;
+    --c5-bg:#181d21; --c5-ln:#8ba3b4; --c5-tx:#bdcdd8;
+    --flag:#e08277; --flag-bg:#2a1613;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper-2);color:var(--ink);font:15px/1.55 var(--sans);margin:0}
+  .page{max-width:1500px;margin:0 auto;padding:0 28px 90px;background:var(--paper)}
+
+  header.mast{padding:48px 0 26px;border-bottom:3px solid var(--ink)}
+  .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--c2-ln)}
+  h1{font:700 36px/1.1 var(--sans);margin:12px 0 10px;letter-spacing:-.02em;text-wrap:balance}
+  .sub{font-size:16.5px;color:var(--ink-2);max-width:70ch}
+
+  .flagbox{border:1px solid var(--flag);border-left:4px solid var(--flag);background:var(--flag-bg);
+    padding:14px 18px;border-radius:0 4px 4px 0;margin:26px 0 0;font-size:14.5px;line-height:1.6;color:var(--ink-2)}
+  .flagbox b{color:var(--flag)}
+
+  h2.sec{font:600 12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+    margin:56px 0 4px;padding-top:26px;border-top:1px solid var(--rule)}
+  h2.sec span{color:var(--ink);display:block;font:700 25px/1.2 var(--sans);letter-spacing:-.01em;margin-top:10px;text-transform:none}
+  .seclede{font-size:15px;color:var(--ink-2);max-width:74ch;margin:8px 0 22px}
+
+  .scroller{overflow-x:auto;padding-bottom:6px}
+
+  /* ============ POSTER ============ */
+  .poster{min-width:1240px;display:grid;grid-template-columns:minmax(0,1.62fr) minmax(0,1fr);gap:16px;align-items:start}
+  .col{display:flex;flex-direction:column;gap:10px}
+
+  .roles{display:flex;align-items:center;gap:20px;border:1px solid var(--rule-2);border-radius:8px;padding:11px 18px;background:var(--paper)}
+  .roles .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;color:var(--ink-3)}
+  .roles .r{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:500;color:var(--ink-2)}
+  .roles .r svg{width:19px;height:19px;color:var(--c2-ln)}
+
+  .tier{display:grid;grid-template-columns:186px minmax(0,1fr);gap:12px;align-items:stretch}
+  .tkey{border-radius:8px;padding:12px 14px;border:1px solid;display:flex;flex-direction:column;justify-content:center;gap:3px}
+  .tkey .n{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;
+    font:700 12px var(--mono);color:#fff;margin-bottom:5px}
+  .tkey h3{margin:0;font:700 13px/1.25 var(--sans);letter-spacing:.04em;text-transform:uppercase}
+  .tkey p{margin:0;font-size:11.5px;line-height:1.4;opacity:.82}
+  .tbody{border:1px solid;border-radius:8px;padding:11px}
+
+  .t1 .tkey{background:var(--c1-bg);border-color:var(--c1-ln);color:var(--c1-tx)} .t1 .tkey .n{background:var(--c1-ln)}
+  .t1 .tbody{background:var(--c1-bg);border-color:var(--c1-ln)}
+  .t2 .tkey{background:var(--c2-bg);border-color:var(--c2-ln);color:var(--c2-tx)} .t2 .tkey .n{background:var(--c2-ln)}
+  .t2 .tbody{background:var(--c2-bg);border-color:var(--c2-ln)}
+  .t3 .tkey{background:var(--c3-bg);border-color:var(--c3-ln);color:var(--c3-tx)} .t3 .tkey .n{background:var(--c3-ln)}
+  .t3 .tbody{background:var(--c3-bg);border-color:var(--c3-ln)}
+  .t5 .tkey{background:var(--c5-bg);border-color:var(--c5-ln);color:var(--c5-tx)} .t5 .tkey .n{background:var(--c5-ln)}
+  .t5 .tbody{background:var(--c5-bg);border-color:var(--c5-ln)}
+
+  .cells{display:grid;gap:9px}
+  .c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .c5{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .cell{background:var(--paper);border:1px solid var(--rule-2);border-radius:6px;padding:10px 11px;display:flex;flex-direction:column;gap:6px;min-width:0}
+  .cell svg.ic{width:24px;height:24px;color:var(--ink-2)}
+  .cell .nm{font:600 12.5px/1.25 var(--sans);color:var(--ink)}
+  .cell .ds{font:400 11px/1.4 var(--mono);color:var(--ink-3)}
+
+  /* services + kafka rail */
+  .svcwrap{display:grid;grid-template-columns:minmax(0,1fr) 214px;gap:12px}
+  .svcgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+  .svc{background:var(--paper);border:1px solid var(--rule-2);border-radius:6px;padding:9px 10px;display:flex;flex-direction:column;gap:5px;min-width:0}
+  .svc .top{display:flex;align-items:center;gap:7px}
+  .svc .mid{font:700 10px/1 var(--mono);color:#fff;background:var(--c3-ln);border-radius:3px;padding:3px 5px}
+  .svc svg.ic{width:20px;height:20px;color:var(--c3-ln);flex:none}
+  .svc .nm{font:600 12.5px/1.2 var(--sans);color:var(--ink)}
+  .svc .ds{font:400 10.5px/1.4 var(--sans);color:var(--ink-3)}
+  .svc .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:4px}
+  .tag{font:500 9.5px/1 var(--mono);padding:3px 5px;border-radius:3px;border:1px solid var(--rule-2);color:var(--ink-2);background:var(--paper-2)}
+  .tag.db{border-color:var(--c5-ln);color:var(--c5-tx);background:var(--c5-bg)}
+  .tag.wk{border-color:var(--c3-ln);color:var(--c3-tx);background:var(--c3-bg)}
+
+  .rail{background:var(--c4-bg);border:1px solid var(--c4-ln);border-radius:8px;padding:11px 12px;display:flex;flex-direction:column;gap:8px;color:var(--c4-tx)}
+  .rail .rn{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:var(--c4-ln);color:#fff;font:700 12px var(--mono)}
+  .rail h3{margin:0;font:700 13px/1.2 var(--sans);letter-spacing:.04em;text-transform:uppercase}
+  .rail .rsub{font:400 11px/1.4 var(--sans);opacity:.85}
+  .rail ul{margin:0;padding-left:14px;display:flex;flex-direction:column;gap:5px}
+  .rail li{font:400 10.5px/1.4 var(--sans)}
+  .rail li b{font-weight:600}
+  .rail .off{margin-top:auto;border-top:1px dashed var(--c4-ln);padding-top:8px;font:600 10.5px/1.4 var(--mono)}
+
+  .arrow{display:flex;align-items:center;justify-content:center;gap:9px;padding:1px 0}
+  .arrow svg{width:15px;height:15px;color:var(--c2-ln)}
+  .arrow span{font:500 10.5px/1 var(--mono);color:var(--ink-3)}
+  .arrow.dash svg{color:var(--c4-ln)} .arrow.dash span{color:var(--c4-ln)}
+
+  .snote{font:400 11px/1.45 var(--mono);color:var(--ink-3);padding:2px 2px 0}
+  .snote b{color:var(--flag);font-weight:600}
+
+  /* right panels */
+  .panel{border:1px solid var(--rule-2);border-radius:8px;background:var(--paper);padding:14px 16px}
+  .panel h4{margin:0 0 11px;font:700 12.5px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--c1-ln);text-align:center}
+  .panel ol{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px}
+  .panel ol li{font-size:12.5px;line-height:1.48;color:var(--ink-2)}
+  .panel ol li b{color:var(--ink);font-weight:600}
+
+  .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+  .fstep{text-align:center;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;padding:2px 1px}
+  .fstep svg.ic{width:26px;height:26px;color:var(--c1-ln)}
+  .fstep .fn{font:700 9px var(--mono);color:var(--ink-3)}
+  .fstep p{margin:0;font-size:10.5px;line-height:1.35;color:var(--ink-2)}
+  .fstep::after{content:"";position:absolute;top:16px;right:-5px;width:7px;height:7px;
+    border-top:1.5px solid var(--rule-2);border-right:1.5px solid var(--rule-2);transform:rotate(45deg)}
+  .fstep:nth-child(4)::after,.fstep:nth-child(8)::after{display:none}
+
+  .bene{display:flex;flex-direction:column;gap:8px}
+  .bene div{display:flex;gap:9px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+  .bene svg{width:16px;height:16px;color:var(--c2-ln);flex:none;margin-top:2px}
+  .bene b{color:var(--ink);font-weight:600}
+
+  /* bottom */
+  .bottom{min-width:1240px;margin-top:16px}
+  .dfrow{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+  .dfc{flex:1;min-width:0;border-radius:6px;padding:9px 8px;text-align:center;border:1px solid;font:500 10.5px/1.35 var(--sans)}
+  .dfc b{display:block;font:600 11.5px/1.3 var(--sans);margin-bottom:2px}
+  .dfc.a{background:var(--c1-bg);border-color:var(--c1-ln);color:var(--c1-tx)}
+  .dfc.b{background:var(--c3-bg);border-color:var(--c3-ln);color:var(--c3-tx)}
+  .dfc.c{background:var(--c4-bg);border-color:var(--c4-ln);color:var(--c4-tx)}
+  .dfc.d{background:var(--c5-bg);border-color:var(--c5-ln);color:var(--c5-tx)}
+  .dfa{flex:none;color:var(--ink-3);display:flex;align-items:center}
+  .dfa svg{width:15px;height:15px}
+
+  table.stack{width:100%;border-collapse:collapse;font-size:12px}
+  table.stack td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule);color:var(--ink-2);vertical-align:top;line-height:1.4}
+  table.stack td:first-child{font:600 11px var(--mono);color:var(--ink);white-space:nowrap;width:34%}
+  table.stack tr:last-child td{border-bottom:none}
+
+  .legend{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:12px}
+  .legend div{display:flex;align-items:center;gap:6px;font:500 11px var(--mono);color:var(--ink-2)}
+  .sw{width:15px;height:15px;border-radius:3px;border:1px solid}
+  .sw.s1{background:var(--c1-bg);border-color:var(--c1-ln)}
+  .sw.s2{background:var(--c2-bg);border-color:var(--c2-ln)}
+  .sw.s3{background:var(--c3-bg);border-color:var(--c3-ln)}
+  .sw.s4{background:var(--c4-bg);border-color:var(--c4-ln)}
+  .sw.s5{background:var(--c5-bg);border-color:var(--c5-ln)}
+
+  figcaption{font:12px/1.6 var(--mono);color:var(--ink-3);margin-top:14px;max-width:84ch}
+  figcaption b{color:var(--ink-2);font-weight:600}
+  figure{margin:0}
+
+  .plain{min-width:1120px;width:100%;height:auto;display:block;border:1px solid var(--rule);border-radius:8px;background:var(--paper);padding:10px}
+  /* CSS beats presentation attributes, so this guarantees the face resolves in the SVG */
+  .plain text{font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+
+  .end{margin-top:60px;padding-top:22px;border-top:3px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <g id="s" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></g>
+  </defs>
+  <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M9 21h6M12 17v4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></symbol>
+  <symbol id="i-shieldalert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l7.5 3v6c0 4.6-3.1 8.4-7.5 10-4.4-1.6-7.5-5.4-7.5-10v-6z"/><path d="M12 8v4M12 15.5v.01"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8z"/><path d="M10.3 20a2 2 0 003.4 0"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 018 0v3.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="8" r="4"/><path d="M10.5 11l9 9M17 18.5l2-2M14 15.5l2-2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><path d="M16 5.2a3.4 3.4 0 010 5.6M17.5 14.4a6.5 6.5 0 014 5.6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5H7a2 2 0 00-2 2v15a2 2 0 002 2h10a2 2 0 002-2V7.5z"/><path d="M14 2.5v5h5M8.5 13h7M8.5 17h5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17a9 9 0 1117 0"/><path d="M12 17l4-5"/><circle cx="12" cy="17" r="1.4"/></symbol>
+  <symbol id="i-books" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="4" height="15" rx="1"/><rect x="9.5" y="3.5" width="4" height="16.5" rx="1"/><path d="M16.2 6.5l3.6 1-3.2 12-3.6-1z"/></symbol>
+  <symbol id="i-dice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8h14M14 4.5L17.5 8 14 11.5"/><path d="M20.5 16h-14M10 12.5L6.5 16 10 19.5"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3.5M15 2.5v3.5M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.2"/><circle cx="4.5" cy="17" r="2.2"/><circle cx="19.5" cy="17" r="2.2"/><path d="M10.4 6.3L6.1 15.2M13.6 6.3l4.3 8.9M6.7 17h10.6"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12.5a7.5 7.5 0 01-10.9 6.7L3.5 21l1.8-6.1A7.5 7.5 0 1120.5 12.5z"/><path d="M8.5 11h7M8.5 14.5h4"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5M3 16.5L12 21l9-4.5"/></symbol>
+  <symbol id="i-bucket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16l-1.6 13a2 2 0 01-2 1.8H7.6a2 2 0 01-2-1.8z"/><ellipse cx="12" cy="6.5" rx="8" ry="2.8"/></symbol>
+  <symbol id="i-stream" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h13M3 12h17M3 17.5h10"/><circle cx="19.5" cy="6.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><path d="M8 12.3l2.7 2.7L16 9.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14.5l6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-updown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5"><path d="M12 3v18"/><path d="M7.5 7.5L12 3l4.5 4.5M7.5 16.5L12 21l4.5-4.5" stroke-dasharray="0"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.8"/><path d="M4.5 20.5a7.5 7.5 0 0115 0"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.8-6.5 10-6.5S22 12 22 12s-3.8 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 18.5A4.5 4.5 0 017 9.6a5.5 5.5 0 0110.4 1.6 3.9 3.9 0 01-.4 7.3z"/><path d="M12 12v5M9.5 14.5L12 17l2.5-2.5"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.5v6.5l-4 2v-8.5z"/></symbol>
+</svg>
+
+<div class="page">
+
+<header class="mast">
+  <div class="kicker">QuantSim &middot; Architecture &amp; Physical Design v0.2</div>
+  <h1>QuantSim System Blueprint</h1>
+  <p class="sub">Two views of the same platform. The first is the engineering blueprint &mdash; every
+  tier, every service, every store, and the technology behind it. The second is the same system with
+  the jargon removed, for an audience that needs to understand what it does and why it is split up
+  at all.</p>
+</header>
+
+<div class="flagbox">
+  <b>One correction against the reference layout.</b> The six-layer stack you shared &mdash; presentation
+  &rarr; API &rarr; domain services &rarr; event backbone &rarr; data access &rarr; <em>shared</em> data
+  systems &mdash; is the arrangement your own ARC document rejects in &sect;4 and &sect;8.2. Two features
+  in particular: a system-wide domain service layer implies the seven domains share one deployment and
+  one data path, and putting Kafka <em>between</em> the domain and the data-access layer puts a log on
+  the path from a service to its own database. This blueprint draws the architecture the document
+  actually settles on &mdash; five deployment tiers, eight services, one database each, and Kafka
+  <em>beside</em> the request path. If you present the six-layer version at defense, the first question
+  will be why the diagram disagrees with the spec.
+</div>
+
+<h2 class="sec">Diagram 1 <span>The engineering blueprint</span></h2>
+<p class="seclede">Read it top to bottom for the request path, and left to right within a tier for what
+that tier contains. Panels on the right carry the narration; the strip along the bottom carries the
+technology and the data flow.</p>
+
+<figure>
+<div class="scroller">
+<div class="poster">
+
+  <!-- ============ LEFT: THE STACK ============ -->
+  <div class="col">
+
+    <div class="roles">
+      <span class="lbl">ROLES</span>
+      <span class="r"><svg class="ic"><use href="#i-gear"/></svg>Admin</span>
+      <span class="r"><svg class="ic"><use href="#i-chart"/></svg>Quant</span>
+      <span class="r"><svg class="ic"><use href="#i-doc"/></svg>Analyst</span>
+      <span class="r"><svg class="ic"><use href="#i-eye"/></svg>Viewer</span>
+      <span class="r" style="margin-left:auto;color:var(--ink-3);font:400 11px var(--mono)">RBAC decided inside each service, never at the edge</span>
+    </div>
+
+    <!-- TIER 1 -->
+    <div class="tier t1">
+      <div class="tkey">
+        <span class="n">1</span>
+        <h3>Client</h3>
+        <p>One single-page app. No business logic, no database access.</p>
+      </div>
+      <div class="tbody">
+        <div class="cells c4">
+          <div class="cell"><svg class="ic"><use href="#i-monitor"/></svg><span class="nm">Dashboard</span><span class="ds">React + TypeScript</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-chart"/></svg><span class="nm">Market &amp; simulation</span><span class="ds">replay, calibration, runs</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-network"/></svg><span class="nm">Risk &amp; TDA views</span><span class="ds">stress, topology, XAI</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-bell"/></svg><span class="nm">Alerts &amp; reports</span><span class="ds">pushed, never polled</span></div>
+        </div>
+        <p class="snote" style="margin-top:8px">Talks to <b>one origin only</b> &mdash; the browser never addresses a service, so the decomposition can change without a frontend release.</p>
+      </div>
+    </div>
+
+    <div class="arrow"><svg><use href="#i-down"/></svg><span>HTTPS &middot; one origin &middot; WebSocket / SSE back</span></div>
+
+    <!-- TIER 2 -->
+    <div class="tier t2">
+      <div class="tkey">
+        <span class="n">2</span>
+        <h3>Edge</h3>
+        <p>The single front door, and the only public address.</p>
+      </div>
+      <div class="tbody">
+        <div class="cells c5">
+          <div class="cell"><svg class="ic"><use href="#i-gear"/></svg><span class="nm">API Gateway</span><span class="ds">Kong / Traefik</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-lock"/></svg><span class="nm">TLS termination</span><span class="ds">only ingress</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-key"/></svg><span class="nm">Verify JWT</span><span class="ds">issued by M0</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-filter"/></svg><span class="nm">Rate limit</span><span class="ds">per caller</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-swap"/></svg><span class="nm">Route by prefix</span><span class="ds">/v1/&hellip; fan-out reads</span></div>
+        </div>
+        <p class="snote" style="margin-top:8px">It authenticates, then passes a verified identity inward. It <b>does not authorize</b> &mdash; a gateway-only check would implicitly trust anything arriving by another route.</p>
+      </div>
+    </div>
+
+    <div class="arrow"><svg><use href="#i-down"/></svg><span>routes each path prefix to the one owning service</span></div>
+
+    <!-- TIER 3 + 4 -->
+    <div class="tier t3">
+      <div class="tkey">
+        <span class="n">3</span>
+        <h3>Services</h3>
+        <p>Eight autonomous services. One bounded context, one database, one pipeline each.</p>
+      </div>
+      <div class="tbody">
+        <div class="svcwrap">
+          <div class="svcgrid">
+            <div class="svc"><div class="top"><span class="mid">M0</span><svg class="ic"><use href="#i-key"/></svg></div><span class="nm">Platform / Identity</span><span class="ds">Accounts, roles, scope grants, audit sink. Issues every token.</span><div class="tags"><span class="tag db">platform_db</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M1</span><svg class="ic"><use href="#i-books"/></svg></div><span class="nm">Market Data</span><span class="ds">Bars, news, returns, volatility, rolling correlation, replay.</span><div class="tags"><span class="tag db">market_db</span><span class="tag wk">scheduler</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M2</span><svg class="ic"><use href="#i-dice"/></svg></div><span class="nm">Simulation</span><span class="ds">Calibration and Monte Carlo path generation.</span><div class="tags"><span class="tag db">simulation_db</span><span class="tag wk">CPU workers</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M3</span><svg class="ic"><use href="#i-swap"/></svg></div><span class="nm">Trading</span><span class="ds">Strategies, portfolios, the ordered trade-event log.</span><div class="tags"><span class="tag db">trading_db</span><span class="tag wk">engine</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M4</span><svg class="ic"><use href="#i-cpu"/></svg></div><span class="nm">ML</span><span class="ds">Model registry and point-in-time feature store.</span><div class="tags"><span class="tag db">ml_db</span><span class="tag wk">GPU worker</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M5</span><svg class="ic"><use href="#i-shieldalert"/></svg></div><span class="nm">Risk &amp; TDA</span><span class="ds">Stress scenarios and the persistent-homology pipeline.</span><div class="tags"><span class="tag db">risk_db</span><span class="tag wk">CPU workers</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M6</span><svg class="ic"><use href="#i-quote"/></svg></div><span class="nm">Explainability</span><span class="ds">SHAP, contribution, decomposition, plain-English narration.</span><div class="tags"><span class="tag db">xai_db</span><span class="tag wk">LLM worker</span></div></div>
+            <div class="svc"><div class="top"><span class="mid">M7</span><svg class="ic"><use href="#i-bell"/></svg></div><span class="nm">Dashboard &amp; Alerting</span><span class="ds">Read models, alert rules, and every client connection.</span><div class="tags"><span class="tag db">dashboard_db</span><span class="tag wk">evaluator</span></div></div>
+          </div>
+
+          <div class="rail">
+            <span class="rn">4</span>
+            <h3>Integration</h3>
+            <div class="rsub">Apache Kafka + schema registry</div>
+            <ul>
+              <li><b>Streaming</b> &mdash; ticks and order lifecycle, ordered per partition key</li>
+              <li><b>Domain events</b> &mdash; sim.completed, stress.completed, prediction.ready</li>
+              <li><b>Read-model feeds</b> &mdash; ML features, M7 widget projections</li>
+            </ul>
+            <div class="off">&harr; every service publishes and consumes<br><br>Drawn beside tier 3, not under it: nothing a user waits on traverses this log.</div>
+          </div>
+        </div>
+        <p class="snote" style="margin-top:9px">Each service is internally a strict four-layer app from one <b>shared template</b>. Nine releasable units &mdash; eight services plus the gateway &mdash; running as sixteen deployments.</p>
+      </div>
+    </div>
+
+    <div class="arrow"><svg><use href="#i-down"/></svg><span>a service reads and writes only its own store</span></div>
+
+    <!-- TIER 5 -->
+    <div class="tier t5">
+      <div class="tkey">
+        <span class="n">5</span>
+        <h3>Per-service data</h3>
+        <p>Three tiers, each partitioned by owning service.</p>
+      </div>
+      <div class="tbody">
+        <div class="cells c3">
+          <div class="cell"><svg class="ic"><use href="#i-db"/></svg><span class="nm">Hot &mdash; PostgreSQL 16 + TimescaleDB</span><span class="ds">8 databases, one per service. No shared tables, no cross-service joins, no shared audit schema.</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-layers"/></svg><span class="nm">Warm &mdash; Redis</span><span class="ds">One logical DB per service. Cache, job and progress state, task-queue backend.</span></div>
+          <div class="cell"><svg class="ic"><use href="#i-bucket"/></svg><span class="nm">Cold &mdash; Parquet on S3 / MinIO</span><span class="ds">One store, per-service prefixes and credentials. Closed path sets, raw bars, model artifacts.</span></div>
+        </div>
+        <p class="snote" style="margin-top:8px">No service holds credentials to any database but its own &mdash; enforced by grant, not by convention, in development as well as production.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ RIGHT: NARRATION ============ -->
+  <div class="col">
+
+    <div class="panel">
+      <h4>How it works</h4>
+      <ol>
+        <li>A <b>Viewer, Analyst, Quant or Admin</b> works in one SPA that speaks to a single origin.</li>
+        <li>The <b>gateway</b> terminates TLS, verifies the token, rate-limits, and routes the path prefix to the owning service. Authorization happens further in.</li>
+        <li>That <b>service</b> handles the request inside its own four-layer app, touching only its own database.</li>
+        <li>Heavy work never blocks: the API writes a <b>queued job row</b> and returns an id; a separate worker deployment executes it.</li>
+        <li>State crossing a boundary leaves through the service's <b>transactional outbox</b> onto Kafka. Delivery is at-least-once, so every consumer is idempotent.</li>
+        <li><b>Dashboard</b> consumes everyone's events into query-shaped projections and pushes to the browser. One widget read touches one database.</li>
+      </ol>
+    </div>
+
+    <div class="panel">
+      <h4>Example flow &mdash; a Monte Carlo run reaches the screen</h4>
+      <div class="flow">
+        <div class="fstep"><span class="fn">1</span><svg class="ic"><use href="#i-person"/></svg><p>Quant clicks Run</p></div>
+        <div class="fstep"><span class="fn">2</span><svg class="ic"><use href="#i-key"/></svg><p>Gateway verifies, routes to M2</p></div>
+        <div class="fstep"><span class="fn">3</span><svg class="ic"><use href="#i-doc"/></svg><p>Job row queued, id returned</p></div>
+        <div class="fstep"><span class="fn">4</span><svg class="ic"><use href="#i-layers"/></svg><p>Enqueued on M2's Redis queue</p></div>
+        <div class="fstep"><span class="fn">5</span><svg class="ic"><use href="#i-cpu"/></svg><p>Worker claims under lease, splits N paths</p></div>
+        <div class="fstep"><span class="fn">6</span><svg class="ic"><use href="#i-db"/></svg><p>Bulk write to simulation_db</p></div>
+        <div class="fstep"><span class="fn">7</span><svg class="ic"><use href="#i-stream"/></svg><p>Outbox drains events to Kafka</p></div>
+        <div class="fstep"><span class="fn">8</span><svg class="ic"><use href="#i-monitor"/></svg><p>M7 projects, pushes over WebSocket</p></div>
+      </div>
+      <p class="snote" style="margin-top:11px;text-align:center">M2 publishes facts and knows nothing about who is watching &mdash; which is why an M2 redeploy drops no live client.</p>
+    </div>
+
+    <div class="panel">
+      <h4>What the shape buys</h4>
+      <div class="bene">
+        <div><svg><use href="#i-check"/></svg><span><b>Isolation.</b> A TDA redeploy cannot break trade execution. Ripser and GUDHI stay in one image.</span></div>
+        <div><svg><use href="#i-check"/></svg><span><b>Independent scale.</b> Simulation, ML and Risk workers each scale on their own knob, off the interactive path.</span></div>
+        <div><svg><use href="#i-check"/></svg><span><b>Graceful failure.</b> Every call site names its fallback, so an outage degrades one panel, not the app.</span></div>
+        <div><svg><use href="#i-check"/></svg><span><b>No lost events.</b> Outbox plus at-least-once delivery plus idempotent consumers &mdash; a crash duplicates, never drops.</span></div>
+        <div><svg><use href="#i-check"/></svg><span><b>Learnable by three people.</b> One shared template, so eight services read as one codebase.</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h4>Technology stack</h4>
+      <table class="stack">
+        <tr><td>Frontend</td><td>React + TypeScript, ECharts / Plotly</td></tr>
+        <tr><td>Edge</td><td>Kong or Traefik (or an in-house FastAPI edge)</td></tr>
+        <tr><td>Services</td><td>Python 3.12 + FastAPI (async), one image each</td></tr>
+        <tr><td>Scaffolding</td><td>One shared internal service template</td></tr>
+        <tr><td>Sync calls</td><td>REST / JSON; gRPC on measured hot paths only</td></tr>
+        <tr><td>Jobs</td><td>asyncio + Arq (or Celery), one queue per compute service</td></tr>
+        <tr><td>Events</td><td>Apache Kafka + schema registry, in every environment</td></tr>
+        <tr><td>Consistency</td><td>Transactional outbox + choreographed sagas</td></tr>
+        <tr><td>Storage</td><td>PostgreSQL 16 + TimescaleDB &middot; Redis &middot; Parquet on S3 / MinIO</td></tr>
+        <tr><td>Deployment</td><td>Docker Compose (dev) &middot; Kubernetes, Terraform, Vault (prod)</td></tr>
+        <tr><td>Observability</td><td>OpenTelemetry traces, structured logs, correlation ids</td></tr>
+      </table>
+      <div class="legend">
+        <div><span class="sw s1"></span>Client</div>
+        <div><span class="sw s2"></span>Edge</div>
+        <div><span class="sw s3"></span>Services</div>
+        <div><span class="sw s4"></span>Integration</div>
+        <div><span class="sw s5"></span>Data</div>
+      </div>
+    </div>
+  </div>
+
+  </div>
+
+<!-- ============ BOTTOM ============ -->
+<div class="bottom">
+  <div class="panel">
+    <h4>Data flow, simplified</h4>
+    <div class="dfrow">
+      <div class="dfc a"><b>Vendor feeds</b>OHLCV, news</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc b"><b>M1 clean &amp; gate</b>nothing publishes until it passes</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc d"><b>market_db</b>bars, returns, correlation</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc b"><b>M2 &middot; M3 &middot; M4 &middot; M5</b>simulate, trade, predict, stress</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc d"><b>own databases</b>+ outbox row</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc c"><b>Kafka</b>drained by each outbox</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc b"><b>M6 &middot; M7</b>explain, project</div>
+      <span class="dfa"><svg><use href="#i-right"/></svg></span>
+      <div class="dfc a"><b>Browser</b>pushed, not polled</div>
+    </div>
+    <p class="snote" style="margin-top:12px">Cleaning is a <b>gate</b>, not a post-processing step: a distributed system cannot retract a bad bar cheaply, because every downstream projection has already copied it.</p>
+  </div>
+
+</div>
+</div>
+<figcaption><b>Reading the tiers.</b> Tier 4 is deliberately drawn as a rail beside tier 3 rather than a
+band beneath it. That placement is the architectural claim: Kafka carries facts <em>between</em>
+services, and never sits between a service and its own database.</figcaption>
+</figure>
+
+<h2 class="sec">Diagram 2 <span>The same system, without the jargon</span></h2>
+<p class="seclede">For a supervisor, a panel member outside the field, or the first slide of any demo.
+Same eight modules, same rules &mdash; drawn as a building people can walk through.</p>
+
+<figure>
+<div class="scroller">
+<svg class="plain" viewBox="0 0 1400 700" role="img" aria-label="QuantSim explained as an office building: a person asks whether their portfolio is risky, a front desk checks their badge and sends them to the right room, seven specialist rooms each do one job and keep their own locked filing cabinet, an internal mail system passes notes between rooms, and the control room sends the answer back to the person's screen.">
+  <defs>
+    <marker id="pa" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--c2-ln)"/>
+    </marker>
+    <marker id="pm" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--c4-ln)"/>
+    </marker>
+    <marker id="pr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--c3-ln)"/>
+    </marker>
+  </defs>
+
+  <!-- ======== PERSON + QUESTION ======== -->
+  <rect x="26" y="168" width="204" height="72" rx="14" fill="var(--c1-bg)" stroke="var(--c1-ln)" stroke-width="1.6"/>
+  <polygon points="100,240 124,240 104,260" fill="var(--c1-bg)" stroke="var(--c1-ln)" stroke-width="1.6"/>
+  <polygon points="102,241 122,241 105,257" fill="var(--c1-bg)" stroke="none"/>
+  <text x="128" y="199" text-anchor="middle" font-family="var(--sans)" font-size="16.5" font-weight="600" fill="var(--c1-tx)">Is this portfolio</text>
+  <text x="128" y="222" text-anchor="middle" font-family="var(--sans)" font-size="16.5" font-weight="600" fill="var(--c1-tx)">risky?</text>
+
+  <circle cx="112" cy="288" r="22" fill="var(--c1-bg)" stroke="var(--c1-ln)" stroke-width="2"/>
+  <path d="M80,336 a32,27 0 0 1 64,0 z" fill="var(--c1-bg)" stroke="var(--c1-ln)" stroke-width="2" stroke-linejoin="round"/>
+
+  <line x1="150" y1="288" x2="288" y2="288" stroke="var(--c2-ln)" stroke-width="2.4" marker-end="url(#pa)"/>
+
+  <!-- monitor -->
+  <rect x="64" y="392" width="96" height="62" rx="6" fill="var(--paper)" stroke="var(--c1-ln)" stroke-width="2"/>
+  <rect x="100" y="454" width="24" height="10" fill="var(--c1-ln)"/>
+  <rect x="84" y="464" width="56" height="6" rx="3" fill="var(--c1-ln)"/>
+  <path d="M82,432 a30,30 0 0 1 60,0" fill="none" stroke="var(--c5-ln)" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
+  <path d="M82,432 a30,30 0 0 1 33,-29" fill="none" stroke="var(--c3-ln)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="112" y1="432" x2="130" y2="415" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="112" cy="432" r="3.4" fill="var(--ink)"/>
+  <text x="112" y="490" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="600" fill="var(--ink)">Your screen</text>
+  <text x="112" y="508" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">updates by itself</text>
+
+  <!-- ======== SECURITY OFFICE ======== -->
+  <rect x="280" y="108" width="192" height="86" rx="9" fill="var(--c2-bg)" stroke="var(--c2-ln)" stroke-width="1.6"/>
+  <g transform="translate(298,133)" fill="none" stroke="var(--c2-ln)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="9" cy="9" r="7"/><path d="M14,14 L27,27 M23,25 l4,-4 M19,21 l4,-4"/>
+  </g>
+  <text x="340" y="145" font-family="var(--sans)" font-size="14" font-weight="600" fill="var(--c2-tx)">Security office</text>
+  <text x="340" y="166" font-family="var(--sans)" font-size="12" fill="var(--c2-tx)" opacity="0.85">issues your badge</text>
+  <line x1="376" y1="196" x2="376" y2="248" stroke="var(--c2-ln)" stroke-width="1.8" stroke-dasharray="5 4"/>
+
+  <!-- ======== FRONT DESK ======== -->
+  <circle cx="336" cy="228" r="15" fill="var(--c2-bg)" stroke="var(--c2-ln)" stroke-width="2"/>
+  <path d="M316,252 a20,17 0 0 1 40,0 z" fill="var(--c2-bg)" stroke="var(--c2-ln)" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="300" y="252" width="152" height="46" rx="7" fill="var(--c2-bg)" stroke="var(--c2-ln)" stroke-width="2"/>
+  <path d="M418,258 l16,6 v11 c0,8 -6,14 -16,17 c-10,-3 -16,-9 -16,-17 v-11 z" fill="var(--paper)" stroke="var(--c2-ln)" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M412,275 l4,4 l8,-8" fill="none" stroke="var(--c2-ln)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="376" y="328" text-anchor="middle" font-family="var(--sans)" font-size="16" font-weight="700" fill="var(--ink)">Front desk</text>
+  <text x="376" y="349" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--ink-3)">checks your badge, sends you</text>
+  <text x="376" y="366" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--ink-3)">to exactly one room</text>
+
+  <line x1="452" y1="288" x2="494" y2="288" stroke="var(--c2-ln)" stroke-width="2.4" marker-end="url(#pa)"/>
+
+  <!-- ======== ROOM 1 — ARCHIVE ======== -->
+  <rect x="500" y="100" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="518" cy="118" r="11" fill="var(--c3-ln)"/><text x="518" y="123" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">1</text>
+  <g stroke="var(--c3-ln)" stroke-width="2.2" fill="var(--paper)" stroke-linejoin="round">
+    <rect x="578" y="128" width="13" height="42" rx="2"/><rect x="594" y="122" width="13" height="48" rx="2"/>
+    <path d="M612,130 l13,3.4 l-9,40 l-13,-3.4 z"/>
+  </g>
+  <text x="600" y="196" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The archive</text>
+  <text x="600" y="217" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">every price and headline,</text>
+  <text x="600" y="233" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">checked before it is filed</text>
+  <g transform="translate(589,246)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- ======== ROOM 2 — WHAT-IF ======== -->
+  <rect x="725" y="100" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="743" cy="118" r="11" fill="var(--c3-ln)"/><text x="743" y="123" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">2</text>
+  <g fill="none" stroke="var(--c3-ln)" stroke-width="1.9" stroke-linecap="round">
+    <path d="M797,166 Q818,150 853,126"/><path d="M797,166 Q818,158 853,142"/>
+    <path d="M797,166 Q818,164 853,160"/><path d="M797,166 Q818,172 853,178"/>
+    <path d="M797,166 Q818,178 853,194"/>
+  </g>
+  <circle cx="797" cy="166" r="4" fill="var(--c3-ln)"/>
+  <text x="825" y="212" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The what-if room</text>
+  <text x="825" y="233" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">runs thousands of futures</text>
+  <g transform="translate(814,246)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- ======== ROOM 3 — TRADING FLOOR ======== -->
+  <rect x="950" y="100" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="968" cy="118" r="11" fill="var(--c3-ln)"/><text x="968" y="123" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">3</text>
+  <g stroke="var(--c3-ln)" stroke-width="2" stroke-linecap="round">
+    <line x1="1026" y1="128" x2="1026" y2="176"/><rect x="1020" y="140" width="12" height="22" rx="1.5" fill="var(--paper)"/>
+    <line x1="1050" y1="122" x2="1050" y2="180"/><rect x="1044" y="134" width="12" height="30" rx="1.5" fill="var(--c3-ln)"/>
+    <line x1="1074" y1="132" x2="1074" y2="174"/><rect x="1068" y="144" width="12" height="20" rx="1.5" fill="var(--paper)"/>
+  </g>
+  <text x="1050" y="212" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The trading floor</text>
+  <text x="1050" y="233" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">plays your strategy, in order</text>
+  <g transform="translate(1039,246)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- ======== ROOM 4 — FORECASTER ======== -->
+  <rect x="1175" y="100" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="1193" cy="118" r="11" fill="var(--c3-ln)"/><text x="1193" y="123" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">4</text>
+  <polyline points="1247,172 1262,152 1275,162 1287,138" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="1287,138 1300,148 1312,124" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-dasharray="5 4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1312" cy="124" r="5" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="2.2"/>
+  <text x="1275" y="212" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The forecaster</text>
+  <text x="1275" y="233" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">learns patterns, calls the odds</text>
+  <g transform="translate(1264,246)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- row-1 chevrons -->
+  <path d="M706,187 l11,6 l-11,6" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M931,187 l11,6 l-11,6" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1156,187 l11,6 l-11,6" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- turn down -->
+  <path d="M1275,286 v20" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" marker-end="url(#pr)"/>
+
+  <!-- ======== ROOM 5 — STRESS LAB ======== -->
+  <rect x="1175" y="306" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="1193" cy="324" r="11" fill="var(--c3-ln)"/><text x="1193" y="329" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">5</text>
+  <path d="M1275,332 l24,9 v22 c0,17 -10,28 -24,33 c-14,-5 -24,-16 -24,-33 v-22 z" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="2.2" stroke-linejoin="round"/>
+  <polyline points="1262,358 1271,366 1279,354 1289,378" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1275" y="418" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The stress lab</text>
+  <text x="1275" y="439" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">breaks it on purpose,</text>
+  <text x="1275" y="455" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">to see what would survive</text>
+  <g transform="translate(1264,464)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- ======== ROOM 6 — TRANSLATOR ======== -->
+  <rect x="950" y="306" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="968" cy="324" r="11" fill="var(--c3-ln)"/><text x="968" y="329" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">6</text>
+  <rect x="1022" y="334" width="58" height="42" rx="9" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="2.2"/>
+  <polygon points="1036,376 1054,376 1034,394" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M1032,348 h38 M1032,358 h30 M1032,368 h20" stroke="var(--c3-ln)" stroke-width="2" stroke-linecap="round"/>
+  <text x="1050" y="418" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The translator</text>
+  <text x="1050" y="439" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">turns the numbers into</text>
+  <text x="1050" y="455" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">a sentence you can act on</text>
+  <g transform="translate(1039,464)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- ======== ROOM 7 — CONTROL ROOM ======== -->
+  <rect x="725" y="306" width="200" height="186" rx="10" fill="var(--c3-bg)" stroke="var(--c3-ln)" stroke-width="1.6"/>
+  <circle cx="743" cy="324" r="11" fill="var(--c3-ln)"/><text x="743" y="329" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="#fff">7</text>
+  <rect x="796" y="334" width="58" height="40" rx="5" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="2.2"/>
+  <rect x="818" y="374" width="14" height="8" fill="var(--c3-ln)"/><rect x="808" y="382" width="34" height="5" rx="2.5" fill="var(--c3-ln)"/>
+  <g fill="var(--c3-ln)"><rect x="806" y="356" width="7" height="11" rx="1.5"/><rect x="817" y="348" width="7" height="19" rx="1.5"/><rect x="828" y="352" width="7" height="15" rx="1.5"/><rect x="839" y="344" width="7" height="23" rx="1.5"/></g>
+  <circle cx="858" cy="336" r="12" fill="var(--paper)" stroke="var(--c3-ln)" stroke-width="2"/>
+  <path d="M862.5,339.5 c0,-1.6 -0.6,-2.2 -0.6,-4 a3.9,3.9 0 0 0 -7.8,0 c0,1.8 -0.6,2.4 -0.6,4 z" fill="var(--c3-ln)"/>
+  <path d="M856.6,341.6 a1.6,1.6 0 0 0 2.8,0" fill="none" stroke="var(--c3-ln)" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="825" y="418" text-anchor="middle" font-family="var(--sans)" font-size="15" font-weight="700" fill="var(--ink)">The control room</text>
+  <text x="825" y="439" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">watches everything and</text>
+  <text x="825" y="455" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-3)">raises the alarm</text>
+  <g transform="translate(814,464)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+
+  <!-- row-2 chevrons (right to left) -->
+  <path d="M1167,393 l-11,6 l11,6" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M942,393 l-11,6 l11,6" fill="none" stroke="var(--c3-ln)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ======== RETURN TO USER ======== -->
+  <line x1="725" y1="412" x2="166" y2="412" stroke="var(--c2-ln)" stroke-width="2.4" marker-end="url(#pa)"/>
+  <text x="446" y="400" text-anchor="middle" font-family="var(--sans)" font-size="13" font-weight="600" fill="var(--c2-ln)">the answer comes back on its own</text>
+
+  <!-- ======== MAIL ROOM ======== -->
+  <line x1="600" y1="286" x2="600" y2="528" stroke="var(--c4-ln)" stroke-width="1.8" stroke-dasharray="6 5" marker-start="url(#pm)" marker-end="url(#pm)"/>
+  <line x1="825" y1="492" x2="825" y2="528" stroke="var(--c4-ln)" stroke-width="1.8" stroke-dasharray="6 5" marker-start="url(#pm)" marker-end="url(#pm)"/>
+  <line x1="1050" y1="492" x2="1050" y2="528" stroke="var(--c4-ln)" stroke-width="1.8" stroke-dasharray="6 5" marker-start="url(#pm)" marker-end="url(#pm)"/>
+  <line x1="1275" y1="492" x2="1275" y2="528" stroke="var(--c4-ln)" stroke-width="1.8" stroke-dasharray="6 5" marker-start="url(#pm)" marker-end="url(#pm)"/>
+
+  <rect x="500" y="530" width="875" height="110" rx="11" fill="var(--c4-bg)" stroke="var(--c4-ln)" stroke-width="1.6"/>
+  <text x="524" y="570" font-family="var(--sans)" font-size="17" font-weight="700" fill="var(--c4-tx)">Internal mail</text>
+  <text x="524" y="594" font-family="var(--sans)" font-size="12.5" fill="var(--c4-tx)" opacity="0.88">rooms leave notes for each other &mdash;</text>
+  <text x="524" y="612" font-family="var(--sans)" font-size="12.5" fill="var(--c4-tx)" opacity="0.88">nobody stands in line waiting</text>
+  <g fill="var(--paper)" stroke="var(--c4-ln)" stroke-width="1.9" stroke-linejoin="round">
+    <g transform="translate(980,564)"><rect width="60" height="42" rx="4"/><polyline points="0,4 30,24 60,4" fill="none"/></g>
+    <g transform="translate(1056,564)"><rect width="60" height="42" rx="4"/><polyline points="0,4 30,24 60,4" fill="none"/></g>
+    <g transform="translate(1132,564)"><rect width="60" height="42" rx="4"/><polyline points="0,4 30,24 60,4" fill="none"/></g>
+    <g transform="translate(1208,564)"><rect width="60" height="42" rx="4"/><polyline points="0,4 30,24 60,4" fill="none"/></g>
+    <g transform="translate(1284,564)"><rect width="60" height="42" rx="4"/><polyline points="0,4 30,24 60,4" fill="none"/></g>
+  </g>
+
+  <!-- ======== LEGEND ======== -->
+  <g transform="translate(504,660)"><rect width="22" height="28" rx="3" fill="var(--paper)" stroke="var(--c5-ln)" stroke-width="1.7"/><path d="M0,9.3 h22 M0,18.6 h22" stroke="var(--c5-ln)" stroke-width="1.3"/><path d="M8.5,4.6 h5 M8.5,13.9 h5 M8.5,23.2 h5" stroke="var(--c5-ln)" stroke-width="1.7" stroke-linecap="round"/></g>
+  <text x="538" y="680" font-family="var(--sans)" font-size="13" fill="var(--ink-2)">Every room keeps its own files. No room can open another room's cabinet.</text>
+</svg>
+</div>
+<figcaption><b>Same architecture, no vocabulary.</b> The front desk is the API gateway, the rooms are the
+eight services, the cabinets are database-per-service, and the mail room is Kafka. Follow the numbers
+1 to 7 and you have walked the request path; the dashed lines are the notes rooms leave for each other
+without anyone waiting.</figcaption>
+</figure>
+
+<div class="end">
+  QuantSim &mdash; Architecture &amp; Physical Design v0.2 &middot; system blueprint &middot;
+  companions: high-level and low-level presenter scripts
+</div>
+
+</div>

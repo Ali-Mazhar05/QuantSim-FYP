@@ -1,0 +1,8 @@
+# SOPS encrypts deploy/secrets/<env>.enc.env for every key listed here.
+# Add each team member's age public key next to the Jenkins key, then run
+#   sops updatekeys deploy/secrets/<env>.enc.env
+# for every environment so they can edit the secrets too.
+creation_rules:
+  - path_regex: deploy/secrets/[^/]+\.enc\.env$
+    age: >-
+      age1tvp9h5vxk3yfw64k5kwyjp5hglvx7j342q2jpe64nw6fealc4avqtc524a

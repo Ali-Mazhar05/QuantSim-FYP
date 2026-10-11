@@ -1,0 +1,71 @@
+# Runs the QuantSim Jenkins controller.
+#   start:    docker compose -f ci/jenkins/compose.yml up -d --build
+#   logs:     docker compose -f ci/jenkins/compose.yml logs -f
+#   stop:     docker compose -f ci/jenkins/compose.yml down        (data is kept)
+# Fill ci/jenkins/secrets/ first; see secrets/README.md.
+name: quantsim-jenkins
+
+services:
+  jenkins:
+    build: .
+    image: quantsim-jenkins:2.580.1
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      JENKINS_URL: ${JENKINS_URL:-http://localhost:8080/}
+    # The Docker socket is owned by group 0 on Docker Desktop. On a Linux host set
+    # DOCKER_GID to the gid of the docker group (getent group docker).
+    group_add:
+      - "${DOCKER_GID:-0}"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Deployed environments are smoke tested through the host's published ports
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    secrets:
+      - admin_password
+      - github_app_id
+      - github_app_key
+      - ghcr_user
+      - ghcr_token
+      - cloudflare_api_token
+      - cloudflare_account_id
+      - sops_age_key
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  jenkins_home:
+
+secrets:
+  admin_password:
+    file: ./secrets/admin_password
+  github_app_id:
+    file: ./secrets/github_app_id
+  github_app_key:
+    file: ./secrets/github_app_key
+  ghcr_user:
+    file: ./secrets/ghcr_user
+  ghcr_token:
+    file: ./secrets/ghcr_token
+  cloudflare_api_token:
+    file: ./secrets/cloudflare_api_token
+  cloudflare_account_id:
+    file: ./secrets/cloudflare_account_id
+  sops_age_key:
+    file: ./secrets/sops_age_key

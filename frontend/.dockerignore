@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+reports
+Dockerfile
+.dockerignore
+**/*.test.ts
+**/*.test.tsx
+src/test

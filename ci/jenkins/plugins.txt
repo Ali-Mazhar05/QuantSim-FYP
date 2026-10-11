@@ -1,0 +1,17 @@
+# Pinned plugin versions for jenkins/jenkins:2.580.1-lts. To upgrade, change a version
+# here (or remove it to take the newest compatible one), rebuild, and pin again.
+configuration-as-code:2132.v60435f73c18a_
+job-dsl:3732.v9a_c49a_61a_313
+workflow-aggregator:608.v67378e9d3db_1
+workflow-multibranch:842.v3a_b_59b_57b_e6e
+github-branch-source:1983.vfa_27ed961853
+git:5.10.1
+pipeline-utility-steps:3.810.va_7672d206740
+credentials-binding:728.v902a_273b_8947
+lockable-resources:1560.va_b_cd589f23eb_
+junit:1432.v3f9a_b_73dd986
+coverage:3.3395.vcc183b_4a_0d7b_
+timestamper:1.30
+ws-cleanup:0.49
+role-strategy:927.v9cf5527c4085
+pipeline-graph-view:1053.v9df19e6ceed2
