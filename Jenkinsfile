@@ -156,6 +156,8 @@ pipeline {
       post {
         always {
           archiveArtifacts artifacts: '.ci/plan.env', allowEmptyArchive: true
+          // Leftover test containers and old cache would otherwise fill the host's disk
+          sh 'ci/scripts/sweep.sh || true'
           cleanWs(deleteDirs: true, notFailBuild: true)
         }
       }
