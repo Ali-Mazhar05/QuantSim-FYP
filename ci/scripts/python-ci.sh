@@ -26,7 +26,7 @@ if uses db || uses kafka; then
   id="qs-ci-$(build_id)-$name"
   network="$id"
   cleanup() {
-    docker rm -f "$id-db" "$id-kafka" >/dev/null 2>&1 || true
+    docker rm -fv "$id-db" "$id-kafka" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
   }
   trap cleanup EXIT
