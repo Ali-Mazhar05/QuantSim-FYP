@@ -84,6 +84,7 @@ These MID requirements are later work and are **not** in Iteration 1: FR-04…FR
 | I-D8 | Revocation | 15-minute access tokens plus a shared Redis revocation list fed on deactivation and role change |
 
 **Delivery decisions** (from `docs/ci-cd.md` and the progress log):
+- **ACC and PROD backends on the Jenkins host** (decided 2026-10-12): ACC (`qs-acc`, port 8083) and PROD (`qs-prod`, port 8084) run the same Docker Compose backend stack as DEV and TEST, each with its own PostgreSQL + TimescaleDB, Redis and Redpanda, on the laptop hosting Jenkins. The frontends stay on Cloudflare Pages. **Moving these backends to a dedicated server is deferred until the team decides**; it then only changes `COMPOSE_TARGET` in `deploy/env/acc.env` and `prod.env` to an ssh target. Consequences: the host laptop runs four backend stacks, and the host hand-over moves Jenkins state but not application databases.
 - Jenkins was chosen over GitHub Actions and Woodpecker. It runs self-hosted and is configured as code.
 - Images are tagged by content hash, built once on `develop` and promoted by retagging.
 - DEV and TEST run on Docker Compose behind Traefik on the CI host. ACC and PROD frontends run on Cloudflare Pages.

@@ -24,6 +24,7 @@ Conventions:
 - **Requirement IDs.** FRs are numbered FR-1 to FR-N for this PRD. Each FR cites the SPEC IDs it realizes (for example FR-MKT-011) and the MID IDs (FR-01 to FR-16) where they apply. That way the Mid report, the SPEC and the stories all trace to the same statements.
 - **Assumptions** are tagged inline as `[ASSUMPTION: …]` and listed again in §11.
 - **The POC is the UI contract.** The frontend imported from `develop-poc` (`frontend/` on `develop`) is the single source of truth for every screen. No requirement in this PRD adds a screen, field, column or control the POC does not have. Backend APIs are shaped to the POC's types, and a capability with no POC screen is API-only (reachable through each service's interactive API docs). Addendum §G maps each POC screen to its API.
+- **Role-specific display** (decided 2026-10-12): every page and action a Role may not use is hidden (navigation entries, whole pages) or disabled (buttons and forms), driven by the POC's own capability map (`frontend/src/demo/permissions.ts`), which matches SPEC §1. No element is added. The backend enforces the same rules on every request (FR-16), so hiding is a convenience, never the protection.
 - **Technical choices** (vendor, queue design, column types, tooling) live in `addendum.md`, together with the requirement crosswalk and the reconciliation of conflicting sources. This PRD states capabilities and testable consequences.
 
 ## 1. Vision
@@ -388,7 +389,7 @@ When an admin adds an Instrument, the system checks the symbol against the lates
 - `[ASSUMPTION: the Symbol directory is used under Nasdaq's terms for non-commercial reference; confirm before any public deployment]`
 
 #### FR-22: Scheduled and on-demand Ingestion runs
-The engine creates a `daily` Ingestion run at 22:30 UTC and a `catchup` run at 06:00 UTC on every calendar day. Admins can trigger a `manual` run (optional window and Instrument list) or a `backfill` run (explicit start date; default 2015-01-02). Each run covers every active Instrument unless restricted. Realizes UJ-1 and UJ-7. *(SPEC FR-MKT-002; NFR-PERF-004; MID FR-01)*
+The engine creates a `daily` Ingestion run at 22:30 UTC and a `catchup` run at 06:00 UTC on every calendar day. Admins and quants can trigger a `manual` run for Instruments already tracked (optional window and Instrument list); only admins can trigger a `backfill` run (explicit start date; default 2015-01-02), as SPEC §1 allows a quant to trigger ingestion but reserves new data scope to admins. Each run covers every active Instrument unless restricted. Realizes UJ-1 and UJ-7. *(SPEC FR-MKT-002; NFR-PERF-004; MID FR-01)*
 
 **Consequences (testable):**
 - A trigger request returns HTTP 202 with the run id within 800 ms, and the work proceeds asynchronously.
@@ -398,7 +399,7 @@ The engine creates a `daily` Ingestion run at 22:30 UTC and a `catchup` run at 0
 - A `daily` run starts within 15 minutes of 22:30 UTC even when a backfill is in progress. `[ASSUMPTION: 15 min bound replaces "backfill never delays the daily run"]`
 - Backfill and manual runs cannot spend the part of the Vendor budget reserved for that day's `daily` and `catchup` runs: one request per active Instrument per run.
 - Triggering a run whose Instruments and window overlap an unfinished run returns HTTP 409 with the id of the active run.
-- Quant, analyst and viewer Users get HTTP 403 when triggering a run.
+- Analyst and viewer Users get HTTP 403 when triggering any run; quants get HTTP 403 when triggering a backfill.
 - The scheduler is enabled in exactly one Environment per Vendor API key (TEST in Iteration 1). Other Environments create runs only when an admin triggers them.
 - Each run records its mode, status, window, requesting User (or `scheduler`), Ruleset version, start and finish times, and error, plus one Run item per Instrument with counts and error.
 
