@@ -312,5 +312,14 @@ market_environment = Table(
 
 # Tables whose every change is written to the audit log (FR-PLT-006)
 AUDITED_TABLES = ("instrument",)
+# References that are deliberately not foreign keys (hypertables and append-only history
+# rows keep no foreign keys); drawn as dotted lines in the ERD, keyed (parent, child)
+LOGICAL_REFERENCES = {
+    ("ingestion_run", "bar"): "run_id",
+    ("bar", "bar_revision"): "instrument_id + session_date",
+    ("ingestion_run", "bar_revision"): "superseded_by_run",
+    ("ingestion_run", "data_gap"): "opened_by_run / resolved_by_run",
+    ("ingestion_run", "corporate_action"): "run_id",
+}
 # Partition column of each hypertable
 HYPERTABLES = {"bar": "session_date", "return_series": "session_date"}
