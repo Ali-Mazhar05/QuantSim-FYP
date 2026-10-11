@@ -49,6 +49,8 @@ r2_env=(
   -e "RCLONE_CONFIG_R2_ACCESS_KEY_ID=$(tr -d '\r\n' < "$secrets/r2_access_key_id")"
   -e "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=$(tr -d '\r\n' < "$secrets/r2_secret_access_key")"
   -e "RCLONE_CONFIG_R2_ENDPOINT=$endpoint"
+  # The R2 token is limited to the one bucket and may not create buckets
+  -e RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
 )
 remote="r2:$bucket/jenkins"
 
