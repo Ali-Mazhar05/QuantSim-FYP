@@ -39,6 +39,7 @@ only the frontend; backend services join them once a server exists (see
 | Frontend CI | every build | `npm ci`, `oxlint`, `tsc`, Vitest with coverage, `vite build`. Test and coverage reports are published in Jenkins |
 | Backend CI | every build with services | For each `services/<name>`, in parallel: `ruff`, `ruff format --check`, `mypy`, `pytest`, then the migration check: upgrade to head, downgrade to base, upgrade again, on an empty PostgreSQL + TimescaleDB |
 | Build images | `develop`, `hotfix/*` | Builds and pushes only the components whose content hash is new |
+| Sweep | every build, after the checks and builds | Removes stopped `qs-ci-*` test containers with their volumes (left behind when Docker or the agent dies mid-build), dangling images, and build cache beyond 3 GB (`sweep.sh`) |
 | Promote images | `develop`, `test`, `acceptance`, `main` | Points the environment tag (`dev`, `test`, `acc`, `prod`) at the image built on develop. Fails if it was never built there |
 | Approve production | `main` | Waits up to 24 hours for an approver. Holds no executor while waiting |
 | Deploy | environment branches | Writes the release file, decrypts secrets, deploys, smoke tests, records the known-good release. ACC and PROD roll back automatically on failure. Holds the `env-<name>` lock so two deploys never overlap |

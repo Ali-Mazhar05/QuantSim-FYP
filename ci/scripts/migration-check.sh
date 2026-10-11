@@ -19,7 +19,7 @@ network="$id"
 db="$id-db"
 
 cleanup() {
-  docker rm -f "$db" >/dev/null 2>&1 || true
+  docker rm -fv "$db" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
