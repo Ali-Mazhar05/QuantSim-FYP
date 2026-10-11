@@ -37,4 +37,5 @@ jenkins:
               - "View/Read"
             entries:
               - user: "Ali-Mazhar05"
-              # - user: "teammate-github-username"
+              - user: "AfnanRizwan1"
+              - user: "SaintOfAllOranges"

@@ -10,7 +10,8 @@
 #     admin      full control of Jenkins
 #     approver   build, cancel and replay jobs, and approve ACC and PROD
 #     developer  build, cancel and replay jobs
-#   Usernames are lowercase letters, digits, dots, dashes and underscores. Lines starting
+#   Usernames are each person's GitHub username (letters, digits, dots, dashes and
+#   underscores), the same names they sign in with on the CI server. Lines starting
 #   with # are ignored. The built-in "admin" account (secrets/admin_password) always
 #   exists as a break-glass login.
 set -euo pipefail
@@ -44,7 +45,7 @@ if [[ -f "$users_file" ]]; then
     rest="${line#*:}"
     role="${rest##*:}"
     password="${rest%:*}"
-    if [[ ! "$username" =~ ^[a-z0-9._-]+$ || "$username" == "admin" ]]; then
+    if [[ ! "$username" =~ ^[A-Za-z0-9._-]+$ || "$username" == "admin" ]]; then
       echo "team_users line $line_no: invalid username '$username'" >&2; exit 1
     fi
     if [[ "$rest" != *:* || ${#password} -lt 12 ]]; then

@@ -81,10 +81,10 @@ permissions. Add one line per person to `secrets/team_users` and share the file 
 the other secrets:
 
 ```
-# username:password:role
-ali.mazhar:<a long password>:admin
-sara:<a long password>:approver
-bilal:<a long password>:developer
+# github-username:password:role
+Ali-Mazhar05:<a long password>:admin
+AfnanRizwan1:<a long password>:approver
+SaintOfAllOranges:<a long password>:approver
 ```
 
 | Role | Can |
