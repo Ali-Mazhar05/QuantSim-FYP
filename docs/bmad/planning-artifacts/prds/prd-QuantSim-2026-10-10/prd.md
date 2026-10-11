@@ -317,9 +317,12 @@ A User signs in with username and password and receives an Access token valid fo
 - A wrong password, an unknown user and a deactivated account all get the same response.
 - After 5 failed attempts, sign-in is refused for 15 minutes (HTTP 429).
 - When the Platform is stopped, already-issued tokens still work on other services until they expire. *(SPEC NFR-REL-006)*
+- Sign-in also returns a refresh token. Exchanging it for a new Access token rotates it: the old refresh token stops working, and presenting an already-used refresh token revokes every refresh token of that session (theft detection). Refresh tokens are stored server-side, only as hashes, and expire after 12 hours.
+- Sign-out revokes the session's refresh token; the POC Sign out button calls it. Deactivating a User or changing their Role revokes all of their refresh tokens.
+- The role the POC sign-in page and top-bar switcher show can preview only the account's own Role or a lower one (viewer < analyst < quant < admin). The backend always authorizes with the account's real Role, so a preview never grants anything.
 
 **Out of Scope:**
-- Refresh tokens and logout. A User signs in again after 15 minutes, and the frontend returns an expired session to the sign-in page. `[ASSUMPTION: acceptable for Iteration 1; revisit in Iteration 2]`
+- Sign-in with GitHub or Google (OAuth2 social login). Decided 2026-10-12: deferred to a later iteration once a fixed domain exists, because the POC sign-in page has no such button and OAuth callbacks need stable addresses. Our tokens already follow the OAuth2/OIDC building blocks (signed JWT, JWKS), so adding it later only adds an identity exchange in the Platform service.
 
 #### FR-16: Role checks on every route
 Every endpoint of every service declares the Roles allowed to call it and refuses all others. The service that owns the data makes the decision. *(SPEC FR-PLT-005; NFR-SEC-001; MID TC-05, TC-06)*
@@ -587,7 +590,7 @@ All FRs below are planned for Iteration 1. If time runs short, cut from the bott
 - Versioned baskets (FR-MKT-005). Extended.
 - End-to-end tracing (NFR-OBS-001). Stretch; first to cut.
 - TLS on internal hops (NFR-SEC-002) and audit-index Events (NFR-AUD-003). See §5.
-- Refresh tokens and logout (FR-15 Out of Scope).
+- Sign-in with GitHub or Google (FR-15 Out of Scope).
 - Backend on ACC and PROD, if no server exists by the Release. Frontend-only ACC and PROD are acceptable for `v0.1.0`.
 - `[NOTE FOR PM]` Correlation is the first piece of analytical evidence the TDA work needs. Revisit if the critical path finishes early.
 
@@ -625,9 +628,9 @@ All FRs below are planned for Iteration 1. If time runs short, cut from the bott
 10. **Contribution evidence:** all Iteration 1 work so far is committed by one member. Task owners will be assigned by the team later; SM-6 needs merged pull requests from every member.
 11. **Tiingo key sharing:** does the free personal licence allow one key to be used by a team server? If not, each Environment that ingests needs its own key, and the shared budget (FR-24) applies per key.
 12. **Sensitive files in the working tree:** an untracked `admin_password` file and `ci/jenkins/.state/` must be git-ignored before anyone runs `git add .` (FR-9).
-13. **POC Users page status `Invited`:** the POC shows `Active`, `Invited` and `Disabled`; the platform service has active and deactivated only. Either the platform adds an invitation state or the API maps deactivated to `Disabled` and never returns `Invited`. Owner: platform. Decide before the Users page is wired.
+13. **POC Users page status `Invited`:** resolved 2026-10-12. Derived with no schema change: `Active` = has signed in at least once, `Invited` = created but never signed in, `Disabled` = deactivated.
 14. **Audit feed for the POC Audit Log page:** the POC shows readable events (time, user, service, action, severity, detail), while each service's audit log stores row-level before and after values. The platform needs a readable activity feed, fed by events from every service, that the Audit Log page reads. FR-29 defines the market service's events for it; the feed itself is a platform task.
-15. **POC sign-in role picker:** the POC sign-in page lets the user pick a role. With real sign-in the account's role decides what a User can do. Keeping the picker unchanged means it can only preselect; a mismatch with the account's role must not grant anything. Decide whether the page shows an error on mismatch or silently uses the account's role. Owner: frontend.
+15. **POC sign-in role picker and top-bar role switcher:** resolved 2026-10-12. Both controls stay as in the POC and preview only the account's Role or a lower one; the backend always enforces the real Role (FR-15).
 
 ## 11. Assumptions Index
 
@@ -641,6 +644,6 @@ All FRs below are planned for Iteration 1. If time runs short, cut from the bott
 - §4.3 FR-21: the Symbol directory may be used for non-commercial reference.
 - §4.3 FR-22: a daily run starts within 15 minutes of its schedule during a backfill.
 - §4.1 FR-11: Cloudflare R2's free tier may require a card on file; no charges are incurred.
-- §4.2 FR-15: refresh tokens and logout are out of scope for Iteration 1.
+- §4.2 FR-15: OAuth2 social sign-in is deferred; refresh tokens and sign-out are in scope (decided 2026-10-12).
 - §5: target iterations for the deferred Core NFRs (OBS-001: Iteration 2; SEC-002: Iteration 4; AUD-003: Iteration 2).
 - §6: any laptop acting as CI host keeps 20 GB free.
