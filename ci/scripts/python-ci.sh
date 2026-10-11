@@ -30,6 +30,14 @@ if uses db || uses kafka; then
     docker network rm "$network" >/dev/null 2>&1 || true
   }
   trap cleanup EXIT
+  # Stops waiting as soon as the broker has exited, and shows why
+  broker_ready() {
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$id-kafka" 2>/dev/null)" != "true" ]]; then
+      docker logs --tail 40 "$id-kafka" >&2 || true
+      die "test broker exited while starting (its log is above)"
+    fi
+    docker exec "$id-kafka" rpk cluster health --exit-when-healthy >/dev/null 2>&1
+  }
   docker network create "$network" >/dev/null
   service_opts=(--network "$network")
 
@@ -54,8 +62,7 @@ if uses db || uses kafka; then
   fi
   if uses kafka; then
     log "waiting for the test broker"
-    retry 60 2 docker exec "$id-kafka" rpk cluster health --exit-when-healthy >/dev/null \
-      || die "test broker did not start"
+    retry 60 2 broker_ready || die "test broker did not start"
     service_opts+=(-e "TEST_KAFKA_BOOTSTRAP=$id-kafka:9092")
   fi
 fi
