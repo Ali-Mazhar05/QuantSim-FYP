@@ -148,6 +148,19 @@ build_id() {
   printf '%s' "${BUILD_TAG:-local-$$}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'
 }
 
+# Name prefix for this build's test containers: qs-ci-<at most 30 characters>. Containers
+# are reached by name on their network, and a host name may not exceed 63 characters,
+# so long branch names are cut and a hash keeps the prefix unique.
+test_id() {
+  local id
+  id="$(build_id)"
+  id="${id#jenkins-quantsim-}"
+  if (( ${#id} > 30 )); then
+    id="${id:0:21}-$(printf '%s' "$id" | sha1sum | cut -c1-8)"
+  fi
+  printf 'qs-ci-%s' "$id"
+}
+
 # Cloudflare Pages API: cf_pages_api <METHOD> <path under /pages/projects> [json-body]
 cf_pages_api() {
   local method=$1 path=$2 body=${3:-}
