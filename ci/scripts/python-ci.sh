@@ -23,7 +23,7 @@ name="$(basename "$project")"
 uses() { grep -rqE "mark\.$1\b" "$REPO_ROOT/$project/tests" 2>/dev/null; }
 service_opts=()
 if uses db || uses kafka; then
-  id="qs-ci-$(build_id)-$name"
+  id="$(test_id)-$name"
   network="$id"
   cleanup() {
     docker rm -fv "$id-db" "$id-kafka" >/dev/null 2>&1 || true
@@ -33,7 +33,8 @@ if uses db || uses kafka; then
   # Stops waiting as soon as the broker has exited, and shows why
   broker_ready() {
     if [[ "$(docker inspect -f '{{.State.Running}}' "$id-kafka" 2>/dev/null)" != "true" ]]; then
-      docker logs --tail 40 "$id-kafka" >&2 || true
+      # The reason is near the top; a usage message may follow it
+      docker logs "$id-kafka" 2>&1 | head -n 15 >&2 || true
       die "test broker exited while starting (its log is above)"
     fi
     docker exec "$id-kafka" rpk cluster health --exit-when-healthy >/dev/null 2>&1
