@@ -109,7 +109,7 @@ gateway ──▶ │ api        /api/market/*         (FastAPI, verifies JWT, r
 | `ingestion_run` | One row per run: mode, status, window, report, error | Status and mode sets checked; `idempotency_key` unique (scheduled runs collapse to one per day) |
 | `ingestion_run_item` | Per-instrument outcome of a run | Status set checked; one row per run and instrument |
 | `staging_bar` | Raw vendor records, untouched | Kept 90 days (cleanup job) |
-| `bar` (hypertable) | Published clean bars | Key (instrument, session); `NUMERIC(20,6)` prices; the database refuses non-positive prices, `low > high`, open or close outside the range, negative volume; `revision`, `content_hash`, `quality_flags` |
+| `bar` (hypertable) | Published clean bars | Key (instrument, session); `NUMERIC(23,8)` prices; the database refuses non-positive prices, `low > high`, open or close outside the range, negative volume; `revision`, `content_hash`, `quality_flags` |
 | `bar_revision` | Previous values of corrected bars | Append-only history |
 | `rejected_bar` | Rejected records with every rule they broke | Kept, never dropped |
 | `data_gap` | Expected sessions with no clean bar | Resolved automatically when the bar arrives |
@@ -293,7 +293,7 @@ Branches 2, 3 and 4 can be built in parallel by different members after branch 1
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Price storage | `NUMERIC(20,6)`, volume `NUMERIC(28,8)` |
+| D1 | Price storage | `NUMERIC(23,8)`, volume `NUMERIC(28,8)` |
 | D2 | Vendor corrections | Revisions plus `bar.corrected`, not "insert once" |
 | D3 | Corporate actions | Store raw and adjusted series |
 | D4 | Outliers | Flag and publish (configurable to reject) until a second vendor exists |

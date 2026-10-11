@@ -97,10 +97,10 @@ merged, green in Jenkins and deployed to DEV.
 | I1-20 | **`market_db` schema:** instrument, staging bar, bar (hypertable, `NUMERIC` prices, OHLC check constraints), rejected bar, data gap, ingestion run and run item, return series, corporate action, replay session with `end > start` check | FR-MKT-001, NFR-INT-001, NFR-INT-003, NFR-REC-001 | Migrations build the schema from empty in CI (migration check); the database itself refuses `high < low` and an inverted replay window | ⬜ |
 | I1-21 | **Instrument master:** admin add, annotate and retire (non-destructive), seed command for the starting universe of about 40 symbols, audited | FR-MKT-001, FR-PLT-006 | Retired instruments stay in history but are no longer ingested; viewers cannot add | ⬜ |
 | I1-22 | **Tiingo adapter:** `PriceSource` interface, Redis token-bucket limiter below vendor limits, timeouts, retries with backoff, circuit breaker, recorded responses for tests | FR-MKT-002, NFR-PERF-005, NFR-REL-006 | Tests cover success, empty, 429 with `Retry-After`, 500 then success, malformed JSON, unknown symbol | ⬜ |
-| I1-23 | **Cleaning gate:** pandera rules (non-positive prices, OHLC order, duplicates, non-trading days, missing sessions against the exchange calendar, outliers, zero volume), UTC session-close timestamps, reconciliation report (passed, corrected, rejected per rule) | **FR-MKT-011** | Table-driven unit test per rule; property test: the gate never publishes `high < low`; passed + corrected + rejected = input | ⬜ |
+| I1-23 | **Cleaning gate:** pure-Python rules with exact decimals (non-positive prices, OHLC order, duplicates, non-trading days, missing sessions against the exchange calendar, outliers, zero volume), UTC session-close timestamps, reconciliation report (passed, corrected, rejected per rule) | **FR-MKT-011** | Table-driven unit test per rule; property test: the gate never publishes `high < low`; passed + corrected + rejected = input | ⬜ |
 | I1-24 | **Ingestion pipeline:** run lock, watermark plus 5-session overlap, staging, gate, idempotent upsert with content hash, vendor corrections as revisions, per-instrument transaction with outbox `bar.ingested` | **FR-MKT-002**, NFR-REL-005, NFR-REL-007 | Re-running a window adds zero rows and zero events; a changed bar creates a revision; two simultaneous runs → one skipped; crash mid-run then re-run gives the same final state | ⬜ |
 | I1-25 | **Returns and volatility:** log returns, 20- and 60-day annualised volatility, recomputed from the earliest changed date | FR-MKT-003 | Values match a hand-computed fixture | ⬜ |
-| I1-26 | **Scheduling:** Celery worker and single beat, daily run 22:30 UTC, catch-up run 06:00 UTC, admin "run now" and backfill on a low-priority queue | FR-MKT-002, NFR-PERF-004 | Trigger returns 202 within 800 ms; backfill never delays the daily run | ⬜ |
+| I1-26 | **Scheduling:** job queue in PostgreSQL with a single scheduler, daily run 22:30 UTC, catch-up run 06:00 UTC, admin "run now" and backfill on a low-priority queue | FR-MKT-002, NFR-PERF-004 | Trigger returns 202 within 800 ms; backfill never delays the daily run | ⬜ |
 | I1-27 | **Market read API:** instruments, bars, returns, ingestion runs, run report, rejected rows, data quality | FR-MKT-001..003, FR-MKT-011 | Contract exported to OpenAPI; role checks on every endpoint | ⬜ |
 | I1-28 | **Planted-fault dataset and demo script:** fixture universe with known defects and the exact expected report | FR-MKT-011 | TEST environment run matches the expected report exactly | ⬜ |
 | I1-29 | **Correlation series (stretch):** baskets, rolling correlation matrices in one request, fingerprinted and cached | FR-MKT-004 | One request returns every window's matrix; identical windows return identical fingerprints | ⬜ |
@@ -158,10 +158,10 @@ helper and a new target recorded in the progress log (rubric criterion 2 rewards
 
 | # | Decision | Recommendation | Affects |
 |---|---|---|---|
-| D1 | Price storage | `NUMERIC(20,6)` in every database (NFR-INT-001); the tech guide's cleaning sketch uses float and must be updated | I1-20, I1-23 |
+| D1 | Price storage | `NUMERIC(23,8)` in every database (NFR-INT-001); the tech guide's cleaning sketch uses float and must be updated | I1-20, I1-23 |
 | D2 | Vendor corrections to already-published bars | Store a revision and publish `bar.corrected`, not `ON CONFLICT DO NOTHING` | I1-24 |
 | D3 | Corporate actions | Store raw and adjusted series (answers the open question in ARC §15) | I1-20, I1-25 |
-| D4 | Outliers over 50% | Cross-check with a second vendor; reject if unconfirmed | I1-23 |
+| D4 | Outliers over 50% | Flag and publish, configurable to reject, until a second vendor exists | I1-23 |
 | D5 | Instrument universe | About 40 symbols to stay inside Tiingo's free limits | I1-21 |
 | D6 | Event backbone | Redpanda (Kafka protocol, a third of the memory) instead of Apache Kafka | I1-13, I1-15 |
 | D7 | Gateway authentication | Each service verifies the JWT locally from the JWKS (FR-PLT-004); Traefik only routes and rate-limits | I1-12, I1-15 |
