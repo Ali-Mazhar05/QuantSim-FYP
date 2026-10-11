@@ -6,7 +6,7 @@ Edge cases behind `SKILL.md`. Read only the section you need.
 
 | PR | Method | Reason |
 |---|---|---|
-| `feature/*` → `develop` | rebase | Linear history on `develop`, and every commit with its author survives (the FYP rubric scores each member's commit history). Squash would collapse them |
+| `feature/*`, `bugfix/*` → `develop` | merge commit | Every commit with its author survives (the FYP rubric scores each member's commit history) and the merge records which pull request brought it in. Squash would collapse them |
 | promotions (`develop` → `test` → `acceptance` → `main`) | merge commit | Images are tagged by the *content* of the files that define them; a merge commit keeps that content identical, so TEST, ACC and PROD reuse the image DEV built and verified. Rebase or squash on these branches would also break the commit statuses Jenkins posted |
 | `hotfix/*` → `main`, `main` → `develop` | merge commit | Same as promotions |
 
@@ -26,10 +26,9 @@ Check them: `gh pr checks <n> --repo Ali-Mazhar05/QuantSim-FYP`, or
 ## Stacked branches
 
 When branch B builds on unmerged branch A:
-1. Open A's PR; wait for green; merge (rebase).
-2. `git switch B && git fetch origin && git rebase --onto origin/develop A B`
-   (drops A's old commits, which now exist on `develop` under new hashes).
-3. Re-run `preflight.sh`, `git push --force-with-lease`, then open B's PR.
+1. Open A's PR; wait for green; merge (merge commit).
+2. A's commits are now on `develop` with the same hashes, so B needs no rebase.
+3. Re-run `preflight.sh` on B, push, then open B's PR.
 
 Open B's PR only after A merges, or its diff will show A's commits too.
 

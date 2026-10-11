@@ -39,7 +39,7 @@ else
   [[ "${1:-}" == "--title" ]] && title="${2:?}"
   head="$(git branch --show-current)"
   case "$head" in
-    feature/*|bugfix/*) base="develop"; method="--rebase --delete-branch" ;;
+    feature/*|bugfix/*) base="develop"; method="--merge --delete-branch" ;;
     hotfix/*)           base="main";    method="--merge --delete-branch" ;;
     *) fail "run from a feature/, bugfix/ or hotfix/ branch, or use: pr.sh promote <from> <to>" ;;
   esac

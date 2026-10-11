@@ -65,11 +65,12 @@ git push -u origin feature/<name>
 ```bash
 .claude/skills/quantsim-git-flow/scripts/pr.sh             # opens feature/<name> → develop
 gh pr checks <number> --watch                              # wait for the Jenkins check
-gh pr merge <number> --rebase --delete-branch              # only when green
+gh pr merge <number> --merge --delete-branch               # only when green
 ```
-Feature PRs merge with **rebase** (linear `develop`, every commit and its author kept).
-Stacked branches (B built on A): merge A first, then rebase B onto `origin/develop`,
-re-run preflight, push with `--force-with-lease`, merge B.
+Every PR merges with a **merge commit**, feature PRs included: every commit and its author
+are kept, and the merge shows which pull request brought them in.
+Stacked branches (B built on A): merge A first, then open B's PR; its diff shrinks to B's
+own commits because A's commits are already on `develop`.
 
 ### 5. Promote (user approval required)
 Each promotion is a PR whose head is the environment branch before it, merged with a
