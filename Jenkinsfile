@@ -160,8 +160,12 @@ pipeline {
               if (env.QS_MISSING_LIST?.trim()) {
                 error("Not built on develop: ${env.QS_MISSING_LIST}. Merge the change into develop first so it is built and verified there.")
               }
-              for (c in env.QS_COMPONENTS.tokenize(' ')) {
-                sh "ci/scripts/promote.sh '${c}' '${env.QS_ENV}'"
+              // PROD's tag moves only after the approval, in Deploy, so a rejected release
+              // never becomes "prod"
+              if (env.QS_ENV != 'prod') {
+                for (c in env.QS_COMPONENTS.tokenize(' ')) {
+                  sh "ci/scripts/promote.sh '${c}' '${env.QS_ENV}'"
+                }
               }
             }
           }
@@ -204,6 +208,11 @@ pipeline {
               string(credentialsId: 'cloudflare-api-token', variable: 'CLOUDFLARE_API_TOKEN'),
               string(credentialsId: 'cloudflare-account-id', variable: 'CLOUDFLARE_ACCOUNT_ID'),
             ]) {
+              if (env.QS_ENV == 'prod') {
+                for (c in env.QS_COMPONENTS.tokenize(' ')) {
+                  sh "ci/scripts/promote.sh '${c}' prod"
+                }
+              }
               sh 'ci/scripts/make-release.sh "$QS_ENV" .ci/release.env'
               try {
                 sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
