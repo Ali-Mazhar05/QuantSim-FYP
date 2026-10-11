@@ -72,8 +72,11 @@ a short hash of the git content of those paths (`content-hash.sh`), for example
 
 ### Ship a change
 1. Branch from `develop`: `feature/<short-name>`.
-2. Push; Jenkins runs the checks. Open a pull request into `develop`; it needs the Jenkins
-   check and one review. Squash merge.
+2. Run `.claude/skills/quantsim-git-flow/scripts/preflight.sh`, push, and open a pull
+   request into `develop` (`scripts/pr.sh`); it needs the Jenkins check and one review.
+   Merge with **Create a merge commit**, which keeps every commit and its author on `develop`.
+   The full procedure, for people and agents alike, is in
+   `.claude/skills/quantsim-git-flow/SKILL.md`.
 3. Jenkins builds, deploys DEV and posts `quantsim/dev-verified`.
 
 ### Promote
