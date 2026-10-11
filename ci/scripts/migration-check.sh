@@ -14,7 +14,7 @@ if [[ ! -f "$REPO_ROOT/services/$service/alembic.ini" ]]; then
   exit 0
 fi
 
-id="qs-ci-$(build_id)-$service"
+id="$(test_id)-$service"
 network="$id"
 db="$id-db"
 
