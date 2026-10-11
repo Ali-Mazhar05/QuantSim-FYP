@@ -20,10 +20,17 @@ def withGitHub(Closure body) {
   }
 }
 
+// Returns true when a person approved, false when AUTO_APPROVE=true in
+// deploy/env/<env>.env let it through; throws when rejected or timed out
 def approve(String message) {
+  if (env.QS_AUTO_APPROVE == 'true') {
+    echo "Auto-approved: AUTO_APPROVE=true in deploy/env/${env.QS_ENV}.env (${message})"
+    return false
+  }
   timeout(time: 24, unit: 'HOURS') {
     input message: message, ok: 'Approve', submitter: env.QS_APPROVERS
   }
+  return true
 }
 
 pipeline {
@@ -101,20 +108,28 @@ pipeline {
         stage('Backend CI') {
           steps {
             script {
-              def services = []
-              for (f in findFiles(glob: 'services/*/pyproject.toml')) {
-                services << f.path.tokenize('/')[1]
+              // Every Python project: shared libraries in libs/, services in services/
+              def projects = []
+              for (f in findFiles(glob: 'libs/*/pyproject.toml')) {
+                def parts = f.path.tokenize('/')
+                projects << "${parts[0]}/${parts[1]}"
               }
-              if (services.isEmpty()) {
-                echo 'No backend services yet, nothing to check'
+              for (f in findFiles(glob: 'services/*/pyproject.toml')) {
+                def parts = f.path.tokenize('/')
+                projects << "${parts[0]}/${parts[1]}"
+              }
+              if (projects.isEmpty()) {
+                echo 'No Python projects yet, nothing to check'
                 return
               }
               def checks = [:]
-              for (s in services) {
-                def service = s
-                checks[service] = {
-                  sh "ci/scripts/python-ci.sh '${service}'"
-                  sh "ci/scripts/migration-check.sh '${service}'"
+              for (p in projects) {
+                def project = p
+                checks[project] = {
+                  sh "ci/scripts/python-ci.sh '${project}'"
+                  if (project.startsWith('services/')) {
+                    sh "ci/scripts/migration-check.sh '${project.tokenize('/')[1]}'"
+                  }
                 }
               }
               parallel checks
@@ -122,7 +137,7 @@ pipeline {
           }
           post {
             always {
-              junit allowEmptyResults: true, testResults: 'services/*/reports/junit.xml'
+              junit allowEmptyResults: true, testResults: 'libs/*/reports/junit.xml, services/*/reports/junit.xml'
             }
           }
         }
@@ -156,6 +171,8 @@ pipeline {
       post {
         always {
           archiveArtifacts artifacts: '.ci/plan.env', allowEmptyArchive: true
+          // Leftover test containers and old cache would otherwise fill the host's disk
+          sh 'ci/scripts/sweep.sh || true'
           cleanWs(deleteDirs: true, notFailBuild: true)
         }
       }
@@ -227,8 +244,9 @@ pipeline {
       steps {
         script {
           def accepted = true
+          def byPerson = true
           try {
-            approve("ACC is serving v${env.QS_VERSION} (frontend ${env.HASH_FRONTEND}). Accept it for production?")
+            byPerson = approve("ACC is serving v${env.QS_VERSION} (frontend ${env.HASH_FRONTEND}). Accept it for production?")
           } catch (err) {
             accepted = false
           }
@@ -236,7 +254,8 @@ pipeline {
             checkout scm
             withGitHub {
               def state = accepted ? 'success' : 'failure'
-              def text = accepted ? 'Accepted for production' : 'Rejected or timed out at acceptance'
+              def text = !accepted ? 'Rejected or timed out at acceptance'
+                : (byPerson ? 'Accepted for production' : 'Accepted automatically (AUTO_APPROVE)')
               sh "ci/scripts/github-status.sh quantsim/acceptance-signoff '${state}' '${text}'"
             }
             cleanWs(deleteDirs: true, notFailBuild: true)
