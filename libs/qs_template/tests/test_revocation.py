@@ -35,11 +35,35 @@ async def test_revocation_cuts_off_earlier_tokens(revocations: RevocationList) -
     assert await revocations.is_revoked(earlier) is True
 
 
-async def test_tokens_issued_after_revocation_are_valid(revocations: RevocationList) -> None:
-    cutoff = await revocations.revoke_user(USER)
+def principal_ms(issued_at_ms: int) -> Principal:
+    return Principal(
+        user_id=USER,
+        username="u",
+        role=Role.QUANT,
+        token_id="t",
+        issued_at=issued_at_ms // 1000,
+        issued_at_ms=issued_at_ms,
+    )
 
-    assert await revocations.is_revoked(principal(cutoff)) is False
-    assert await revocations.is_revoked(principal(cutoff - 1)) is True
+
+async def test_cut_off_is_exact_to_the_millisecond(revocations: RevocationList) -> None:
+    cutoff_ms = await revocations.revoke_user(USER)
+
+    # A sign-in right after the revocation, even in the same second, works
+    assert await revocations.is_revoked(principal_ms(cutoff_ms)) is False
+    assert await revocations.is_revoked(principal_ms(cutoff_ms + 1)) is False
+    assert await revocations.is_revoked(principal_ms(cutoff_ms - 1)) is True
+
+
+async def test_tokens_without_millisecond_times_err_on_refusal(
+    revocations: RevocationList,
+) -> None:
+    cutoff_ms = await revocations.revoke_user(USER)
+
+    same_second = principal(cutoff_ms // 1000)
+
+    assert same_second.issued_at_ms <= cutoff_ms
+    assert await revocations.is_revoked(same_second) is (same_second.issued_at_ms < cutoff_ms)
 
 
 async def test_revocation_only_affects_that_user(revocations: RevocationList) -> None:

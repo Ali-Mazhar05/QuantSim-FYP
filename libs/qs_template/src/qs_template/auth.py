@@ -57,6 +57,13 @@ class Principal:
     role: Role
     token_id: str
     issued_at: int
+    # Millisecond issue time ("iat_ms" claim, falling back to iat), so a revocation can
+    # cut off exactly the tokens issued before it
+    issued_at_ms: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.issued_at_ms:
+            object.__setattr__(self, "issued_at_ms", self.issued_at * 1000)
 
 
 def _unauthenticated(detail: str) -> ServiceError:
@@ -208,6 +215,7 @@ class Authenticator:
                 role=Role(str(claims.get("role"))),
                 token_id=str(claims["jti"]),
                 issued_at=int(claims["iat"]),
+                issued_at_ms=int(claims.get("iat_ms") or int(claims["iat"]) * 1000),
             )
         except (ValueError, KeyError):
             raise _unauthenticated("The token does not name a valid user and role.") from None
