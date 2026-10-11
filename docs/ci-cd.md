@@ -89,7 +89,16 @@ environment must be green first.
 
 ### Approve
 Open the running build in Jenkins (Pipeline Graph view) and answer the input step.
-Only users listed in `RELEASE_APPROVERS` (`ci/jenkins/casc.yaml`) can approve.
+Only release approvers can approve: admins and approvers in `secrets/team_users` on a
+laptop host, `--approvers` on the CI server.
+
+To skip the click, set `AUTO_APPROVE=true` in `deploy/env/acc.env` (ACC sign-off) or
+`deploy/env/prod.env` (PROD approval). The build then logs "Auto-approved" and carries
+on; ACC posts `quantsim/acceptance-signoff` as "Accepted automatically (AUTO_APPROVE)".
+Every other gate still applies: the required status from the previous environment, the
+smoke test and automatic rollback. Only the exact value `true` counts; anything else asks
+a person. Jenkins reads the file from the branch it is building, so the change takes
+effect once it has been promoted to that branch (`acceptance` or `main`).
 
 ### Release a new version
 Bump `VERSION` in a pull request into `develop` and promote as usual. `main` refuses to
