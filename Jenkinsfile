@@ -101,20 +101,28 @@ pipeline {
         stage('Backend CI') {
           steps {
             script {
-              def services = []
-              for (f in findFiles(glob: 'services/*/pyproject.toml')) {
-                services << f.path.tokenize('/')[1]
+              // Every Python project: shared libraries in libs/, services in services/
+              def projects = []
+              for (f in findFiles(glob: 'libs/*/pyproject.toml')) {
+                def parts = f.path.tokenize('/')
+                projects << "${parts[0]}/${parts[1]}"
               }
-              if (services.isEmpty()) {
-                echo 'No backend services yet, nothing to check'
+              for (f in findFiles(glob: 'services/*/pyproject.toml')) {
+                def parts = f.path.tokenize('/')
+                projects << "${parts[0]}/${parts[1]}"
+              }
+              if (projects.isEmpty()) {
+                echo 'No Python projects yet, nothing to check'
                 return
               }
               def checks = [:]
-              for (s in services) {
-                def service = s
-                checks[service] = {
-                  sh "ci/scripts/python-ci.sh '${service}'"
-                  sh "ci/scripts/migration-check.sh '${service}'"
+              for (p in projects) {
+                def project = p
+                checks[project] = {
+                  sh "ci/scripts/python-ci.sh '${project}'"
+                  if (project.startsWith('services/')) {
+                    sh "ci/scripts/migration-check.sh '${project.tokenize('/')[1]}'"
+                  }
                 }
               }
               parallel checks
@@ -122,7 +130,7 @@ pipeline {
           }
           post {
             always {
-              junit allowEmptyResults: true, testResults: 'services/*/reports/junit.xml'
+              junit allowEmptyResults: true, testResults: 'libs/*/reports/junit.xml, services/*/reports/junit.xml'
             }
           }
         }
