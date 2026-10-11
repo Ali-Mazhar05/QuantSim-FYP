@@ -4,6 +4,46 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-10-12
+
+**Delivered**
+- **CI/CD module complete.** Every environment deploys from its branch: DEV and TEST
+  automatically, ACC with an approver's sign-off and PROD with an approver's approval,
+  each skippable per environment with `AUTO_APPROVE` in `deploy/env/acc.env` and
+  `deploy/env/prod.env`.
+- **All four websites on Cloudflare Pages**, DEV and TEST included, at fixed addresses
+  that stay up whoever hosts Jenkins.
+- **Shared laptop hosting** (`ci/jenkins/host.sh`): a host lease and Jenkins' state in
+  Cloudflare R2, a public Jenkins link, a dedicated build agent, per-person logins with
+  GitHub usernames; Ali-Mazhar05 admin, AfnanRizwan1 and SaintOfAllOranges approvers.
+- **Host housekeeping**: a sweep after every build (leftover test containers and volumes,
+  build cache), test containers that no longer leak volumes, short test container names
+  for long branch names, `ci/jenkins/compact-docker-disk.ps1`.
+- **Team guide**: [ci-cd-team-guide.md](ci-cd-team-guide.md).
+
+**Verified**
+- Frontend through every environment: v0.1.0 released to PROD on 2026-10-11 with the
+  ACC sign-off and PROD approval, one image built once and promoted unchanged.
+- Backend on DEV and TEST: Backend CI (111 tests), the migration check, the `platform`
+  image built once on `develop`, `platform-migrate` before the new version, smoke test on
+  `/api/platform/health` with the content hash, the same image promoted to TEST.
+- Hotfix: `hotfix/favicon-link` from `main`, built on its branch, approved and released to
+  PROD as v0.1.1, then merged back into `develop`.
+- Hand-over: an empty second Jenkins restored the full history from R2 and continued the
+  build numbers; a second host was refused while the lease was held.
+
+**Decided**
+- Laptop hosting instead of Oracle Cloud (card verification failed); the CI server
+  setup stays in `ci/jenkins/` for later.
+- Every pull request, feature and promotion alike, merges with a merge commit.
+- The Vercel integration stays; its checks are informational.
+
+**Known limits**
+- Backend runs on DEV and TEST only, and only while someone hosts Jenkins; ACC and PROD
+  serve the frontend until an always-on server exists.
+- On the host laptop Docker's disk file must be compacted now and then, and Docker's
+  memory capped with `.wslconfig`.
+
 ## 2026-10-09
 
 **Delivered (committed, tests pending)**
