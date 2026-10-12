@@ -1,8 +1,10 @@
 """HTTP API of the Platform service, all under ``/api/platform``.
 
 Public:  POST /auth/login, POST /auth/refresh, POST /auth/logout, GET /.well-known/jwks.json
-Signed-in users:  GET /auth/me
-Admins:  user management and per-user change history
+Signed-in users:  GET /auth/me (with the role's capabilities)
+manage_users:  list, create, read, deactivate and reactivate users
+manage_roles:  change a user's role
+view_audit_log:  a user's change history
 """
 
 import uuid
@@ -18,6 +20,7 @@ from qs_platform.schemas import (
     ChangeRoleRequest,
     CreateUserRequest,
     LoginRequest,
+    MeOut,
     RefreshRequest,
     TokenResponse,
     UserList,
@@ -26,7 +29,7 @@ from qs_platform.schemas import (
 from qs_platform.service import INVALID_CREDENTIALS, INVALID_REFRESH, UserService
 from qs_template import Database, ServiceError
 from qs_template.audit import set_audit_context
-from qs_template.auth import Authenticator, Principal, Role
+from qs_template.auth import Authenticator, Capability, Principal
 
 
 def build_routers(
@@ -35,22 +38,37 @@ def build_routers(
     public = APIRouter(tags=["auth"])
     users = APIRouter(prefix="/users", tags=["users"])
 
-    Admin = Annotated[Principal, Depends(auth.require(Role.ADMIN))]
+    ManageUsers = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_USERS))]
+    ManageRoles = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_ROLES))]
+    ViewAudit = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_AUDIT_LOG))]
     Session = Annotated[AsyncSession, Depends(database.session)]
 
-    async def admin_session(
-        request: Request, admin: Admin
+    async def audited(
+        request: Request, actor: Principal
     ) -> AsyncIterator[tuple[AsyncSession, Principal]]:
-        """A transaction whose changes the audit trail attributes to the admin."""
+        """A transaction whose changes the audit trail attributes to ``actor``."""
         async with database.transaction() as session:
             await set_audit_context(
                 session,
-                user_id=admin.user_id,
+                user_id=actor.user_id,
                 request_id=getattr(request.state, "request_id", None),
             )
-            yield session, admin
+            yield session, actor
 
-    AdminSession = Annotated[tuple[AsyncSession, Principal], Depends(admin_session)]
+    async def users_session(
+        request: Request, actor: ManageUsers
+    ) -> AsyncIterator[tuple[AsyncSession, Principal]]:
+        async for pair in audited(request, actor):
+            yield pair
+
+    async def roles_session(
+        request: Request, actor: ManageRoles
+    ) -> AsyncIterator[tuple[AsyncSession, Principal]]:
+        async for pair in audited(request, actor):
+            yield pair
+
+    UsersSession = Annotated[tuple[AsyncSession, Principal], Depends(users_session)]
+    RolesSession = Annotated[tuple[AsyncSession, Principal], Depends(roles_session)]
 
     @public.post("/auth/login", responses={401: {}, 429: {}})
     async def login(body: LoginRequest, response: Response) -> TokenResponse:
@@ -95,13 +113,14 @@ def build_routers(
     @public.get("/auth/me")
     async def me(
         session: Session, principal: Annotated[Principal, Depends(auth.principal)]
-    ) -> UserOut:
-        return await service.get_user(session, principal.user_id)
+    ) -> MeOut:
+        user = await service.get_user(session, principal.user_id)
+        return MeOut.model_validate(user.model_dump(exclude={"status"}))
 
     @users.get("")
     async def list_users(
         session: Session,
-        _: Admin,
+        _: ManageUsers,
         include_inactive: bool = False,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
         offset: Annotated[int, Query(ge=0)] = 0,
@@ -111,33 +130,33 @@ def build_routers(
         )
 
     @users.post("", status_code=status.HTTP_201_CREATED, responses={409: {}})
-    async def create_user(body: CreateUserRequest, context: AdminSession) -> UserOut:
+    async def create_user(body: CreateUserRequest, context: UsersSession) -> UserOut:
         session, admin = context
         return await service.create_user(session, admin, body)
 
     @users.get("/{user_id}", responses={404: {}})
-    async def get_user(user_id: uuid.UUID, session: Session, _: Admin) -> UserOut:
+    async def get_user(user_id: uuid.UUID, session: Session, _: ManageUsers) -> UserOut:
         return await service.get_user(session, user_id)
 
     @users.post("/{user_id}/deactivate", responses={404: {}, 409: {}})
-    async def deactivate(user_id: uuid.UUID, context: AdminSession) -> UserOut:
+    async def deactivate(user_id: uuid.UUID, context: UsersSession) -> UserOut:
         session, admin = context
         return await service.deactivate(session, admin, user_id)
 
     @users.post("/{user_id}/reactivate", responses={404: {}})
-    async def reactivate(user_id: uuid.UUID, context: AdminSession) -> UserOut:
+    async def reactivate(user_id: uuid.UUID, context: UsersSession) -> UserOut:
         session, admin = context
         return await service.reactivate(session, admin, user_id)
 
     @users.put("/{user_id}/role", responses={404: {}, 409: {}})
     async def change_role(
-        user_id: uuid.UUID, body: ChangeRoleRequest, context: AdminSession
+        user_id: uuid.UUID, body: ChangeRoleRequest, context: RolesSession
     ) -> UserOut:
         session, admin = context
         return await service.change_role(session, admin, user_id, body.role)
 
     @users.get("/{user_id}/history", responses={404: {}})
-    async def history(user_id: uuid.UUID, session: Session, _: Admin) -> list[AuditEntryOut]:
+    async def history(user_id: uuid.UUID, session: Session, _: ViewAudit) -> list[AuditEntryOut]:
         return await service.history(session, user_id)
 
     return [public, users]
