@@ -29,12 +29,18 @@ Read this once before your first pull request. The full technical reference is
 |---|---|---|---|
 | DEV | `develop` | https://develop.quantsim-4hz.pages.dev | On the laptop hosting Jenkins, `http://localhost:8081/api/platform/health` |
 | TEST | `test` | https://test.quantsim-4hz.pages.dev | On the laptop hosting Jenkins, `http://localhost:8082/api/platform/health` |
-| ACC | `acceptance` | https://acceptance.quantsim-4hz.pages.dev | Not yet (frontend only) |
-| PROD | `main` | https://quantsim-4hz.pages.dev | Not yet (frontend only) |
+| ACC | `acceptance` | https://acceptance.quantsim-4hz.pages.dev | On the laptop hosting Jenkins, `http://localhost:8083/api/platform/health` |
+| PROD | `main` | https://quantsim-4hz.pages.dev | On the laptop hosting Jenkins, `http://localhost:8084/api/platform/health` |
 
 The websites are on Cloudflare Pages and stay up even when every laptop is off. Backend
 services (the platform API with PostgreSQL + TimescaleDB, Redis and Redpanda) run in Docker
-on the laptop hosting Jenkins, so they are up only while someone hosts.
+on the laptop hosting Jenkins, one separate stack with its own databases per environment,
+so they are up only while someone hosts. ACC and PROD stay there until the team decides to
+move them to a dedicated server.
+
+Databases do not move with a hand-over (section 5): the next host starts DEV and TEST with
+fresh databases, and ACC and PROD get fresh databases on their next deploy. Each
+environment's first admin comes from its encrypted secrets.
 
 **How each environment deploys:**
 - **DEV** and **TEST** always deploy by themselves: DEV on every merge into `develop`, TEST on

@@ -26,9 +26,12 @@ hotfix/*      branched from main, checked and built, merged into main and back i
 
 The Jenkins host is whichever machine runs `ci/jenkins/`: the always-on CI server, or
 a team member's laptop while there is none. See [Where Jenkins runs](#where-jenkins-runs).
-Each environment's settings live in `deploy/env/<env>.env`. ACC and PROD currently host
-only the frontend; backend services join them once a server exists (see
-[Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
+Each environment's settings live in `deploy/env/<env>.env`. All four environments run
+their backend (services, PostgreSQL + TimescaleDB, Redis, Redpanda) as a separate Docker
+Compose project on the Jenkins host: `qs-dev` (port 8081), `qs-test` (8082), `qs-acc`
+(8083) and `qs-prod` (8084), each with its own databases and secrets. ACC and PROD stay
+on the Jenkins host until the team decides to move them to a dedicated server (decision
+of 2026-10-12; see [Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
 
 ## What the pipeline does
 
@@ -164,7 +167,8 @@ Then:
 
 ## Moving ACC and PROD to a server
 
-When the Oracle Cloud (or Hetzner) server exists:
+Only when the team decides to (ACC and PROD run on the Jenkins host until then). Once a
+server exists:
 1. Create a `deploy` user that can run Docker, with SSH key login only; open ports 22,
    80 and 443.
 2. Add the `ssh-agent` plugin to `ci/jenkins/plugins.txt`, add the private key as a
@@ -250,8 +254,10 @@ lets several Redpanda brokers run at once (see the team guide, section 5).
 - The DEV and TEST frontends stay up on Cloudflare Pages, but their backend services
   and Jenkins share the Jenkins host. On a laptop host they stop when the laptop is off,
   and nothing builds while nobody hosts.
-- ACC and PROD run the frontend only; their backend needs an always-on server (see
-  [Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
+- ACC and PROD backends also run on the Jenkins host (ports 8083 and 8084) until the team
+  moves them to a server. The host hand-over moves Jenkins' state, not the environments'
+  databases: after a hand-over DEV and TEST are redeployed automatically with fresh
+  databases, and ACC and PROD come back with fresh databases on their next deploy.
 - The public Jenkins link is a free Cloudflare quick tunnel, so its address changes every
   time someone starts hosting.
 - On a laptop host GitHub webhooks cannot reach Jenkins, so it scans the repository every

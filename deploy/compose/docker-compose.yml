@@ -183,7 +183,7 @@ services:
       - start
       - --mode=dev-container
       - --smp=1
-      - --memory=768M
+      - --memory=${REDPANDA_MEMORY:-768M}
       - --overprovisioned
       - --kafka-addr=internal://0.0.0.0:9092
       - --advertise-kafka-addr=internal://redpanda:9092

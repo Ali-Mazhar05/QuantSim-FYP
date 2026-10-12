@@ -1,6 +1,6 @@
 """HTTP API of the Platform service, all under ``/api/platform``.
 
-Public:  POST /auth/login, GET /.well-known/jwks.json
+Public:  POST /auth/login, POST /auth/refresh, POST /auth/logout, GET /.well-known/jwks.json
 Signed-in users:  GET /auth/me
 Admins:  user management and per-user change history
 """
@@ -18,11 +18,12 @@ from qs_platform.schemas import (
     ChangeRoleRequest,
     CreateUserRequest,
     LoginRequest,
+    RefreshRequest,
     TokenResponse,
     UserList,
     UserOut,
 )
-from qs_platform.service import INVALID_CREDENTIALS, UserService
+from qs_platform.service import INVALID_CREDENTIALS, INVALID_REFRESH, UserService
 from qs_template import Database, ServiceError
 from qs_template.audit import set_audit_context
 from qs_template.auth import Authenticator, Principal, Role
@@ -69,6 +70,22 @@ def build_routers(
                 extra={"retry_after_seconds": outcome.locked_seconds},
             )
         raise INVALID_CREDENTIALS
+
+    @public.post("/auth/refresh", responses={401: {}})
+    async def refresh(body: RefreshRequest, response: Response) -> TokenResponse:
+        # Committed before an error is returned, so a detected reuse stays revoked
+        async with database.transaction() as session:
+            token = await service.refresh(session, body.refresh_token)
+        if token is None:
+            raise INVALID_REFRESH
+        response.headers["Cache-Control"] = "no-store"
+        return token
+
+    @public.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+    async def logout(body: RefreshRequest) -> Response:
+        async with database.transaction() as session:
+            await service.logout(session, body.refresh_token)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @public.get("/.well-known/jwks.json")
     async def jwks(response: Response) -> dict[str, object]:

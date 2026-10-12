@@ -19,6 +19,8 @@ class PlatformSettings(ServiceSettings):
     retired_public_keys: str | None = None
 
     access_token_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    # Refresh tokens slide: each refresh issues a new one valid for this long
+    refresh_token_ttl_seconds: int = Field(default=43_200, ge=300, le=2_592_000)
 
     # Redis holding the shared token revocation list
     redis_url: SecretStr

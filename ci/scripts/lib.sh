@@ -110,6 +110,19 @@ load_release() {
 # working directory. Inside Jenkins (itself a container) the workspace lives in a
 # volume, so the Jenkins container's volumes are shared instead of a bind mount.
 #   run_in_image <image> [docker run options...] -- <command...>
+# Package downloads (uv, npm) kept between builds in a named Docker volume: Jenkins wipes
+# each workspace after a build, and the host hand-over copies the agent's home but never
+# this volume, so packages are downloaded once instead of on every build.
+CI_CACHE_VOLUME="${CI_CACHE_VOLUME:-qs-ci-cache}"
+
+# Make the cache volume writable by the build user (cheap: no recursive chown). Uses the
+# uv image because some tool images (ShellCheck) have no shell.
+prepare_ci_cache() {
+  docker run --rm -u 0 -v "$CI_CACHE_VOLUME:/ci-cache" --entrypoint sh "$UV_IMAGE" -c \
+    "mkdir -p /ci-cache/uv /ci-cache/npm && chown $(id -u):$(id -g) /ci-cache /ci-cache/uv /ci-cache/npm" \
+    >/dev/null
+}
+
 run_in_image() {
   local image=$1
   shift
@@ -132,8 +145,12 @@ run_in_image() {
     workdir="/workspace"
   fi
 
-  docker run --rm "${mount[@]}" -w "$workdir" -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp "${opts[@]}" "$image" "$@"
+  prepare_ci_cache
+  # Slow or flaky connections: wait longer for each download and retry more
+  docker run --rm "${mount[@]}" -v "$CI_CACHE_VOLUME:/ci-cache" -w "$workdir" -u "$(id -u):$(id -g)" \
+    -e HOME=/tmp -e UV_CACHE_DIR=/ci-cache/uv -e UV_HTTP_TIMEOUT=120 -e UV_HTTP_RETRIES=5 \
+    -e npm_config_cache=/ci-cache/npm -e npm_config_fetch_retries=5 \
+    -e npm_config_fetch_retry_maxtimeout=120000 "${opts[@]}" "$image" "$@"
 }
 
 # Pinned toolchain images used by the CI scripts

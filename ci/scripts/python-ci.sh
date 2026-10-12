@@ -72,7 +72,7 @@ fi
 # The command runs inside the container, so its variables must not expand here.
 # shellcheck disable=SC2016
 run_in_image "$UV_IMAGE" "${service_opts[@]}" -e UV_LINK_MODE=copy -e PROJECT="$project" -e NAME="$name" -- bash -ec '
-  export UV_CACHE_DIR="$PWD/.ci/uv-cache"
+  export UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.ci/uv-cache}"
   export UV_PROJECT_ENVIRONMENT="$PWD/.ci/venv-$NAME"
   cd "$PROJECT"
   uv sync --frozen

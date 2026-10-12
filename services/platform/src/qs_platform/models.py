@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     MetaData,
@@ -51,4 +52,25 @@ users = Table(
     # Usernames and emails are unique regardless of letter case
     Index("users_username_unique", func.lower(text("username")), unique=True),
     Index("users_email_unique", func.lower(text("email")), unique=True),
+)
+
+# Server-side refresh tokens (FR-15). Only a SHA-256 hash of each token is stored. Every
+# refresh replaces the token with a new one in the same family (one family per sign-in);
+# presenting a token that was already used revokes the whole family. Not audited: rows
+# change on every refresh and hold nothing a reviewer needs beyond the user events.
+refresh_tokens = Table(
+    "refresh_tokens",
+    metadata,
+    Column("id", Uuid, primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("user_id", Uuid, ForeignKey("users.id"), nullable=False),
+    Column("family_id", Uuid, nullable=False),
+    Column("token_hash", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("used_at", DateTime(timezone=True)),
+    Column("revoked_at", DateTime(timezone=True)),
+    CheckConstraint("expires_at > created_at", name="refresh_tokens_expiry_after_creation"),
+    Index("refresh_tokens_token_hash_unique", "token_hash", unique=True),
+    Index("refresh_tokens_family", "family_id"),
+    Index("refresh_tokens_active_by_user", "user_id", postgresql_where=text("revoked_at IS NULL")),
 )
