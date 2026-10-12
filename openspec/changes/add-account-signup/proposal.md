@@ -37,8 +37,7 @@ Iteration 1 needs real accounts end to end:
 - **Email delivery:**
   - Mail is written to a mail outbox in the same transaction as the account change, so a rolled-back sign-up never sends mail.
   - The platform's existing background worker sends it over SMTP with retries.
-  - DEV and TEST deliver to a local Mailpit inbox, so no real mail leaves the laptop. ACC and PROD send through Gmail SMTP.
-  - The sender everywhere is `QuantSim <alimazhar+QuantSim@gmail.com>`. The Gmail account and app password are configured later by the user.
+  - Every environment sends through Gmail SMTP as `QuantSim <alimazhar3005+QuantSim@gmail.com>`, so anyone can sign up on any of the four sites.
 - **Abuse limits:**
   - Per client address on sign-up, resend and forgot-password.
   - At most 3 account emails per address per hour, so nobody can flood an inbox.
@@ -73,7 +72,7 @@ Requirements covered:
 - Changing a verified email address.
 - Two-factor sign-in.
 - Per-row data entitlement, which comes with M3/M5 in Iteration 2.
-- Making the API reachable from other computers. The deployed sites call the API on `localhost`, so only the machine running the environment can sign in today; this needs its own change once a fixed domain or named tunnel exists.
+- An always-on host: the environments run while the laptop hosting Jenkins is on.
 
 This change belongs to **Iteration 1** (tasks I1-16, I1-42 and I1-45 in `docs/iteration-plan.md`).
 
@@ -101,7 +100,8 @@ None. `openspec/specs/` has no capabilities yet.
   - The `relay` worker also sends mail.
   - New settings: `QS_SIGNUP_ENABLED`, `QS_PUBLIC_APP_URL`, `QS_SMTP_*`, and the limits.
 - **Deploy:**
-  - A Mailpit container on DEV and TEST (about 30 MB of memory).
+  - An `api-tunnel` container per environment: a free Cloudflare quick tunnel giving its API a public HTTPS address, written to the site's `config.json` on every deploy and by `host.sh start`.
+  - An optional Mailpit container (profile `mailpit`) for working offline.
   - SMTP settings in the ACC and PROD env files, with the password in `deploy/secrets/{acc,prod}.enc.env`.
 - **Frontend (`frontend/`):**
   - `Login.tsx` changes.
@@ -112,5 +112,5 @@ None. `openspec/specs/` has no capabilities yet.
 - **Docs:**
   - Decisions recorded in the iteration plan.
   - The auth section of `docs/QuantSim_Tech_Stack_and_Implementation.md` is updated.
-  - `docs/ci-cd-team-guide.md` explains how to open Mailpit.
+  - `docs/ci-cd-team-guide.md` explains accounts, email and the public API address.
   - `docs/progress-log.md` is updated.

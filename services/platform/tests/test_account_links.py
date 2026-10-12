@@ -311,3 +311,87 @@ async def test_test_accounts_are_seeded_verified_and_can_be_reset(
         assert me["role"] == role
         assert me["email"] == f"alimazhar3005+qs-{role}@gmail.com"
         assert me["status"] == "active"
+
+
+# Changing your own password -------------------------------------------------------------
+
+
+async def test_changing_your_password_ends_other_sessions_and_keeps_this_one(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    other = (await try_login(client, "admin", ADMIN_PASSWORD)).json()
+    current = (await try_login(client, "admin", ADMIN_PASSWORD)).json()
+
+    changed = await client.post(
+        f"{API}/auth/change-password",
+        json={"current_password": ADMIN_PASSWORD, "new_password": "brand-new-password-1"},
+        headers=bearer(current["access_token"]),
+    )
+
+    assert changed.status_code == 200
+    fresh = changed.json()
+    me = await client.get(f"{API}/auth/me", headers=bearer(fresh["access_token"]))
+    assert me.status_code == 200
+    for old in (other, current):
+        refreshed = await client.post(
+            f"{API}/auth/refresh", json={"refresh_token": old["refresh_token"]}
+        )
+        assert refreshed.status_code == 401
+    assert (await try_login(client, "admin", ADMIN_PASSWORD)).status_code == 401
+    assert (await try_login(client, "admin", "brand-new-password-1")).status_code == 200
+    templates = [t for t, _ in await mails_to(database, "admin@quantsim.dev")]
+    assert templates == ["password_changed"]
+
+
+async def test_a_wrong_current_password_is_refused_and_counted(
+    client: httpx.AsyncClient,
+) -> None:
+    token = await login(client, "admin", ADMIN_PASSWORD)
+
+    for _ in range(3):
+        wrong = await client.post(
+            f"{API}/auth/change-password",
+            json={"current_password": "not-my-password", "new_password": "brand-new-password-1"},
+            headers=bearer(token),
+        )
+        assert wrong.status_code == 400
+        assert wrong.json()["detail"] == "The current password is incorrect."
+
+    # The test settings lock after 3 failures
+    assert (await try_login(client, "admin", ADMIN_PASSWORD)).status_code == 429
+
+
+async def test_changing_a_password_needs_a_session(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        f"{API}/auth/change-password",
+        json={"current_password": ADMIN_PASSWORD, "new_password": "brand-new-password-1"},
+    )
+
+    assert response.status_code == 401
+
+
+# Admins hear about pending sign-ups -----------------------------------------------------
+
+
+async def test_admins_are_emailed_when_a_quant_sign_up_waits_for_them(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    for account_type, email in (("quant", "sara@example.com"), ("viewer", "vera@example.com")):
+        await client.post(
+            f"{API}/auth/signup",
+            json={
+                "username": email.split("@")[0],
+                "email": email,
+                "password": "a-long-password-123",
+                "account_type": account_type,
+            },
+        )
+        link = await last_link(client, email, "verify_email")
+        await client.post(f"{API}/auth/verify-email", json={"token": link_token(link)})
+
+    notices = [
+        p for t, p in await mails_to(database, "admin@quantsim.dev") if t == "approval_needed"
+    ]
+    assert len(notices) == 1  # only the Quant needs approval
+    assert notices[0]["username"] == "sara"
+    assert notices[0]["link"].endswith("/admin/users")

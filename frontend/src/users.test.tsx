@@ -114,6 +114,37 @@ describe('the Users page', () => {
     expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /users/u2/approve')
   })
 
+  it('deactivates after confirming and reactivates a disabled user', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { calls } = fakeBackend({
+      'GET /users': () => json(200, { items: USERS, total: USERS.length }),
+      'POST /users/u4/deactivate': () => json(200, apiUser('u4', 'Vera Lee', 'viewer', 'disabled')),
+      'POST /users/u4/reactivate': () => json(200, apiUser('u4', 'Vera Lee', 'viewer', 'active')),
+    })
+    useDemoStore.getState().startSession(account('Admin'))
+    renderApp('/admin/users')
+    await screen.findByText('Vera Lee')
+
+    fireEvent.click(within(row('Vera Lee')).getByRole('button', { name: 'Deactivate' }))
+    await waitFor(() => expect(within(row('Vera Lee')).getByText('Disabled')).toBeInTheDocument())
+    fireEvent.click(within(row('Vera Lee')).getByRole('button', { name: 'Reactivate' }))
+    await waitFor(() => expect(within(row('Vera Lee')).getByText('Active')).toBeInTheDocument())
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(
+      expect.arrayContaining(['POST /users/u4/deactivate', 'POST /users/u4/reactivate']),
+    )
+  })
+
+  it('offers no Deactivate on your own row', async () => {
+    const me = { ...apiUser('u9', 'Admin User', 'admin', 'active'), email: 'admin.user@quantsim.dev' }
+    fakeBackend({ 'GET /users': () => json(200, { items: [...USERS, me], total: USERS.length + 1 }) })
+    useDemoStore.getState().startSession(account('Admin'))
+    renderApp('/admin/users')
+    await screen.findByText('Admin User')
+
+    expect(within(row('Admin User')).queryByRole('button', { name: 'Deactivate' })).not.toBeInTheDocument()
+    expect(within(row('Vera Lee')).getByRole('button', { name: 'Deactivate' })).toBeInTheDocument()
+  })
+
   it('invites a user without a password and adds an Invited row', async () => {
     const { calls } = fakeBackend({
       'GET /users': () => json(200, { items: USERS, total: USERS.length }),

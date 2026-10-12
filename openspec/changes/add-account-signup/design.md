@@ -12,7 +12,7 @@ The motivation is in proposal.md (Why). The platform service already has these p
 - the audit trigger on `users`;
 - `user.*` events through the transactional outbox, published by the `platform-relay` worker.
 
-Requests reach the platform through each environment's Traefik gateway. Today the deployed sites call the API on `localhost:8081-8084`, so every browser that can reach it is on the Jenkins laptop. The frontend's demo fallback is in `Login.tsx`.
+Requests reach the platform through each environment's Traefik gateway. A free Cloudflare quick tunnel per environment (`api-tunnel`) gives that gateway a public HTTPS address; the site reads it from `/config.json`, so browsers anywhere can sign in while the Jenkins host is on. Behind the tunnel the caller's address comes from `CF-Connecting-IP`. The frontend's demo fallback was in `Login.tsx`.
 
 ## Goals / Non-Goals
 
@@ -102,14 +102,13 @@ Rows older than 7 days are deleted after sending, because they contain links.
 ### D5. Mail transport per environment
 
 - **DEV and TEST:**
-  - A `mailpit` service (axllent/mailpit, MIT licence, pinned digest) joins the compose project on the backend network, with a 64 MB memory limit.
+  - Gmail as well, so real people can sign up there. An optional `mailpit` service (axllent/mailpit, MIT licence, pinned digest, profile `mailpit`) can catch mail instead when working offline.
   - Its web inbox is published on the host only: `127.0.0.1:8025` for DEV and `:8026` for TEST.
-  - The platform sends to `mailpit:1025` without auth. Nothing leaves the laptop.
 - **ACC and PROD:** Gmail SMTP, as the user chose.
   - `smtp.gmail.com:587` with STARTTLS.
   - `QS_SMTP_USERNAME` is the Gmail account; `QS_SMTP_PASSWORD` is its app password, kept in the SOPS secrets.
   - Gmail allows about 500 messages a day.
-- **Sender:** `QS_SMTP_FROM=QuantSim <alimazhar+QuantSim@gmail.com>` everywhere. Gmail accepts a `+` alias of the signed-in account as the From address.
+- **Sender:** `QS_SMTP_FROM=QuantSim <alimazhar3005+QuantSim@gmail.com>` everywhere, signing in as `alimazhar3005@gmail.com`. Gmail accepts a `+` alias of the signed-in account as the From address.
 - **Fail fast:** the platform refuses to start when `QS_EMAIL_REQUIRED=true` (ACC and PROD) and the SMTP host or password is missing.
 
 ### D6. Responses that reveal nothing
@@ -160,7 +159,7 @@ The downgrade drops the tables and the column. It refuses if any user has a NULL
 
 A `platform seed-test-users` CLI command creates or updates `test.admin`, `test.quant`, `test.analyst` and `test.viewer`:
 - They are verified and approved.
-- Their emails are `alimazhar+qs-<role>@gmail.com`, so any mail lands in the user's own inbox.
+- Their emails are `alimazhar3005+qs-<role>@gmail.com`, so any mail lands in the project inbox.
 - The passwords come from `TEST_USERS_PASSWORD` in the DEV and TEST encrypted secrets.
 
 The DEV and TEST deploy runs the command after migrating. ACC and PROD never run it.
@@ -183,8 +182,8 @@ The DEV and TEST deploy runs the command after migrating. ACC and PROD never run
 
 ## Risks / Trade-offs
 
-- **[Only the laptop running an environment can reach its API, because the sites call `localhost`.]** Verification links work for anyone on that laptop, but people on other machines cannot use the app at all yet. → This is out of scope here. It is listed in the proposal as the next infrastructure change: a named tunnel or fixed domain.
-- **[A Gmail sending account can be rate-limited or flagged by Google.]** → The outbox retries for 24 hours. Brevo works the same way, and switching is a settings change.
+- **[The environments are up only while the laptop hosting Jenkins is on, and a quick tunnel's address changes when it restarts.]** → Every deploy and `host.sh start` publish the current address to each site's `config.json`. An always-on server or a fixed domain removes this later.
+- **[A Gmail sending account can be rate-limited or flagged by Google.]** → The outbox retries for 24 hours. Another SMTP provider is a settings change.
 - **[Emails may land in spam without a domain of our own (no SPF or DKIM for pages.dev).]** → The check-email screen says to look in spam. A custom domain fixes this later.
 - **[A taken username is revealed by 409.]** → This is accepted, because usernames are visible to every signed-in user. The rate limit bounds probing.
 - **[Sign-up spam can create unverified rows.]** → The per-client limit, the 7-day expiry and the per-address mail cap bound it. Unverified rows cannot sign in.
@@ -195,7 +194,7 @@ The DEV and TEST deploy runs the command after migrating. ACC and PROD never run
 
 1. Migration `0003` ships in its own PR with `migration-check.sh` (upgrade, downgrade and upgrade again on a scratch database). Existing users stay able to sign in, because of the backfill.
 2. The platform PRs follow in order:
-   - links, outbox and sender, plus Mailpit on DEV and TEST;
+   - links, outbox and sender;
    - sign-up, resend and verify;
    - forgot and set password;
    - invitations.

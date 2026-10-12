@@ -227,3 +227,28 @@ The page SHALL check fields before sending and show the platform's errors on the
 - **GIVEN** a valid session
 - **WHEN** `/signup` or `/login` is opened
 - **THEN** the app goes to `/dashboard`
+
+### Requirement: Signed-in users change their own password
+
+A signed-in user SHALL be able to change their password from Settings → Security by giving the current password and a new one of 12-1024 characters, typed twice. The platform SHALL end every other session of the account, return a fresh session for the browser that made the change, and email the account "Your QuantSim password was changed" (FR-PLT-002, NFR-SEC-004). A wrong current password SHALL get 400 and count toward the sign-in lockout.
+
+#### Scenario: Change the password
+
+- **GIVEN** `sara.k` is signed in on two browsers
+- **WHEN** she changes her password in Settings → Security on one of them
+- **THEN** that browser stays signed in
+- **AND** the other browser's session is refused with 401
+- **AND** only the new password signs in from then on
+- **AND** a "password was changed" email is queued for her address
+
+#### Scenario: Wrong current password
+
+- **GIVEN** a signed-in user
+- **WHEN** they submit a current password that is not theirs
+- **THEN** the page shows "The current password is incorrect." and nothing changes
+- **AND** the failure counts toward the sign-in lockout
+
+#### Scenario: New passwords do not match
+
+- **WHEN** New password and Confirm password differ
+- **THEN** "Passwords do not match" is shown and nothing is sent

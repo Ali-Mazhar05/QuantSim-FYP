@@ -24,8 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from qs_platform.limits import RateLimiter, too_many
 from qs_platform.mail import queue_mail
 from qs_platform.models import account_tokens, users
-from qs_platform.passwords import hash_password
-from qs_platform.schemas import CreateUserRequest, SignUpRequest, UserOut
+from qs_platform.passwords import hash_password, verify_password
+from qs_platform.schemas import CreateUserRequest, SignUpRequest, TokenResponse, UserOut
 from qs_platform.service import UserService
 from qs_platform.settings import PlatformSettings
 from qs_template.audit import set_audit_context
@@ -270,7 +270,33 @@ class AccountService:
             )
             user = await self._users._get(session, user_id)
             await self._users._publish(session, "user.email_verified", user, user_id, {})
+            if user.approved_at is None:
+                await self._tell_admins(session, user)
         return user.approved_at is None
+
+    async def _tell_admins(self, session: AsyncSession, user: UserOut) -> None:
+        """Email every active admin that a verified sign-up waits for approval."""
+        admins = (
+            await session.execute(
+                select(users.c.email).where(
+                    users.c.role == Role.ADMIN.value,
+                    users.c.is_active,
+                    users.c.email_verified_at.is_not(None),
+                )
+            )
+        ).scalars()
+        for address in admins:
+            await self._mail(
+                session,
+                address,
+                "approval_needed",
+                {
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role.value.title(),
+                    "link": f"{self._settings.app_url}/admin/users",
+                },
+            )
 
     async def resend_verification(self, session: AsyncSession, email: str) -> None:
         row = (
@@ -337,6 +363,42 @@ class AccountService:
         )
         user = await self._users._get(session, user_id)
         await self._users._publish(session, "user.password_set", user, user_id, {})
+
+    async def change_password(
+        self, session: AsyncSession, user_id: uuid.UUID, current: str, new: str
+    ) -> TokenResponse | None:
+        """A signed-in user's own password change. Returns a fresh session, or None when
+        the current password is wrong (counted toward the lockout, committed by the
+        caller before reporting it). Every other session is ended."""
+        new_hash = hash_password(new)
+        row = (
+            await session.execute(select(users).where(users.c.id == user_id).with_for_update())
+        ).one_or_none()
+        if row is None or not row.is_active:
+            return None
+        if not verify_password(row.password_hash, current):
+            await self._users._record_failure(session, row, datetime.now(UTC))
+            return None
+        await self._users._revocations.revoke_user(user_id)
+        await self._users._revoke_user_sessions(session, user_id)
+        await session.execute(
+            update(users)
+            .where(users.c.id == user_id)
+            .values(
+                password_hash=new_hash, failed_logins=0, locked_until=None, updated_at=func.now()
+            )
+        )
+        user = await self._users._get(session, user_id)
+        await self._mail(
+            session,
+            user.email,
+            "password_changed",
+            {"username": user.username, "link": self._sign_in_link()},
+        )
+        await self._users._publish(
+            session, "user.password_set", user, user_id, {"source": "change"}
+        )
+        return await self._users._issue_tokens(session, user, uuid.uuid4())
 
     # Admin: invitations and approval -------------------------------------------------
 

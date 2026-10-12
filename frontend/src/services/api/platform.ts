@@ -177,6 +177,23 @@ export async function resendInvite(id: string): Promise<void> {
   await apiRequest(`${BASE}/users/${encodeURIComponent(id)}/resend-invite`, { method: 'POST' })
 }
 
+export async function deactivateUser(id: string): Promise<UserAccount> {
+  return toUserAccount(await apiRequest<ApiUser>(`${BASE}/users/${encodeURIComponent(id)}/deactivate`, { method: 'POST' }))
+}
+
+export async function reactivateUser(id: string): Promise<UserAccount> {
+  return toUserAccount(await apiRequest<ApiUser>(`${BASE}/users/${encodeURIComponent(id)}/reactivate`, { method: 'POST' }))
+}
+
+/** Change your own password. Every other session ends; this tab gets a fresh one. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const tokens = await apiRequest<{ access_token: string; refresh_token: string }>(`${BASE}/auth/change-password`, {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  })
+  setSession(tokens.access_token, tokens.refresh_token)
+}
+
 export async function changeRole(id: string, role: Role): Promise<UserAccount> {
   const user = await apiRequest<ApiUser>(`${BASE}/users/${encodeURIComponent(id)}/role`, {
     method: 'PUT',
