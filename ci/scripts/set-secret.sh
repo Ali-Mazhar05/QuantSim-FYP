@@ -29,6 +29,10 @@ key_file="${SOPS_AGE_KEY_FILE:-$REPO_ROOT/ci/jenkins/secrets/sops_age_key}"
 
 read -rsp "Value for $name: " value
 printf '\n'
+# A value piped from PowerShell may start with a byte-order mark and end with a carriage
+# return; neither is part of it
+value="${value#$'\xEF\xBB\xBF'}"
+value="${value//$'\r'/}"
 [[ -n "$value" ]] || die "empty value; nothing changed"
 # Gmail shows app passwords in groups of four; the spaces are not part of it
 [[ "$name" == "SMTP_PASSWORD" ]] && value="${value// /}"
