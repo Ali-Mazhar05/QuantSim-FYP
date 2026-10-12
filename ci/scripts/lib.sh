@@ -160,6 +160,33 @@ REDPANDA_IMAGE="redpandadata/redpanda:v25.2.9@sha256:bd6c35647153a4dbc19507c8037
 SOPS_IMAGE="ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea"
 TIMESCALE_IMAGE="timescale/timescaledb:2.22.1-pg17@sha256:fba60021a224479e174ae1ec577c1a0576d5185b09fe9e622f1d19e4bf5bab0d"
 
+# Public HTTPS address of an environment's API, from its tunnel; empty when it has none yet
+#   api_public_url <compose-project>
+api_public_url() {
+  docker run --rm --network "$1_default" --entrypoint wget "$NODE_IMAGE" \
+    -qO- --timeout=5 http://api-tunnel:2000/quicktunnel 2>/dev/null \
+    | sed -n 's/.*"hostname":"\([^"]*\)".*/https:\/\/\1/p' || true
+}
+
+# Waits until the tunnel has an address that reaches the platform API; restarts the tunnel
+# once if it has none after a minute (the first request to trycloudflare.com can time out)
+wait_for_api_url() {
+  local project=$1 url attempt
+  for attempt in $(seq 1 60); do
+    url="$(api_public_url "$project")"
+    if [[ -n "$url" ]] && curl -fsS --max-time 10 -o /dev/null "$url/api/platform/health"; then
+      printf '%s' "$url"
+      return 0
+    fi
+    if (( attempt == 30 )); then
+      log "no public API address yet; restarting the tunnel"
+      docker compose -p "$project" -f "$COMPOSE_FILE" restart api-tunnel >/dev/null 2>&1 || true
+    fi
+    sleep 3
+  done
+  return 1
+}
+
 # A name unique to this build, safe for Docker objects
 build_id() {
   printf '%s' "${BUILD_TAG:-local-$$}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'

@@ -68,4 +68,17 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
   done < <(component_names)
 fi
 
+# Browsers reach the API through its public address, from the site's config.json
+if [[ "$FRONTEND_TARGET" == "pages" && "$COMPOSE_TARGET" == "local" ]]; then
+  config_url="$(pages_url)/config.json"
+  log "checking the public API address published at $config_url"
+  public_api() {
+    local api
+    api="$(body_of "$config_url" | sed -n 's/.*"apiBaseUrl":"\([^"]*\)".*/\1/p')"
+    [[ -n "$api" ]] && body_of "$api/api/platform/health" >/dev/null
+  }
+  retry "$ATTEMPTS" "$DELAY" public_api || die "the website's API address does not reach the platform"
+  log "public API OK"
+fi
+
 log "smoke test passed for $env"

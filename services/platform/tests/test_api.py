@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from qs_platform.models import users
 from qs_template import Database
 from qs_template.messaging import outbox
-from tests.conftest import ADMIN_PASSWORD, bearer, login
+from tests.conftest import ADMIN_PASSWORD, bearer, invite_and_accept, login
 
 pytestmark = pytest.mark.db
 
@@ -23,18 +23,8 @@ async def admin_token(client: httpx.AsyncClient) -> str:
 async def create_user(
     client: httpx.AsyncClient, token: str, username: str, role: str = "quant", **extra: Any
 ) -> dict[str, Any]:
-    body = {
-        "username": username,
-        "email": f"{username}@quantsim.dev",
-        "display_name": username.title(),
-        "password": f"{username}-password-123",
-        "role": role,
-        **extra,
-    }
-    response = await client.post(f"{API}/users", json=body, headers=bearer(token))
-    assert response.status_code == 201, response.text
-    created: dict[str, Any] = response.json()
-    return created
+    """An active user with the password ``<username>-password-123``."""
+    return await invite_and_accept(client, token, username, role, **extra)
 
 
 async def events(database: Database) -> list[tuple[str, str]]:
@@ -143,7 +133,7 @@ async def test_duplicate_username_or_email_is_a_conflict(client: httpx.AsyncClie
     ):
         response = await client.post(
             f"{API}/users",
-            json={**body, "display_name": "x", "password": "long-enough-pass", "role": "viewer"},
+            json={**body, "display_name": "x", "role": "viewer"},
             headers=bearer(token),
         )
         assert response.status_code == 409
@@ -152,16 +142,10 @@ async def test_duplicate_username_or_email_is_a_conflict(client: httpx.AsyncClie
 @pytest.mark.parametrize(
     "body",
     [
-        {"username": "No Spaces", "email": "a@quantsim.dev", "password": "long-enough-pass"},
-        {"username": "ok", "email": "a@quantsim.dev", "password": "long-enough-pass"},
-        {"username": "okay", "email": "not-an-email", "password": "long-enough-pass"},
-        {"username": "okay", "email": "a@quantsim.dev", "password": "short"},
-        {
-            "username": "okay",
-            "email": "a@quantsim.dev",
-            "password": "long-enough-pass",
-            "role": "superuser",
-        },
+        {"username": "No Spaces", "email": "a@quantsim.dev"},
+        {"username": "ok", "email": "a@quantsim.dev"},
+        {"username": "okay", "email": "not-an-email"},
+        {"username": "okay", "email": "a@quantsim.dev", "role": "superuser"},
     ],
 )
 async def test_invalid_users_are_rejected(client: httpx.AsyncClient, body: dict[str, str]) -> None:
@@ -300,10 +284,12 @@ async def test_history_shows_who_changed_what_without_secrets(
 
     history = (await client.get(f"{API}/users/{sara['id']}/history", headers=bearer(token))).json()
 
-    assert [h["operation"] for h in history] == ["INSERT", "UPDATE", "UPDATE"]
-    assert {h["changed_by"] for h in history} == {admin_id}
-    assert history[1]["changes"]["role"] == {"from": "viewer", "to": "analyst"}
-    assert history[2]["changes"]["is_active"] == {"from": True, "to": False}
+    # Invited by the admin, password set by sara through her link, then changed by the admin
+    assert [h["operation"] for h in history] == ["INSERT", "UPDATE", "UPDATE", "UPDATE"]
+    assert [h["changed_by"] for h in history] == [admin_id, sara["id"], admin_id, admin_id]
+    assert "email_verified_at" in history[1]["changes"]
+    assert history[2]["changes"]["role"] == {"from": "viewer", "to": "analyst"}
+    assert history[3]["changes"]["is_active"] == {"from": True, "to": False}
     async with database.transaction() as session:
         raw = (await session.execute(text("SELECT old_data, new_data FROM audit_log"))).all()
     assert "argon2" not in str(raw)
