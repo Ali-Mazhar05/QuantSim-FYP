@@ -249,6 +249,9 @@ class UserService:
                         password_hash=hash_password(request.password),
                         role=request.role.value,
                         created_by=actor.user_id,
+                        email_verified_at=func.now(),
+                        approved_at=func.now(),
+                        approved_by=actor.user_id,
                     )
                     .returning(users.c.id)
                 )
@@ -453,5 +456,8 @@ async def create_first_admin(
             display_name="Administrator",
             password_hash=hash_password(password),
             role=Role.ADMIN.value,
+            # Set up by the operator: nothing to verify or approve
+            email_verified_at=func.now(),
+            approved_at=func.now(),
         )
     )
