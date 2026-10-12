@@ -6,8 +6,26 @@
 const SITE_PORTS: Record<string, number> = { develop: 8081, test: 8082, acceptance: 8083 }
 const REFRESH_KEY = 'qs.refresh_token'
 
+let runtimeApiBase: string | null = null
+
+/** Reads /config.json, which each deploy writes with the environment's public API
+ * address. Without it (local development) the address is derived from the hostname. */
+export async function loadRuntimeConfig(): Promise<void> {
+  try {
+    const response = await fetch('/config.json', { cache: 'no-store' })
+    if (!response.ok) return
+    const body: { apiBaseUrl?: unknown } = await response.json()
+    if (typeof body.apiBaseUrl === 'string' && body.apiBaseUrl) {
+      runtimeApiBase = body.apiBaseUrl.replace(/\/$/, '')
+    }
+  } catch {
+    // no config: fall back to the address derived from the hostname
+  }
+}
+
 /** Base URL of the backend gateway for the site this page was loaded from. */
 export function apiBaseUrl(): string {
+  if (runtimeApiBase) return runtimeApiBase
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined
   if (configured) return configured.replace(/\/$/, '')
   const host = window.location.hostname
