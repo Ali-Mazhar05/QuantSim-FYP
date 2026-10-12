@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
 import { useDemoStore } from '../../demo/demoState'
+import { useNotifications } from '../../demo/notifications'
+import { ApiError, ApiUnreachableError } from '../../services/api/client'
+import { signIn } from '../../services/api/platform'
 import type { Role } from '../../types'
 
 const ROLES: { role: Role; description: string }[] = [
@@ -16,18 +19,32 @@ const ROLES: { role: Role; description: string }[] = [
 export default function Login() {
   const navigate = useNavigate()
   const login = useDemoStore((s) => s.login)
+  const signInLive = useDemoStore((s) => s.signInLive)
+  const notify = useNotifications((s) => s.push)
   const [role, setRole] = useState<Role>('Quant')
   const [username, setUsername] = useState('quant.demo')
   const [password, setPassword] = useState('••••••••')
   const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
-    setTimeout(() => {
-      login(role)
+    try {
+      // Real sign-in: the account's role decides access; the picker can only preview
+      // that role or a lower one
+      signInLive(await signIn(username, password), role)
       navigate('/dashboard')
-    }, 500)
+    } catch (error) {
+      if (error instanceof ApiUnreachableError) {
+        // No backend reachable from this browser: keep the POC working on mock data
+        login(role)
+        notify('Backend not reachable from this browser; running in demo mode', 'info')
+        navigate('/dashboard')
+      } else {
+        notify(error instanceof ApiError ? error.message : 'Sign-in failed', 'warning')
+        setSubmitting(false)
+      }
+    }
   }
 
   return (
