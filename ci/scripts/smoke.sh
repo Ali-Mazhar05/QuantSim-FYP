@@ -72,7 +72,8 @@ fi
 if [[ "$COMPOSE_TARGET" == "local" && -n "${SMTP_HOST:-}" ]]; then
   log "checking that $QS_PROJECT can reach the mail server $SMTP_HOST:${SMTP_PORT:-587}"
   reaches_mail() {
-    docker compose -p "$QS_PROJECT" -f "$COMPOSE_FILE" exec -T platform-relay python -c       "import socket; socket.create_connection(('$SMTP_HOST', ${SMTP_PORT:-587}), 10).close()" >/dev/null 2>&1
+    docker exec "$QS_PROJECT-platform-relay-1" python -c \
+      "import socket; socket.create_connection(('$SMTP_HOST', ${SMTP_PORT:-587}), 10).close()" >/dev/null 2>&1
   }
   retry "$ATTEMPTS" "$DELAY" reaches_mail || die "the relay of $env cannot reach $SMTP_HOST"
   log "mail server reachable"
