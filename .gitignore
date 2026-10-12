@@ -35,6 +35,10 @@ ci/jenkins/secrets/*
 # CI scratch output
 .ci/
 
+# Personal BMAD settings (each member keeps their own)
+_bmad/config.user.toml
+_bmad/custom/config.user.toml
+
 # Shared hosting scratch files (host.sh)
 ci/jenkins/.state/
 
