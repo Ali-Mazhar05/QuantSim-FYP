@@ -4,9 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
-from qs_template.auth import Role
+from qs_template.auth import ROLE_CAPABILITIES, ROLE_RANK, Role
 
 USERNAME_PATTERN = r"^[a-z0-9._-]{3,40}$"
 
@@ -41,6 +41,28 @@ class UserOut(BaseModel):
     created_at: datetime
     last_login_at: datetime | None
     deactivated_at: datetime | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def status(self) -> Literal["active", "invited", "disabled"]:
+        """As the POC Users page shows it: invited means created but never signed in."""
+        if not self.is_active:
+            return "disabled"
+        return "active" if self.last_login_at else "invited"
+
+
+class MeOut(UserOut):
+    """The signed-in user, with what their role allows, so the UI shows exactly that."""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def capabilities(self) -> list[str]:
+        return sorted(c.value for c in ROLE_CAPABILITIES[self.role])
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def role_rank(self) -> int:
+        return ROLE_RANK[self.role]
 
 
 class CreateUserRequest(BaseModel):
