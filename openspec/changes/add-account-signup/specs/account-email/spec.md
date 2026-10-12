@@ -149,17 +149,17 @@ Every account email SHALL be written to a mail outbox in the same database trans
 
 ### Requirement: Each environment has its own mail transport
 
-DEV and TEST SHALL deliver every account email to that environment's local Mailpit inbox, which can be opened in a browser on the host, so no real email leaves the machine. Every environment's sender SHALL be `QuantSim <alimazhar+QuantSim@gmail.com>`. ACC and PROD SHALL send through the Gmail SMTP account set in their environment, with the SMTP password kept only in the encrypted secrets (NFR-SEC-003). Every link SHALL point at that environment's own website.
+Every environment SHALL send account email through the Gmail SMTP account set in its settings, as `QuantSim <alimazhar3005+QuantSim@gmail.com>`, with the SMTP password kept only in the encrypted secrets (NFR-SEC-003). Until the password is set, mail SHALL wait in the queue rather than be attempted. Every link SHALL point at that environment's own website.
 
 #### Scenario: A DEV sign-up
 
 - **WHEN** someone signs up on DEV
-- **THEN** the verification email appears in DEV's Mailpit inbox and in no other inbox
+- **THEN** the verification email is sent from `alimazhar3005+QuantSim@gmail.com` to the address given
 - **AND** its link opens `https://develop.quantsim-4hz.pages.dev/verify-email#...`
 
-#### Scenario: Missing SMTP settings on ACC
+#### Scenario: Missing SMTP settings
 
-- **GIVEN** ACC's SMTP host or password is not set
+- **GIVEN** an environment's SMTP host, username or password is not set
 - **WHEN** the platform starts
 - **THEN** it refuses to start with a message naming the missing setting, rather than accepting sign-ups it cannot email
 
@@ -180,7 +180,7 @@ The reset email SHALL be sent to the account's email address. It SHALL contain a
 
 - **GIVEN** an active user `sara.k` with email `sara@gmail.com`
 - **WHEN** she presses "Forgot password?" and submits `sara@gmail.com`
-- **THEN** an email from `alimazhar+QuantSim@gmail.com` reaches `sara@gmail.com`
+- **THEN** an email from `alimazhar3005+QuantSim@gmail.com` reaches `sara@gmail.com`
 - **AND** its "Change password" button opens `/set-password` with the token
 - **AND** setting a new password there lets her sign in with it
 

@@ -128,3 +128,39 @@ The web Users page SHALL show a role selector (Viewer, Analyst, Quant, Admin) in
 - **GIVEN** an admin previewing the app as Analyst from the top bar
 - **WHEN** they view any page
 - **THEN** no role selector is offered, because previewing shows exactly what that role sees
+
+### Requirement: Admins are emailed about sign-ups waiting for them
+
+When a Quant or Analyst sign-up verifies its email, the platform SHALL email every active admin, saying who signed up, with which email and role, and linking to the Users page. Viewer sign-ups SHALL send no such email.
+
+#### Scenario: A Quant verifies
+
+- **GIVEN** one active admin
+- **WHEN** `sara.k`, who signed up as `quant`, opens her verification link
+- **THEN** the admin gets "A QuantSim sign-up is waiting for your approval" with a "Review sign-ups" link to `/admin/users`
+
+#### Scenario: A Viewer verifies
+
+- **WHEN** a Viewer sign-up opens its verification link
+- **THEN** no approval email is sent to admins
+
+### Requirement: Admins deactivate and reactivate users from the Users page
+
+A holder of `manage_users` SHALL have these buttons on the Users page:
+- **Deactivate**, on active and invited rows except their own, after a confirmation;
+- **Reactivate**, on disabled rows.
+
+Rows SHALL change only from the platform's answer. A deactivated user's sessions SHALL end at once (FR-PLT-002), and the last active admin SHALL NOT be deactivated.
+
+#### Scenario: Deactivate and reactivate
+
+- **GIVEN** an admin on `/admin/users`
+- **WHEN** they press Deactivate on `vera`'s row and confirm
+- **THEN** the row shows Disabled and `vera` can no longer sign in
+- **WHEN** they press Reactivate on that row
+- **THEN** the row shows Active and `vera` can sign in again
+
+#### Scenario: No Deactivate on your own row
+
+- **WHEN** an admin views the Users page
+- **THEN** their own row has no Deactivate button

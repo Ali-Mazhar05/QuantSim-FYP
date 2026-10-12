@@ -96,6 +96,16 @@ Every group is one pull request:
 - [ ] 5.3 Once the user has set the Gmail app password, add the ACC and PROD SMTP settings and the encrypted password. Promote to acceptance and check that a reset email reaches a real Gmail inbox.
   - Done when `acceptance-signoff` is requested from the user. PROD promotion is the user's call.
 
+## 6. Completion (`feature/account-completion`)
+
+- [ ] 6.1 Add `POST /auth/change-password` for signed-in users, which ends other sessions, returns a fresh one and emails a notice. Add the "approval needed" email to admins when a Quant or Analyst verifies.
+  - Tests: change keeps this session and ends the others; a wrong current password → 400 and counted; anonymous → 401; only Quant and Analyst verifications email admins.
+  - Done when `python-ci.sh` is green.
+- [ ] 6.2 Add Settings → Security change-password form, and Deactivate and Reactivate on the Users page (none on your own row).
+  - Tests: `account-settings.test.tsx` and the new `users.test.tsx` cases.
+  - Done when `frontend-ci.sh` is green.
+- [ ] 6.3 Deploy through DEV, TEST, ACC and PROD, and check every account flow on each site with real email.
+
 ## Workflow follow-up
 
 - After the PROD release, archive with `openspec archive add-account-signup`.
