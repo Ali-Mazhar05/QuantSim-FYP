@@ -84,3 +84,77 @@ def test_models_match_the_migrations_exactly(migrated_url: str) -> None:
             await engine.dispose()
 
     assert asyncio.run(work()) == []
+
+
+def _alembic_config() -> Config:
+    config = Config(str(SERVICE_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(SERVICE_ROOT / "migrations"))
+    return config
+
+
+@pytest.fixture
+def empty_url() -> Iterator[str]:
+    base_url = os.environ["TEST_DATABASE_URL"]
+    name = f"platform_test_{uuid.uuid4().hex[:12]}"
+    asyncio.run(_autocommit(base_url, f'CREATE DATABASE "{name}"'))
+    url = make_url(base_url).set(database=name).render_as_string(hide_password=False)
+    previous = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = url
+    try:
+        yield url
+    finally:
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
+        asyncio.run(_autocommit(base_url, f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+
+
+async def _run(url: str, statement: str) -> list[Any]:
+    engine = create_async_engine(url)
+    try:
+        async with engine.begin() as connection:
+            result = await connection.execute(text(statement))
+            return list(result.all()) if result.returns_rows else []
+    finally:
+        await engine.dispose()
+
+
+def test_existing_users_stay_verified_and_approved_through_0003(empty_url: str) -> None:
+    config = _alembic_config()
+    command.upgrade(config, "0002")
+    asyncio.run(
+        _run(
+            empty_url,
+            "INSERT INTO users (username, email, display_name, password_hash, role)"
+            " VALUES ('old.user', 'old@example.com', 'Old', 'hash', 'quant')",
+        )
+    )
+    command.upgrade(config, "head")
+    rows = asyncio.run(
+        _run(
+            empty_url,
+            "SELECT email_verified_at = created_at, approved_at = created_at FROM users",
+        )
+    )
+    assert rows == [(True, True)]
+
+    # Down and up again leaves the same schema
+    command.downgrade(config, "0002")
+    command.upgrade(config, "head")
+
+
+def test_downgrade_below_0003_refuses_while_invited_users_have_no_password(
+    empty_url: str,
+) -> None:
+    config = _alembic_config()
+    command.upgrade(config, "head")
+    asyncio.run(
+        _run(
+            empty_url,
+            "INSERT INTO users (username, email, display_name, role)"
+            " VALUES ('invited', 'invited@example.com', 'Invited', 'viewer')",
+        )
+    )
+    with pytest.raises(RuntimeError, match="no password"):
+        command.downgrade(config, "0002")
