@@ -1,6 +1,10 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout'
 import { useDemoStore } from './demo/demoState'
+import { canOpen } from './demo/permissions'
+import { storedRefreshToken } from './services/api/client'
+import { resumeSession } from './services/api/platform'
 import Login from './pages/auth/Login'
 import Dashboard from './pages/dashboard/Dashboard'
 
@@ -48,7 +52,29 @@ import NotFound from './pages/other/NotFound'
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const authenticated = useDemoStore((s) => s.authenticated)
+  const role = useDemoStore((s) => s.role)
+  const signInLive = useDemoStore((s) => s.signInLive)
+  const { pathname } = useLocation()
+  // After a page reload, pick up the session this tab already had
+  const [resuming, setResuming] = useState(() => !authenticated && storedRefreshToken() !== null)
+
+  useEffect(() => {
+    if (!resuming) return
+    let cancelled = false
+    resumeSession().then((account) => {
+      if (cancelled) return
+      if (account) signInLive(account, account.role)
+      setResuming(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [resuming, signInLive])
+
+  if (resuming) return null
   if (!authenticated) return <Navigate to="/login" replace />
+  // Pages the role may not use are not reachable by URL either
+  if (!canOpen(role, pathname)) return <Navigate to="/dashboard" replace />
   return children
 }
 

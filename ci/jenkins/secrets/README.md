@@ -14,6 +14,10 @@ no trailing spaces.
 | `cloudflare_api_token` | API token with **Account → Cloudflare Pages → Edit** | Cloudflare dashboard → My Profile → API Tokens → Create Token |
 | `cloudflare_account_id` | Your Cloudflare account id | Cloudflare dashboard → Workers & Pages → Account ID |
 | `sops_age_key` | Jenkins' age private key; its public half is in `.sops.yaml` | Already generated. **Back it up** somewhere safe outside this machine |
+| `agent_ssh_key` (+ `.pub`) | Key the controller uses to reach the build agent | Created by `init-env.sh`; copy it along with the others when moving hosts |
+| `github_oauth_client_id`, `github_oauth_client_secret` | **CI server only:** GitHub sign-in for Jenkins | The OAuth App described in `ci/jenkins/README.md` |
+| `r2_access_key_id`, `r2_secret_access_key` | **Shared hosting only:** access to the `quantsim-ci` R2 bucket that holds the hand-over state and the host lease | Cloudflare → R2 → Manage API tokens (see `ci/jenkins/README.md`) |
+| `team_users` | **Laptop hosts:** one Jenkins account per team member, `username:password:role` per line (role `admin`, `approver` or `developer`); passwords at least 12 characters | Agreed by the team; see `ci/jenkins/README.md` |
 
 ## GitHub App
 
@@ -31,6 +35,12 @@ Jenkins needs the private key in PKCS#8 format:
 openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \
   -in quantsim-jenkins.<date>.private-key.pem -out github_app_key
 ```
+
+## Moving them to another host
+
+Copy the whole folder over a private channel (`scp`, an encrypted archive, a password
+manager), never through chat or git. Then run `ci/jenkins/init-env.sh` on the new host;
+it reports any file that is missing.
 
 ## After changing a secret
 

@@ -4,7 +4,9 @@
 // after a short simulated processing delay.
 
 import { create } from 'zustand'
+import type { SignedInUser } from '../services/api/platform'
 import type { RiskModuleKey, RiskModuleStatus, Role } from '../types'
+import { ROLE_RANK } from './permissions'
 
 export const FLOW_STEPS = [
   'IDLE',
@@ -56,7 +58,12 @@ const MODULE_STEP: Record<RiskModuleKey, FlowStep> = {
 
 interface DemoState {
   authenticated: boolean
+  /** 'live' when signed in against the backend; 'demo' on mock data (no backend reachable). */
+  mode: 'demo' | 'live'
+  /** The role shown and previewed: the account's own role or a lower one. */
   role: Role
+  /** The signed-in account (live mode only); its role is what the backend enforces. */
+  account: SignedInUser | null
   flowStep: FlowStep
   runningFullDemo: boolean
   systemActivityOpen: boolean
@@ -66,6 +73,7 @@ interface DemoState {
   alertModules: RiskModuleKey[]
   dismissedAlertIds: string[]
   login: (role: Role) => void
+  signInLive: (account: SignedInUser, preview: Role) => void
   logout: () => void
   setRole: (role: Role) => void
   advanceTo: (step: FlowStep) => void
@@ -83,7 +91,9 @@ interface DemoState {
 
 export const useDemoStore = create<DemoState>((set, get) => ({
   authenticated: false,
+  mode: 'demo',
   role: 'Quant',
+  account: null,
   flowStep: 'IDLE',
   runningFullDemo: false,
   systemActivityOpen: false,
@@ -91,9 +101,18 @@ export const useDemoStore = create<DemoState>((set, get) => ({
   riskQueue: [],
   alertModules: [],
   dismissedAlertIds: [],
-  login: (role) => set({ authenticated: true, role }),
-  logout: () => set({ authenticated: false }),
-  setRole: (role) => set({ role }),
+  login: (role) => set({ authenticated: true, mode: 'demo', account: null, role }),
+  signInLive: (account, preview) =>
+    set({
+      authenticated: true,
+      mode: 'live',
+      account,
+      // The sign-in picker can only preview the account's role or a lower one
+      role: ROLE_RANK[preview] <= ROLE_RANK[account.role] ? preview : account.role,
+    }),
+  logout: () => set({ authenticated: false, mode: 'demo', account: null }),
+  setRole: (role) =>
+    set((s) => (s.account && ROLE_RANK[role] > ROLE_RANK[s.account.role] ? s : { ...s, role })),
   // Progress only ever moves forward. Revisiting an earlier page must not rewind
   // the flow and wipe out work the user already completed.
   advanceTo: (step) =>

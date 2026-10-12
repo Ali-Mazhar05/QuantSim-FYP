@@ -13,8 +13,15 @@ release="${2:?usage: smoke.sh <env> <release-file>}"
 load_env "$env"
 load_release "$release"
 
-ATTEMPTS="${SMOKE_ATTEMPTS:-20}"
-DELAY="${SMOKE_DELAY:-3}"
+# Cloudflare Pages needs a few minutes to issue the HTTPS certificate for a new site or
+# branch alias, so Pages targets get up to 5 minutes; local stacks answer within a minute.
+if [[ "$FRONTEND_TARGET" == "pages" ]]; then
+  ATTEMPTS="${SMOKE_ATTEMPTS:-60}"
+  DELAY="${SMOKE_DELAY:-5}"
+else
+  ATTEMPTS="${SMOKE_ATTEMPTS:-20}"
+  DELAY="${SMOKE_DELAY:-3}"
+fi
 
 body_of() { curl -fsS --max-time 10 "$1"; }
 

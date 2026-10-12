@@ -1,0 +1,27 @@
+# uv workspace for every Python package in QuantSim: the shared service template in
+# libs/ and one project per backend service in services/. One lockfile (uv.lock) pins
+# every dependency for all of them.
+[tool.uv.workspace]
+members = ["libs/*", "services/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Every workspace project counts as first-party when sorting imports
+src = ["libs/*/src", "libs/*/tests", "services/*/src", "services/*/tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",        # pyflakes
+  "I",        # import order
+  "B",        # bugbear
+  "UP",       # modern syntax
+  "S",        # security
+  "ASYNC",    # async pitfalls
+  "RUF",
+]
+ignore = ["S101"]  # assert is how pytest checks
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106"]  # test fixtures use literal secrets
