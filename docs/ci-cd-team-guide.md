@@ -56,7 +56,7 @@ environment's first admin comes from its encrypted secrets.
   `api-tunnel` container). Every deploy writes it to the site's `/config.json`, and
   `host.sh start` publishes the new addresses after a restart, so the sites work from any
   computer while someone hosts.
-- Email goes out through Gmail as `alimazhar+QuantSim@gmail.com` in every environment. The
+- Email goes out through Gmail as `alimazhar3005+QuantSim@gmail.com` in every environment. The
   Gmail app password is `SMTP_PASSWORD` in the encrypted secrets; to change it, run
   `ci/scripts/set-secret.sh SMTP_PASSWORD all` and merge the changed secrets files. Without
   it, emails wait in the queue and go out once it is set.

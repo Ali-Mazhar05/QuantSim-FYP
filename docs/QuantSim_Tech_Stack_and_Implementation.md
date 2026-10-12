@@ -551,7 +551,7 @@ The steps above are the original plan; what runs today differs in these ways:
 - **Links** are 256-bit random tokens in the URL fragment, stored only as SHA-256 hashes in
   `account_tokens`, single-use (verify 24 h, invitation 72 h, reset 1 h).
 - **Email** is written to `mail_outbox` in the same transaction and sent by `platform-relay`
-  over SMTP through Gmail (`alimazhar+QuantSim@gmail.com`), retried for 24 hours. No paid
+  over SMTP through Gmail (`alimazhar3005+QuantSim@gmail.com`), retried for 24 hours. No paid
   email service is used.
 - **Reaching the API:** each environment's gateway has a public HTTPS address through a free
   Cloudflare quick tunnel; the website reads it from `/config.json`, written on every deploy.

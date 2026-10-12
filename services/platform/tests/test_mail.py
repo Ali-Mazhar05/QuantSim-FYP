@@ -65,7 +65,7 @@ async def test_due_mail_is_sent_once_with_the_sender_and_the_button_link(
     assert await sender.send_due() == 0
 
     (message,) = transport.sent
-    assert message["From"] == "QuantSim <alimazhar+QuantSim@gmail.com>"
+    assert message["From"] == "QuantSim <alimazhar3005+QuantSim@gmail.com>"
     assert message["To"] == "sara@gmail.com"
     assert message["Subject"] == "Change your QuantSim password"
     html = message.get_body(("html",))

@@ -296,9 +296,9 @@ async def test_test_accounts_are_seeded_verified_and_can_be_reset(
 ) -> None:
     service = accounts_service(redis)
     async with database.transaction() as session:
-        await service.seed_test_users(session, "test-users-pass-1", "alimazhar@gmail.com")
+        await service.seed_test_users(session, "test-users-pass-1", "alimazhar3005@gmail.com")
     async with database.transaction() as session:
-        await service.seed_test_users(session, "test-users-pass-2", "alimazhar@gmail.com")
+        await service.seed_test_users(session, "test-users-pass-2", "alimazhar3005@gmail.com")
 
     for name, role in (
         ("test.admin", "admin"),
@@ -309,5 +309,5 @@ async def test_test_accounts_are_seeded_verified_and_can_be_reset(
         token = await login(client, name, "test-users-pass-2")
         me = (await client.get(f"{API}/auth/me", headers=bearer(token))).json()
         assert me["role"] == role
-        assert me["email"] == f"alimazhar+qs-{role}@gmail.com"
+        assert me["email"] == f"alimazhar3005+qs-{role}@gmail.com"
         assert me["status"] == "active"

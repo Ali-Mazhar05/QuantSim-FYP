@@ -220,7 +220,7 @@ services:
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
-      # (Gmail as alimazhar+QuantSim@gmail.com in every environment)
+      # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
       QS_SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
       QS_PUBLIC_APP_URL: ${PUBLIC_APP_URL:?PUBLIC_APP_URL is the environment's website}
       QS_EMAIL_REQUIRED: ${EMAIL_REQUIRED:-false}
@@ -229,7 +229,7 @@ services:
       QS_SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
       QS_SMTP_USERNAME: ${SMTP_USERNAME:-}
       QS_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      QS_SMTP_FROM: ${SMTP_FROM:-QuantSim <alimazhar+QuantSim@gmail.com>}
+      QS_SMTP_FROM: ${SMTP_FROM:-QuantSim <alimazhar3005+QuantSim@gmail.com>}
     depends_on:
       postgres:
         condition: service_healthy
@@ -291,7 +291,7 @@ services:
       QS_BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD comes from the environment's secrets}
       # DEV and TEST only: test.admin, test.quant, test.analyst and test.viewer
       QS_TEST_USERS_PASSWORD: ${TEST_USERS_PASSWORD:-}
-      QS_TEST_USERS_EMAIL: ${TEST_USERS_EMAIL:-alimazhar@gmail.com}
+      QS_TEST_USERS_EMAIL: ${TEST_USERS_EMAIL:-alimazhar3005@gmail.com}
     networks:
       - backend
     entrypoint: ["sh", "-ec"]

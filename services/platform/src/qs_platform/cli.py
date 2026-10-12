@@ -147,7 +147,7 @@ async def _seed_test_users() -> int:
         log.error("test users are for DEV and TEST only", environment=settings.environment)
         return 1
     password = os.environ.get("QS_TEST_USERS_PASSWORD", "")
-    email = os.environ.get("QS_TEST_USERS_EMAIL", "alimazhar@gmail.com")
+    email = os.environ.get("QS_TEST_USERS_EMAIL", "alimazhar3005@gmail.com")
     if len(password) < 12:
         log.error("QS_TEST_USERS_PASSWORD must be at least 12 characters")
         return 1

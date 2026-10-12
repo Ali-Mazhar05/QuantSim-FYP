@@ -50,7 +50,7 @@ class PlatformSettings(ServiceSettings):
     smtp_security: Literal["starttls", "tls", "none"] = "starttls"
     smtp_username: str | None = None
     smtp_password: SecretStr | None = None
-    smtp_from: str = "QuantSim <alimazhar+QuantSim@gmail.com>"
+    smtp_from: str = "QuantSim <alimazhar3005+QuantSim@gmail.com>"
     # True where real mail must go out (ACC, PROD): refuse to start without SMTP settings
     email_required: bool = False
 
