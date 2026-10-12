@@ -9,7 +9,17 @@ import StatusPill from '../../components/status/StatusPill'
 import { useNotifications } from '../../demo/notifications'
 import { useCan } from '../../demo/useCan'
 import { ApiError } from '../../services/api/client'
-import { approveUser, changeRole, inviteUser, listUsers, rejectUser, resendInvite } from '../../services/api/platform'
+import { useDemoStore } from '../../demo/demoState'
+import {
+  approveUser,
+  changeRole,
+  deactivateUser,
+  inviteUser,
+  listUsers,
+  reactivateUser,
+  rejectUser,
+  resendInvite,
+} from '../../services/api/platform'
 import type { Role, UserAccount } from '../../types'
 import AuthField from '../auth/AuthField'
 import { emailProblem, errorMessage, usernameProblem } from '../auth/authShared'
@@ -31,6 +41,7 @@ export default function Users() {
   const canManage = useCan('manage_users')
   const canManageRoles = useCan('manage_roles')
   const notify = useNotifications((s) => s.push)
+  const me = useDemoStore((s) => s.account)
   const [rows, setRows] = useState<UserAccount[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -70,6 +81,13 @@ export default function Users() {
       return
     }
     void act(row, () => changeRole(row.id, role), `${row.name} is now ${role}`)
+  }
+
+  const onDeactivate = (row: UserAccount) => {
+    if (!window.confirm(`Deactivate ${row.name}? They are signed out everywhere and cannot sign in until reactivated.`)) {
+      return
+    }
+    void act(row, () => deactivateUser(row.id), `${row.name} is deactivated`)
   }
 
   const pendingCount = rows.filter((r) => r.status === 'Pending').length
@@ -146,6 +164,21 @@ export default function Users() {
               onClick={() => act(r, () => resendInvite(r.id), `Invitation sent again to ${r.email}`)}
             >
               Resend invite
+            </Button>
+          )}
+          {(r.status === 'Active' || r.status === 'Invited') && r.email !== me?.email && (
+            <Button size="sm" variant="ghost" disabled={busy === r.id} onClick={() => onDeactivate(r)}>
+              Deactivate
+            </Button>
+          )}
+          {r.status === 'Disabled' && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy === r.id}
+              onClick={() => act(r, () => reactivateUser(r.id), `${r.name} is reactivated`)}
+            >
+              Reactivate
             </Button>
           )}
         </div>
