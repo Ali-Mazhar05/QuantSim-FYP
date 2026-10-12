@@ -263,7 +263,9 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    # default: outbound access for sending account email (SMTP); backend: database and broker
     networks:
+      - default
       - backend
     read_only: true
     tmpfs:
