@@ -3,7 +3,7 @@
 Public:  POST /auth/login, /auth/refresh, /auth/logout, /auth/signup, /auth/verify-email,
          /auth/resend-verification, /auth/forgot-password, /auth/reset-password,
          GET /.well-known/jwks.json
-Signed-in users:  GET /auth/me (with the role's capabilities)
+Signed-in users:  GET /auth/me (with the role's capabilities), POST /auth/change-password
 manage_users:  list, invite, read, deactivate and reactivate users; approve or reject
                sign-ups waiting for approval; resend an invitation
 manage_roles:  change a user's role
@@ -21,6 +21,7 @@ from qs_platform.accounts import CHECK_EMAIL, LINK_SENT, AccountService
 from qs_platform.keys import SigningKeys
 from qs_platform.schemas import (
     AuditEntryOut,
+    ChangePasswordRequest,
     ChangeRoleRequest,
     CreateUserRequest,
     EmailRequest,
@@ -207,6 +208,33 @@ def build_routers(
         async with database.transaction() as session:
             await accounts.set_password(session, body.token, body.password)
         return PasswordSetOut()
+
+    @public.post("/auth/change-password", responses={400: {}, 401: {}})
+    async def change_password(
+        body: ChangePasswordRequest,
+        request: Request,
+        response: Response,
+        principal: Annotated[Principal, Depends(auth.principal)],
+    ) -> TokenResponse:
+        """Change your own password; every other session ends and a new one is returned."""
+        async with database.transaction() as session:
+            await set_audit_context(
+                session,
+                user_id=principal.user_id,
+                request_id=getattr(request.state, "request_id", None),
+            )
+            token = await accounts.change_password(
+                session, principal.user_id, body.current_password, body.new_password
+            )
+        if token is None:
+            raise ServiceError(
+                400,
+                "Wrong password",
+                "The current password is incorrect.",
+                type_="urn:quantsim:problem:wrong-password",
+            )
+        response.headers["Cache-Control"] = "no-store"
+        return token
 
     @public.get("/.well-known/jwks.json")
     async def jwks(response: Response) -> dict[str, object]:

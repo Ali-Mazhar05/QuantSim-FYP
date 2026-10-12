@@ -46,6 +46,7 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("GET", "/health"): EVERYONE,
     ("GET", "/ready"): EVERYONE,
     ("GET", "/auth/me"): SIGNED_IN,
+    ("POST", "/auth/change-password"): SIGNED_IN,
     ("GET", "/users"): frozenset({Role.ADMIN}),
     ("POST", "/users"): frozenset({Role.ADMIN}),
     ("GET", "/users/{user_id}"): frozenset({Role.ADMIN}),
@@ -99,6 +100,8 @@ def body_for(method: str, path: str, username: str) -> dict[str, Any] | None:
         return {"email": "nobody@quantsim.dev"}
     if path == "/auth/verify-email":
         return {"token": "x" * 43}
+    if path == "/auth/change-password":
+        return {"current_password": "wrong", "new_password": "a-long-password-123"}
     if path == "/auth/reset-password":
         return {"token": "x" * 43, "password": "a-long-password-123"}
     return None

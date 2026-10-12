@@ -73,6 +73,20 @@ TEMPLATES: dict[str, Template] = {
         "The link works once and expires in 1 hour. Changing the password signs you out "
         "everywhere. If you did not ask for this, ignore this email.",
     ),
+    "approval_needed": Template(
+        "A QuantSim sign-up is waiting for your approval",
+        "{username} ({email}) signed up as {role} and verified their email. They can sign "
+        "in once an administrator approves the account.",
+        "Review sign-ups",
+        "Approve or reject it on the Users page.",
+    ),
+    "password_changed": Template(
+        "Your QuantSim password was changed",
+        "Hi {username}, the password of your QuantSim account was just changed and every "
+        "other session was signed out.",
+        "Sign in",
+        'If this was not you, use "Forgot password?" on the sign-in page right away.',
+    ),
     "approved": Template(
         "Your QuantSim account is approved",
         "Hi {username}, an administrator approved your {role} account. You can sign in now.",
