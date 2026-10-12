@@ -68,6 +68,16 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
   done < <(component_names)
 fi
 
+# The relay sends account email; it must be able to open a connection to the mail server
+if [[ "$COMPOSE_TARGET" == "local" && -n "${SMTP_HOST:-}" ]]; then
+  log "checking that $QS_PROJECT can reach the mail server $SMTP_HOST:${SMTP_PORT:-587}"
+  reaches_mail() {
+    docker compose -p "$QS_PROJECT" -f "$COMPOSE_FILE" exec -T platform-relay python -c       "import socket; socket.create_connection(('$SMTP_HOST', ${SMTP_PORT:-587}), 10).close()" >/dev/null 2>&1
+  }
+  retry "$ATTEMPTS" "$DELAY" reaches_mail || die "the relay of $env cannot reach $SMTP_HOST"
+  log "mail server reachable"
+fi
+
 # Browsers reach the API through its public address, from the site's config.json
 if [[ "$FRONTEND_TARGET" == "pages" && "$COMPOSE_TARGET" == "local" ]]; then
   config_url="$(pages_url)/config.json"
