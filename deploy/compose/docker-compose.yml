@@ -212,6 +212,7 @@ services:
     image: ${PLATFORM_IMAGE:?PLATFORM_IMAGE comes from the release file}
     environment: &platform-env
       QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
       QS_DATABASE_URL: postgresql+asyncpg://platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/platform
       QS_REDIS_URL: redis://redis:6379/0
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
