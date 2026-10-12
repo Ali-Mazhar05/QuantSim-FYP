@@ -79,7 +79,8 @@ async def _relay() -> None:
     log = get_logger(__name__)
     sender: MailSender | None = None
     # Gmail needs its account and app password; until both are set mail stays queued
-    if settings.smtp_host and (settings.smtp_username or settings.smtp_security == "none"):
+    signs_in = bool(settings.smtp_username and settings.smtp_password)
+    if settings.smtp_host and (signs_in or settings.smtp_security == "none"):
         sender = MailSender(database, settings, smtp_transport(settings))
     else:
         log.warning("outgoing mail is not configured; account emails stay queued")

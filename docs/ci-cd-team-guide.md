@@ -49,18 +49,20 @@ environment's first admin comes from its encrypted secrets.
   `AUTO_APPROVE=true` is set for that environment (section 7).
 
 **Accounts and email in each environment:**
-- People sign up on the website. Viewers can sign in once they open the emailed link; Quant
-  and Analyst accounts also wait until an admin presses Approve on the Users page.
-- DEV and TEST never send real email. Every email (verification, password reset,
-  invitation, approval) lands in that environment's **Mailpit** inbox on the Jenkins host:
-  http://localhost:8025 for DEV and http://localhost:8026 for TEST. Open it there to click
-  the links.
+- Anyone can sign up on any of the four websites. Viewers can sign in once they open the
+  emailed link; Quant and Analyst accounts also wait until an admin presses Approve on the
+  Users page.
+- Each environment's API has a public HTTPS address (a free Cloudflare quick tunnel, the
+  `api-tunnel` container). Every deploy writes it to the site's `/config.json`, and
+  `host.sh start` publishes the new addresses after a restart, so the sites work from any
+  computer while someone hosts.
+- Email goes out through Gmail as `alimazhar+QuantSim@gmail.com` in every environment. The
+  Gmail app password is `SMTP_PASSWORD` in the encrypted secrets; to change it, run
+  `ci/scripts/set-secret.sh SMTP_PASSWORD all` and merge the changed secrets files. Without
+  it, emails wait in the queue and go out once it is set.
 - DEV and TEST also have four test accounts, re-created on every deploy: `test.admin`,
   `test.quant`, `test.analyst` and `test.viewer`. Their password is in the encrypted
   secrets (`TEST_USERS_PASSWORD`); ask Ali.
-- ACC and PROD send real email through Gmail as `alimazhar+QuantSim@gmail.com` once the
-  sending account is configured (`SMTP_USERNAME` in the env file, `SMTP_PASSWORD` in the
-  secrets). Until then their emails wait in the queue and go out once it is set.
 
 Other branches:
 - `develop-poc`: the original proof of concept, frozen. **Never touch it.**

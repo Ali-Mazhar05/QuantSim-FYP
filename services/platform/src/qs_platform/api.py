@@ -44,8 +44,12 @@ from qs_template.auth import Authenticator, Capability, Principal
 
 
 def client_address(request: Request) -> str:
-    """The caller's address as this environment's gateway saw it: Traefik appends it as
-    the last X-Forwarded-For entry, which a caller cannot replace."""
+    """The caller's address. Through the public tunnel, Cloudflare's edge sets
+    CF-Connecting-IP (a caller cannot choose it); on the host, Traefik appends the caller
+    as the last X-Forwarded-For entry."""
+    cloudflare = request.headers.get("cf-connecting-ip", "").strip()
+    if cloudflare:
+        return cloudflare
     forwarded = request.headers.get("x-forwarded-for", "")
     last = forwarded.split(",")[-1].strip()
     if last:

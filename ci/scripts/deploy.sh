@@ -62,6 +62,12 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
 
   log "starting $QS_PROJECT"
   "${compose[@]}" "${profiles[@]}" up -d --wait --wait-timeout 180 --remove-orphans
+
+  # The website reads this address from its config.json (pages-deploy.sh)
+  API_PUBLIC_URL="$(wait_for_api_url "$QS_PROJECT")" \
+    || die "the API of $env has no public address; check the $QS_PROJECT-api-tunnel-1 logs"
+  export API_PUBLIC_URL
+  log "public API address of $env: $API_PUBLIC_URL"
 fi
 
 if [[ "$FRONTEND_TARGET" == "pages" ]]; then

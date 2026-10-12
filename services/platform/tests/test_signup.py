@@ -423,3 +423,32 @@ async def test_a_deactivated_account_and_an_unknown_email_look_the_same(
 
     assert deactivated.status_code == unknown.status_code == 401
     assert deactivated.json()["detail"] == unknown.json()["detail"]
+
+
+async def test_behind_the_tunnel_each_visitor_gets_their_own_limit(
+    client: httpx.AsyncClient,
+) -> None:
+    # Through the tunnel every request comes from the same proxy, but Cloudflare's edge
+    # names the real visitor in CF-Connecting-IP
+    proxy = {"X-Forwarded-For": "172.18.0.9"}
+    for n in range(10):
+        response = await client.post(
+            f"{API}/auth/signup",
+            json=signup_body(username=f"user{n}", email=f"user{n}@example.com"),
+            headers={**proxy, "CF-Connecting-IP": "203.0.113.5"},
+        )
+        assert response.status_code == 202
+
+    blocked = await client.post(
+        f"{API}/auth/signup",
+        json=signup_body(username="user10", email="user10@example.com"),
+        headers={**proxy, "CF-Connecting-IP": "203.0.113.5"},
+    )
+    other = await client.post(
+        f"{API}/auth/signup",
+        json=signup_body(username="user11", email="user11@example.com"),
+        headers={**proxy, "CF-Connecting-IP": "198.51.100.7"},
+    )
+
+    assert blocked.status_code == 429
+    assert other.status_code == 202
