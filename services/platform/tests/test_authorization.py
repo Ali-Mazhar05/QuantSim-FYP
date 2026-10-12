@@ -10,11 +10,20 @@ import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 
+from qs_platform.limits import RateLimiter
 from qs_platform.main import build_app
 from qs_template import Database
 from qs_template.auth import ROLE_CAPABILITIES, Role
 from qs_template.revocation import RevocationList
-from tests.conftest import ADMIN_PASSWORD, bearer, login, make_settings
+from tests.conftest import (
+    ADMIN_PASSWORD,
+    bearer,
+    invite_and_accept,
+    last_link,
+    link_token,
+    login,
+    make_settings,
+)
 
 pytestmark = pytest.mark.db
 
@@ -28,6 +37,11 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("POST", "/auth/login"): EVERYONE,
     ("POST", "/auth/refresh"): EVERYONE,
     ("POST", "/auth/logout"): EVERYONE,
+    ("POST", "/auth/signup"): EVERYONE,
+    ("POST", "/auth/verify-email"): EVERYONE,
+    ("POST", "/auth/resend-verification"): EVERYONE,
+    ("POST", "/auth/forgot-password"): EVERYONE,
+    ("POST", "/auth/reset-password"): EVERYONE,
     ("GET", "/.well-known/jwks.json"): EVERYONE,
     ("GET", "/health"): EVERYONE,
     ("GET", "/ready"): EVERYONE,
@@ -37,6 +51,9 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("GET", "/users/{user_id}"): frozenset({Role.ADMIN}),
     ("POST", "/users/{user_id}/deactivate"): frozenset({Role.ADMIN}),
     ("POST", "/users/{user_id}/reactivate"): frozenset({Role.ADMIN}),
+    ("POST", "/users/{user_id}/approve"): frozenset({Role.ADMIN}),
+    ("POST", "/users/{user_id}/reject"): frozenset({Role.ADMIN}),
+    ("POST", "/users/{user_id}/resend-invite"): frozenset({Role.ADMIN}),
     ("PUT", "/users/{user_id}/role"): frozenset({Role.ADMIN}),
     ("GET", "/users/{user_id}/history"): frozenset({Role.ADMIN}),
 }
@@ -44,7 +61,8 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
 
 def platform_routes() -> set[tuple[str, str]]:
     """Every API route, from the app's own OpenAPI document (it lists every operation)."""
-    app = build_app(make_settings(), revocations=RevocationList(FakeAsyncRedis()))
+    redis = FakeAsyncRedis()
+    app = build_app(make_settings(), revocations=RevocationList(redis), limiter=RateLimiter(redis))
     found = set()
     for path, operations in app.openapi()["paths"].items():
         for method in operations:
@@ -62,7 +80,6 @@ def body_for(method: str, path: str, username: str) -> dict[str, Any] | None:
             "username": f"new.{username}",
             "email": f"new.{username}@quantsim.dev",
             "display_name": "New",
-            "password": "a-long-password-123",
             "role": "viewer",
         }
     if path.endswith("/role"):
@@ -71,6 +88,19 @@ def body_for(method: str, path: str, username: str) -> dict[str, Any] | None:
         return {"username": "nobody", "password": "x"}
     if path in ("/auth/refresh", "/auth/logout"):
         return {"refresh_token": "x" * 43}
+    if path == "/auth/signup":
+        return {
+            "username": f"signup.{username}",
+            "email": f"signup.{username}@quantsim.dev",
+            "password": "a-long-password-123",
+            "account_type": "viewer",
+        }
+    if path in ("/auth/resend-verification", "/auth/forgot-password"):
+        return {"email": "nobody@quantsim.dev"}
+    if path == "/auth/verify-email":
+        return {"token": "x" * 43}
+    if path == "/auth/reset-password":
+        return {"token": "x" * 43, "password": "a-long-password-123"}
     return None
 
 
@@ -80,18 +110,7 @@ async def tokens(client: httpx.AsyncClient) -> dict[Role, str]:
     result = {Role.ADMIN: admin}
     for role in (Role.QUANT, Role.ANALYST, Role.VIEWER):
         name = f"{role.value}.user"
-        response = await client.post(
-            f"{API}/users",
-            json={
-                "username": name,
-                "email": f"{name}@quantsim.dev",
-                "display_name": name,
-                "password": f"{name}-password-123",
-                "role": role.value,
-            },
-            headers=bearer(admin),
-        )
-        assert response.status_code == 201, response.text
+        await invite_and_accept(client, admin, name, role.value)
         result[role] = await login(client, name, f"{name}-password-123")
     return result
 
@@ -151,7 +170,7 @@ async def test_me_returns_the_role_and_its_capabilities(
     assert "manage_users" in admin["capabilities"]
 
 
-async def test_user_status_is_shown_as_the_poc_users_page_expects(
+async def test_user_status_is_shown_as_the_users_page_expects(
     client: httpx.AsyncClient, tokens: dict[Role, str]
 ) -> None:
     admin = tokens[Role.ADMIN]
@@ -161,7 +180,6 @@ async def test_user_status_is_shown_as_the_poc_users_page_expects(
             "username": "fresh",
             "email": "fresh@quantsim.dev",
             "display_name": "Fresh",
-            "password": "fresh-password-123",
             "role": "viewer",
         },
         headers=bearer(admin),
@@ -169,9 +187,13 @@ async def test_user_status_is_shown_as_the_poc_users_page_expects(
     fresh = created.json()
     assert fresh["status"] == "invited"
 
-    await login(client, "fresh", "fresh-password-123")
-    signed_in = await client.get(f"{API}/users/{fresh['id']}", headers=bearer(admin))
-    assert signed_in.json()["status"] == "active"
+    link = await last_link(client, "fresh@quantsim.dev", "invite")
+    await client.post(
+        f"{API}/auth/reset-password",
+        json={"token": link_token(link), "password": "fresh-password-123"},
+    )
+    accepted = await client.get(f"{API}/users/{fresh['id']}", headers=bearer(admin))
+    assert accepted.json()["status"] == "active"
 
     await client.post(f"{API}/users/{fresh['id']}/deactivate", headers=bearer(admin))
     disabled = await client.get(f"{API}/users/{fresh['id']}", headers=bearer(admin))

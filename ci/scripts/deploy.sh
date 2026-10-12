@@ -40,6 +40,7 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
 
   profiles=()
   [[ "$FRONTEND_TARGET" == "compose" ]] && profiles+=(--profile frontend)
+  [[ "${MAILPIT:-false}" == "true" ]] && profiles+=(--profile mailpit)
 
   compose=(docker compose -p "$QS_PROJECT" -f "$COMPOSE_FILE"
            --env-file "$(env_file "$env")" --env-file "$release" "${secrets_args[@]}")

@@ -1,8 +1,10 @@
 """User and session rules of the Platform service (FR-PLT-001..005, FR-PLT-008).
 
-- Sign-in checks the password with Argon2id, locks an account for a while after repeated
-  failures, and gives the same answer for unknown users, wrong passwords and deactivated
-  accounts, so it never reveals which usernames exist.
+- Sign-in takes a username or an email, checks the password with Argon2id, locks an
+  account for a while after repeated failures, and gives the same answer for unknown
+  users, wrong passwords and deactivated accounts, so it never reveals which exist. Only
+  after a correct password does it say that the email is unverified or that an admin
+  has not approved the account yet.
 - Every change to a user is published as an event through the outbox in the same
   transaction, and recorded in the audit trail by the database.
 - Deactivation and role changes revoke the user's existing tokens in every service.
@@ -18,8 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Row, func, insert, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Row, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_platform.keys import SigningKeys
@@ -27,7 +28,6 @@ from qs_platform.models import refresh_tokens, users
 from qs_platform.passwords import hash_password, needs_rehash, verify_password
 from qs_platform.schemas import (
     AuditEntryOut,
-    CreateUserRequest,
     TokenResponse,
     UserList,
     UserOut,
@@ -66,6 +66,8 @@ _HISTORY_COLUMNS = (
     "is_active",
     "deactivated_at",
     "locked_until",
+    "email_verified_at",
+    "approved_at",
 )
 
 
@@ -82,6 +84,9 @@ class LoginOutcome:
 
     token: TokenResponse | None = None
     locked_seconds: int | None = None
+    # Correct password, but the account cannot sign in yet
+    email_unverified: bool = False
+    pending_role: Role | None = None
 
 
 class UserService:
@@ -96,10 +101,17 @@ class UserService:
 
     async def login(self, session: AsyncSession, username: str, password: str) -> LoginOutcome:
         now = datetime.now(UTC)
+        # A username cannot contain "@", so at most one account matches either way
+        identifier = username.strip().lower()
         row = (
             await session.execute(
                 select(users)
-                .where(func.lower(users.c.username) == username.strip().lower())
+                .where(
+                    or_(
+                        func.lower(users.c.username) == identifier,
+                        func.lower(users.c.email) == identifier,
+                    )
+                )
                 .with_for_update()
             )
         ).one_or_none()
@@ -117,6 +129,12 @@ class UserService:
             return LoginOutcome()
         if not row.is_active:
             return LoginOutcome()
+        if row.email_verified_at is None:
+            await self._clear_failures(session, row.id)
+            return LoginOutcome(email_unverified=True)
+        if row.approved_at is None:
+            await self._clear_failures(session, row.id)
+            return LoginOutcome(pending_role=Role(row.role))
 
         changes: dict[str, Any] = {"failed_logins": 0, "locked_until": None, "last_login_at": now}
         if needs_rehash(row.password_hash):
@@ -124,6 +142,11 @@ class UserService:
         await session.execute(update(users).where(users.c.id == row.id).values(**changes))
         user = await self._get(session, row.id)
         return LoginOutcome(token=await self._issue_tokens(session, user, uuid.uuid4()))
+
+    async def _clear_failures(self, session: AsyncSession, user_id: uuid.UUID) -> None:
+        await session.execute(
+            update(users).where(users.c.id == user_id).values(failed_logins=0, locked_until=None)
+        )
 
     # Sessions ------------------------------------------------------------------------
 
@@ -234,38 +257,6 @@ class UserService:
         )
 
     # Users ---------------------------------------------------------------------------
-
-    async def create_user(
-        self, session: AsyncSession, actor: Principal, request: CreateUserRequest
-    ) -> UserOut:
-        try:
-            user_id = (
-                await session.execute(
-                    insert(users)
-                    .values(
-                        username=request.username,
-                        email=str(request.email),
-                        display_name=request.display_name,
-                        password_hash=hash_password(request.password),
-                        role=request.role.value,
-                        created_by=actor.user_id,
-                        email_verified_at=func.now(),
-                        approved_at=func.now(),
-                        approved_by=actor.user_id,
-                    )
-                    .returning(users.c.id)
-                )
-            ).scalar_one()
-        except IntegrityError as exc:
-            raise ServiceError(
-                409,
-                "User already exists",
-                "That username or email is already in use.",
-                type_="urn:quantsim:problem:conflict",
-            ) from exc
-        user = await self._get(session, user_id)
-        await self._publish(session, "user.created", user, actor, {"role": user.role.value})
-        return user
 
     async def list_users(
         self, session: AsyncSession, *, include_inactive: bool, limit: int, offset: int
@@ -411,9 +402,11 @@ class UserService:
         session: AsyncSession,
         event_type: str,
         user: UserOut,
-        actor: Principal,
+        actor: Principal | uuid.UUID | None,
         data: dict[str, Any],
     ) -> None:
+        if isinstance(actor, Principal):
+            actor = actor.user_id
         await add_event(
             session,
             EventEnvelope(
@@ -425,7 +418,7 @@ class UserService:
                     "user_id": str(user.id),
                     "username": user.username,
                     "is_active": user.is_active,
-                    "actor_id": str(actor.user_id),
+                    "actor_id": str(actor) if actor else None,
                     **data,
                 },
             ),
