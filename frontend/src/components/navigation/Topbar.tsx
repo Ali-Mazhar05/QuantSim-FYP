@@ -5,11 +5,8 @@ import { useDemoStore } from '../../demo/demoState'
 import { rolesUpTo } from '../../demo/permissions'
 import { useRiskAlerts } from '../../demo/useRiskAlerts'
 import { signOut } from '../../services/api/platform'
-import type { Role } from '../../types'
 import { MARKET_ENVIRONMENTS } from '../../services/mock/data'
 import StatusPill from '../status/StatusPill'
-
-const ROLES: Role[] = ['Viewer', 'Analyst', 'Quant', 'Admin']
 
 export default function Topbar() {
   const navigate = useNavigate()
@@ -18,17 +15,15 @@ export default function Topbar() {
   const logout = useDemoStore((s) => s.logout)
   const account = useDemoStore((s) => s.account)
   // A signed-in account may preview its own role or a lower one, never a higher one
-  const previewRoles = account ? rolesUpTo(account.role) : ROLES
-  const profileName = account?.name ?? 'Awais'
-  const profileEmail = account?.email ?? 'Awais@powerbanclending.com'
-  const initials = account
-    ? account.name
-        .split(/\s+/)
-        .map((part) => part[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
-    : 'AM'
+  const previewRoles = account ? rolesUpTo(account.role) : []
+  const profileName = account?.name ?? ''
+  const profileEmail = account?.email ?? ''
+  const initials = (account?.name ?? '')
+    .split(/\s+/)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
   const flowStep = useDemoStore((s) => s.flowStep)
   const { active: activeAlerts } = useRiskAlerts()
   const toggleSystemActivity = useDemoStore((s) => s.toggleSystemActivity)
@@ -153,7 +148,7 @@ export default function Topbar() {
                     r === role ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]' : 'text-[var(--color-text-secondary)] hover:bg-black/5'
                   }`}
                 >
-                  Demo as {r}
+                  Preview as {r}
                 </button>
               ))}
             </div>

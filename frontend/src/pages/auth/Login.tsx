@@ -1,122 +1,160 @@
-import clsx from 'clsx'
-import { Radar } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
 import { useDemoStore } from '../../demo/demoState'
-import { useNotifications } from '../../demo/notifications'
-import { ApiError, ApiUnreachableError } from '../../services/api/client'
-import { signIn } from '../../services/api/platform'
+import { ApiError } from '../../services/api/client'
+import {
+  PROBLEM_APPROVAL_PENDING,
+  PROBLEM_EMAIL_UNVERIFIED,
+  resendVerification,
+  roleName,
+  signIn,
+} from '../../services/api/platform'
 import type { Role } from '../../types'
+import AuthCard, { AuthNotice } from './AuthCard'
+import AuthField from './AuthField'
+import { LINK_CLASS, SENT_MESSAGE, emailProblem, errorMessage } from './authShared'
 
-const ROLES: { role: Role; description: string }[] = [
-  { role: 'Viewer', description: 'View dashboards, reports & alerts' },
-  { role: 'Analyst', description: 'Run stress tests & TDA analysis' },
-  { role: 'Quant', description: 'Launch simulations & build portfolios' },
-  { role: 'Admin', description: 'Manage users, roles & system' },
-]
+type View = { kind: 'form' } | { kind: 'unverified' } | { kind: 'pending'; role: Role | null }
 
 export default function Login() {
   const navigate = useNavigate()
-  const login = useDemoStore((s) => s.login)
-  const signInLive = useDemoStore((s) => s.signInLive)
-  const notify = useNotifications((s) => s.push)
-  const [role, setRole] = useState<Role>('Quant')
-  const [username, setUsername] = useState('quant.demo')
-  const [password, setPassword] = useState('••••••••')
+  const startSession = useDemoStore((s) => s.startSession)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [view, setView] = useState<View>({ kind: 'form' })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
+    setError(null)
     try {
-      // Real sign-in: the account's role decides access; the picker can only preview
-      // that role or a lower one
-      signInLive(await signIn(username, password), role)
+      startSession(await signIn(username.trim(), password))
       navigate('/dashboard')
-    } catch (error) {
-      if (error instanceof ApiUnreachableError) {
-        // No backend reachable from this browser: keep the POC working on mock data
-        login(role)
-        notify('Backend not reachable from this browser; running in demo mode', 'info')
-        navigate('/dashboard')
+    } catch (failure) {
+      setSubmitting(false)
+      if (failure instanceof ApiError && failure.status === 403 && failure.type === PROBLEM_EMAIL_UNVERIFIED) {
+        setView({ kind: 'unverified' })
+      } else if (failure instanceof ApiError && failure.status === 403 && failure.type === PROBLEM_APPROVAL_PENDING) {
+        setView({ kind: 'pending', role: roleName(failure.body.requested_role) })
       } else {
-        notify(error instanceof ApiError ? error.message : 'Sign-in failed', 'warning')
-        setSubmitting(false)
+        setError(errorMessage(failure))
       }
     }
   }
 
+  const backToSignIn = () => {
+    setPassword('')
+    setError(null)
+    setView({ kind: 'form' })
+  }
+
+  if (view.kind === 'unverified') {
+    return <VerifyFirst identifier={username.trim()} onBack={backToSignIn} />
+  }
+
+  if (view.kind === 'pending') {
+    return (
+      <AuthCard title="Waiting for admin approval" subtitle="Your email is verified.">
+        <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+          {view.role ? (
+            <>
+              An admin must approve your <span className="font-semibold text-[var(--color-text-primary)]">{view.role}</span>{' '}
+              account before you can sign in.
+            </>
+          ) : (
+            'An admin must approve your account before you can sign in.'
+          )}{' '}
+          You will get an email when it is approved.
+        </p>
+        <Button type="button" variant="secondary" className="w-full" onClick={backToSignIn}>
+          Back to sign in
+        </Button>
+      </AuthCard>
+    )
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg-0)] px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]">
-            <Radar size={24} />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text-primary)]">QuantSim</h1>
-          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-            AI-Assisted Market Simulation
-            <br />
-            &amp; Portfolio Risk Analytics
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="qs-panel rounded p-6">
-          <label className="mb-3 block">
-            <span className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">Username</span>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
-            />
-          </label>
-          <label className="mb-4 block">
-            <span className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-[var(--color-border-strong)] bg-[var(--color-bg-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-strong)] focus:outline-none"
-            />
-          </label>
-
-          <div className="mb-5">
-            <span className="mb-2 block text-xs font-medium text-[var(--color-text-secondary)]">Demo as</span>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLES.map((r) => (
-                <button
-                  type="button"
-                  key={r.role}
-                  onClick={() => setRole(r.role)}
-                  className={clsx(
-                    'rounded border px-3 py-2 text-left transition-colors',
-                    role === r.role
-                      ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/10'
-                      : 'border-[var(--color-border-strong)] hover:border-[var(--color-border-strong)]/80',
-                  )}
-                >
-                  <div
-                    className={clsx(
-                      'text-xs font-semibold',
-                      role === r.role ? 'text-[var(--color-accent-strong)]' : 'text-[var(--color-text-primary)]',
-                    )}
-                  >
-                    {r.role}
-                  </div>
-                  <div className="mt-0.5 text-[10px] leading-snug text-[var(--color-text-muted)]">{r.description}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" loading={submitting}>
-            Sign In
-          </Button>
-
-          <div className="mt-4 text-center text-xs text-[var(--color-text-muted)]">Research Environment</div>
-        </form>
+    <AuthCard onSubmit={handleSubmit}>
+      {error && <AuthNotice>{error}</AuthNotice>}
+      <AuthField label="Username or email" value={username} onChange={setUsername} autoComplete="username" />
+      <AuthField
+        label="Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        className="mb-2"
+      />
+      <div className="mb-5 text-right text-xs">
+        <Link to="/forgot-password" className={LINK_CLASS}>
+          Forgot password?
+        </Link>
       </div>
-    </div>
+
+      <Button type="submit" className="w-full" loading={submitting}>
+        Sign In
+      </Button>
+
+      <div className="mt-4 text-center text-xs text-[var(--color-text-secondary)]">
+        No account yet?{' '}
+        <Link to="/signup" className={LINK_CLASS}>
+          Create account
+        </Link>
+      </div>
+    </AuthCard>
+  )
+}
+
+/** "Verify your email first", with a resend that asks for the email when a username was typed. */
+function VerifyFirst({ identifier, onBack }: { identifier: string; onBack: () => void }) {
+  const typedEmail = identifier.includes('@')
+  const [email, setEmail] = useState(typedEmail ? identifier : '')
+  const [sending, setSending] = useState(false)
+  const [notice, setNotice] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null)
+  const [fieldError, setFieldError] = useState<string | null>(null)
+  // Ask for the address unless a valid one was typed to sign in
+  const askEmail = !typedEmail || emailProblem(identifier) !== null
+
+  const resend = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const problem = emailProblem(email)
+    setFieldError(problem)
+    if (problem) return
+    setSending(true)
+    setNotice(null)
+    try {
+      await resendVerification(email.trim())
+      setNotice({ tone: 'success', text: SENT_MESSAGE })
+    } catch (failure) {
+      setNotice({ tone: 'warning', text: errorMessage(failure) })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <AuthCard title="Verify your email first" subtitle="Open the link we emailed you, then sign in." onSubmit={resend}>
+      {notice && <AuthNotice tone={notice.tone}>{notice.text}</AuthNotice>}
+      {askEmail && (
+        <AuthField
+          label="Email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          error={fieldError}
+          autoComplete="email"
+          className="mb-4"
+        />
+      )}
+      <Button type="submit" className="w-full" loading={sending}>
+        Send the link again
+      </Button>
+      <Button type="button" variant="ghost" className="mt-2 w-full" onClick={onBack}>
+        Back to sign in
+      </Button>
+    </AuthCard>
   )
 }
