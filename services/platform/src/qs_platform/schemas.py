@@ -20,7 +20,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 - a scheme name, not a secret
     expires_in: int
+    refresh_token: str
+    refresh_expires_in: int
     user: "UserOut"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=20, max_length=200)
 
 
 class UserOut(BaseModel):

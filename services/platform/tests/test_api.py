@@ -324,3 +324,131 @@ async def test_the_database_itself_rejects_unknown_roles(database: Database) -> 
                     role="superuser",
                 )
             )
+
+
+# Sessions: refresh and sign-out ---------------------------------------------------------
+
+
+async def sign_in(client: httpx.AsyncClient, username: str, password: str) -> dict[str, Any]:
+    response = await client.post(
+        f"{API}/auth/login", json={"username": username, "password": password}
+    )
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+async def refresh(client: httpx.AsyncClient, token: str) -> httpx.Response:
+    return await client.post(f"{API}/auth/refresh", json={"refresh_token": token})
+
+
+async def test_sign_in_returns_a_refresh_token(client: httpx.AsyncClient) -> None:
+    body = await sign_in(client, "admin", ADMIN_PASSWORD)
+    assert len(body["refresh_token"]) >= 40
+    assert body["refresh_expires_in"] == 43_200
+
+
+async def test_refresh_issues_a_new_pair_and_rotates_the_refresh_token(
+    client: httpx.AsyncClient,
+) -> None:
+    first = await sign_in(client, "admin", ADMIN_PASSWORD)
+
+    response = await refresh(client, first["refresh_token"])
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    second = response.json()
+    assert second["refresh_token"] != first["refresh_token"]
+    me = await client.get(f"{API}/auth/me", headers=bearer(second["access_token"]))
+    assert me.json()["username"] == "admin"
+
+
+async def test_reusing_a_rotated_refresh_token_ends_the_whole_session(
+    client: httpx.AsyncClient,
+) -> None:
+    first = await sign_in(client, "admin", ADMIN_PASSWORD)
+    second = (await refresh(client, first["refresh_token"])).json()
+
+    stolen = await refresh(client, first["refresh_token"])
+
+    assert stolen.status_code == 401
+    assert stolen.json()["type"] == "urn:quantsim:problem:invalid-refresh-token"
+    # The legitimate holder's newer token is revoked too
+    assert (await refresh(client, second["refresh_token"])).status_code == 401
+
+
+async def test_sign_out_ends_the_session_and_is_safe_to_repeat(client: httpx.AsyncClient) -> None:
+    session = await sign_in(client, "admin", ADMIN_PASSWORD)
+    body = {"refresh_token": session["refresh_token"]}
+
+    first = await client.post(f"{API}/auth/logout", json=body)
+    again = await client.post(f"{API}/auth/logout", json=body)
+
+    assert first.status_code == again.status_code == 204
+    assert (await refresh(client, session["refresh_token"])).status_code == 401
+
+
+async def test_sign_out_ends_only_that_session(client: httpx.AsyncClient) -> None:
+    laptop = await sign_in(client, "admin", ADMIN_PASSWORD)
+    phone = await sign_in(client, "admin", ADMIN_PASSWORD)
+
+    await client.post(f"{API}/auth/logout", json={"refresh_token": laptop["refresh_token"]})
+
+    assert (await refresh(client, phone["refresh_token"])).status_code == 200
+
+
+async def test_unknown_refresh_tokens_are_refused_and_sign_out_reveals_nothing(
+    client: httpx.AsyncClient,
+) -> None:
+    made_up = "x" * 43
+    assert (await refresh(client, made_up)).status_code == 401
+    assert (
+        await client.post(f"{API}/auth/logout", json={"refresh_token": made_up})
+    ).status_code == 204
+
+
+async def test_an_expired_refresh_token_is_refused(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    session = await sign_in(client, "admin", ADMIN_PASSWORD)
+    async with database.transaction() as db:
+        await db.execute(
+            text(
+                "UPDATE refresh_tokens SET created_at = now() - interval '2 days',"
+                " expires_at = now() - interval '1 second'"
+            )
+        )
+
+    assert (await refresh(client, session["refresh_token"])).status_code == 401
+
+
+async def test_deactivation_revokes_refresh_tokens(client: httpx.AsyncClient) -> None:
+    token = await admin_token(client)
+    sara = await create_user(client, token, "sara")
+    session = await sign_in(client, "sara", "sara-password-123")
+
+    await client.post(f"{API}/users/{sara['id']}/deactivate", headers=bearer(token))
+
+    assert (await refresh(client, session["refresh_token"])).status_code == 401
+
+
+async def test_a_role_change_revokes_refresh_tokens(client: httpx.AsyncClient) -> None:
+    token = await admin_token(client)
+    sara = await create_user(client, token, "sara", role="viewer")
+    session = await sign_in(client, "sara", "sara-password-123")
+
+    await client.put(
+        f"{API}/users/{sara['id']}/role", json={"role": "quant"}, headers=bearer(token)
+    )
+
+    assert (await refresh(client, session["refresh_token"])).status_code == 401
+
+
+async def test_only_hashes_of_refresh_tokens_are_stored(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    session = await sign_in(client, "admin", ADMIN_PASSWORD)
+    async with database.transaction() as db:
+        stored = (await db.execute(text("SELECT token_hash FROM refresh_tokens"))).scalars().all()
+    assert stored and session["refresh_token"] not in stored
+    assert all(len(value) == 64 for value in stored)
