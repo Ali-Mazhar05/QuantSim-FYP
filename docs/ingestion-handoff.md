@@ -1,7 +1,6 @@
 # Market data ingestion module: handoff
 
-Written 2026-10-14 by Afnan Rizwan (with Claude Code doing most of the build) for whoever
-continues this work. It is meant to be read top to bottom once, then used as a reference.
+Written 2026-10-14 by Afnan Rizwan for whoever continues this work. It is meant to be read top to bottom once, then used as a reference.
 It is a snapshot: where it disagrees with the code or with a merged pull request, the
 code wins, and please fix this file.
 
