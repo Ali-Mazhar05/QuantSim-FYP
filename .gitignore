@@ -34,3 +34,6 @@ ci/jenkins/secrets/*
 
 # CI scratch output
 .ci/
+
+# Recorded vendor data for the real-data tests: fetched on demand, never committed
+services/market/tests/realdata/corpus/

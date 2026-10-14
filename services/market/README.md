@@ -65,3 +65,28 @@ Behaviour to know when operating it:
   ```sh
   TIINGO_API_KEY=... python services/market/scripts/vendor_check.py AAPL
   ```
+
+## Real-data validation
+
+Unit tests prove each rule on constructed bars. `tests/realdata/` proves the code on years
+of real vendor bars, and is skipped when no corpus is present, so CI and fresh clones are
+unaffected.
+
+| File | What it checks |
+|---|---|
+| `test_gate_on_real_data.py` | Vendor rows match the exchange calendar exactly; real history passes with no rejects or gaps; real splits (NVDA, TSLA, AAPL) are read correctly and never flagged; dividends survive; the result is deterministic and independent of input order |
+| `test_returns_on_real_data.py` | Log returns and 20 and 60 session volatility equal independent numpy and pandas computations; a split does not look like a crash in adjusted returns |
+| `test_faults_in_real_data.py` | Each of eight planted faults in real AAPL bars is caught by its own rule and no untouched bar changes |
+| `test_performance_on_real_data.py` | Time and memory budgets for the planned 40 instrument, 11 year backfill |
+
+Record the corpus once (six symbols, 2015 to today, six requests) and run the suite:
+
+```sh
+TIINGO_API_KEY=... uv run python scripts/fetch_realdata.py
+uv run python -m pytest tests/realdata -q
+```
+
+The corpus goes to `tests/realdata/corpus/`, which git ignores: the free tier is for
+personal use, so the data is fetched on demand and never committed. Point
+`QS_REALDATA_DIR` at another folder to keep it elsewhere. Budgets can be loosened with
+`QS_REALDATA_GATE_SECONDS`, `QS_REALDATA_RETURNS_SECONDS` and `QS_REALDATA_MEMORY_MB`.
