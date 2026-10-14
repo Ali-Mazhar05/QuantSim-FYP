@@ -47,7 +47,7 @@ EXPECTED = {
 def apply_fault(work: Records, fault: str, original: Records) -> str:
     """Plant one fault in ``work`` (in place) and return the session it affects."""
     row = work[AT[fault]] if fault != "missing_session" else None
-    day = original[AT[fault]]["date"]
+    day: str = original[AT[fault]]["date"]
     if fault == "negative_price" and row:
         row["open"] = Decimal("-5")
     elif fault == "low_above_high" and row:
