@@ -1,0 +1,32 @@
+ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol
+A|Agilent Technologies, Inc. Common Stock|N|A|N|100|N|A
+AA|Alcoa Corporation Common Stock |N|AA|N|100|N|AA
+AAC.W|Ares Acquisition Corporation III Redeemable warrants, each whole warrant exercisable for one Class A ordinary share at an exercise price of $11.50|N|AAC.WS|N|100|N|AAC+
+ARKK|ARK Innovation ETF|Z|ARKK|Y|100|N|ARKK
+BAC|Bank of America Corporation Common Stock|N|BAC|N|100|N|BAC
+BIL|State Street SPDR Bloomberg 1-3 Month T-Bill ETF|P|BIL|Y|100|N|BIL
+BRK.A|Berkshire Hathaway Inc. Common Stock|N|BRK.A|N|1|N|BRK.A
+BRK.B|Berkshire Hathaway Inc. New Common Stock|N|BRK.B|N|40|N|BRK.B
+CVX|Chevron Corporation Common Stock|N|CVX|N|100|N|CVX
+DIA|State Street SPDR Dow Jones Industrial Average ETF Trust|P|DIA|Y|40|N|DIA
+DIS|Walt Disney Company (The) Common Stock|N|DIS|N|100|N|DIS
+GLD|SPDR Gold Shares|P|GLD|Y|40|N|GLD
+HD|Home Depot, Inc. (The) Common Stock|N|HD|N|40|N|HD
+IWM|iShares Russell 2000 Index Fund|P|IWM|Y|40|N|IWM
+JNJ|Johnson & Johnson Common Stock|N|JNJ|N|100|N|JNJ
+JPM|JP Morgan Chase & Co. Common Stock|N|JPM|N|40|N|JPM
+KO|Coca-Cola Company (The) Common Stock|N|KO|N|100|N|KO
+LLY|Eli Lilly and Company Common Stock|N|LLY|N|40|N|LLY
+MA|Mastercard Incorporated Common Stock|N|MA|N|40|N|MA
+PG|Procter & Gamble Company (The) Common Stock|N|PG|N|100|N|PG
+SPY|State Street SPDR S&P 500 ETF Trust|P|SPY|Y|40|N|SPY
+UNH|UnitedHealth Group Incorporated Common Stock (DE)|N|UNH|N|40|N|UNH
+V|Visa Inc.|N|V|N|40|N|V
+VOO|Vanguard S&P 500 ETF|P|VOO|Y|40|N|VOO
+VTI|Vanguard Morningstar Total Stock Market ETF|P|VTI|Y|40|N|VTI
+XLE|State Street Energy Select Sector SPDR ETF|P|XLE|Y|100|N|XLE
+XLF|State Street Financial Select Sector SPDR ETF|P|XLF|Y|100|N|XLF
+XLK|State Street Technology Select Sector SPDR ETF|P|XLK|Y|100|N|XLK
+XOM|ExxonMobil Holdings Corporation Common Stock|N|XOM|N|100|N|XOM
+ZZZTX|TXSE Test Stk 5 Common Stock|F|ZZZTX|N|40|Y|ZZZTX
+File Creation Time: 1014202612:11||||||
