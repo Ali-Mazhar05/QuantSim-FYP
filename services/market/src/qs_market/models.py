@@ -135,6 +135,8 @@ ingestion_run_item = Table(
     Column("gaps_opened", Integer, nullable=False, server_default=text("0")),
     Column("gaps_resolved", Integer, nullable=False, server_default=text("0")),
     Column("error", Text),
+    # The gate's full report for the instrument (per rule counts, flags, gaps, range)
+    Column("report", JSONB),
     PrimaryKeyConstraint("run_id", "instrument_id"),
     CheckConstraint(_one_of("status", RUN_ITEM_STATUSES), name="ingestion_run_item_status_valid"),
     CheckConstraint(
