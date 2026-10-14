@@ -141,3 +141,30 @@ python -m qs_market.seed
 | `GET /instruments/{id}/gaps?status=open\|resolved` | all signed-in | Sessions with no clean bar |
 | `GET /instruments/{id}/quote` | all signed-in | Latest and previous close, change in percent, session date |
 | `GET /data-quality` | admin, quant, analyst | One row per active instrument: last session, bar count, open gaps, flagged bars, rejected total, last run |
+
+## Correlation matrices
+
+`qs_market/correlation.py` (the maths, no database) and `qs_market/api_correlation.py`. `POST /api/market/correlations`, for every signed-in role, returns every window's matrix in one response (FR-MKT-004).
+
+Body: a basket as `symbols` or `instrument_ids` (not both, 2 to 40), and either `windows` (explicit inclusive `start`/`end` dates, up to 250) or `rolling` (`length` and `step` in sessions plus an overall `start`/`end`; only whole windows). `min_observations` defaults to 20.
+
+Rules:
+
+- Pearson correlation of the stored adjusted log returns, so a split is not a crash.
+- Sessions are the inner join of the basket inside the window: one `n_obs` per window, every cell uses the same sessions.
+- Fewer than `min_observations` sessions makes every cell `null` with the reason `insufficient_observations`. A series that is constant in the window makes its row and column `null` with `constant_series`. Never NaN, never an error.
+- The matrix is symmetric, the diagonal is exactly `"1.00000000"` when defined, values are strings with 8 decimals. Rows and columns are ordered by symbol.
+- `fingerprint` is the sha256 of the sorted instrument ids, the window bounds, the method name and version, `min_observations`, and for every shared session the return value plus the content hashes of the bar it came from and the bar before it. The same inputs give the same fingerprint whatever the order of symbols or windows; a vendor correction of any bar used gives a new one. The exact encoding is in the module docstring.
+- Problems: 404 for unknown symbols or ids (listed in `unknown`), 422 for an empty or single instrument basket, both or neither of symbols and ids, an inverted window, instruments with no returns in the range (listed in `instruments`), and requests beyond 40 instruments, 250 windows or the work cap.
+
+```json
+POST /api/market/correlations
+{"symbols": ["AAPL", "MSFT"], "rolling": {"length": 60, "step": 20, "start": "2024-01-01", "end": "2024-12-31"}}
+
+200
+{"method": "pearson-adj-log-return", "method_version": 1, "min_observations": 20,
+ "windows": [{"start": "2024-01-02", "end": "2024-03-27", "n_obs": 60,
+              "fingerprint": "9c1f...e07a", "symbols": ["AAPL", "MSFT"],
+              "matrix": [["1.00000000", "0.61234567"], ["0.61234567", "1.00000000"]],
+              "unavailable": []}]}
+```
