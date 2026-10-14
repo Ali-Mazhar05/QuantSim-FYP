@@ -26,7 +26,6 @@ from qs_market.models import (
     return_series,
     staging_bar,
 )
-from qs_market.pipeline import runner
 from qs_market.pipeline.runner import PipelineConfig, RunOutcome, run_next
 from qs_market.pipeline.runs import RunConflict, claim_next, create_run, worker_lock
 from qs_market.settings import MarketSettings
@@ -37,7 +36,7 @@ from qs_market.vendor.base import (
     VendorTransientError,
 )
 from qs_market.vendor.fixture import FixtureSource
-from qs_template import Database
+from qs_template import Database, messaging
 from qs_template.messaging import outbox
 
 pytestmark = pytest.mark.db
@@ -97,7 +96,7 @@ async def db(migrated_database_url: str) -> AsyncIterator[Database]:
 
 async def add_instrument(db: Database, symbol: str, vendor_symbol: str | None = None) -> uuid.UUID:
     async with db.transaction() as session:
-        return (
+        new_id: uuid.UUID = (
             await session.execute(
                 insert(instrument)
                 .values(
@@ -113,6 +112,7 @@ async def add_instrument(db: Database, symbol: str, vendor_symbol: str | None = 
                 .returning(instrument.c.id)
             )
         ).scalar_one()
+    return new_id
 
 
 async def go(
@@ -518,13 +518,13 @@ async def test_event_and_bars_commit_together(
     db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     aapl = await add_instrument(db, "AAPL")
-    real = runner.add_event
+    real = messaging.add_event
 
     async def add_then_fail(session: Any, event: Any) -> None:
         await real(session, event)
         raise RuntimeError("fails after the event was queued")
 
-    monkeypatch.setattr(runner, "add_event", add_then_fail)
+    monkeypatch.setattr("qs_market.pipeline.runner.add_event", add_then_fail)
     outcome = await go(db, Scripted(), window=AAPL_WINDOW, ids=[aapl])
     assert outcome.status == "failed"
     for table in (bar, outbox, staging_bar, return_series, corporate_action, rejected_bar):

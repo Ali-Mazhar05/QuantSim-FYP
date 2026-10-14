@@ -76,7 +76,7 @@ async def test_redis_down_fails_closed() -> None:
 async def test_key_is_hashed_in_redis() -> None:
     redis = FakeAsyncRedis()
     await make(redis).acquire()
-    keys = [k.decode() for k in await redis.keys("*")]
+    keys = [k.decode() if isinstance(k, bytes) else k for k in await redis.keys("*")]
     assert keys
     assert all("budget-key-abcdef" not in k for k in keys)
 
