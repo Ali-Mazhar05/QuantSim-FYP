@@ -35,6 +35,12 @@ class MarketSettings(ServiceSettings):
     # Consecutive vendor failures that open the circuit and defer the rest of the run
     ingest_circuit_failures: int = Field(default=5, ge=1)
 
+    # Folder holding nasdaqlisted.txt and otherlisted.txt (see scripts/fetch_symbol_directory.py).
+    # Unset means a new instrument's symbol is not checked against the directory.
+    symbol_directory_dir: Path | None = None
+    # A directory older than this logs a warning; it never blocks an add
+    symbol_directory_max_age_days: int = Field(default=14, ge=1)
+
     @model_validator(mode="after")
     def _vendor_is_usable(self) -> Self:
         if self.vendor == "tiingo" and (
