@@ -90,3 +90,23 @@ The corpus goes to `tests/realdata/corpus/`, which git ignores: the free tier is
 personal use, so the data is fetched on demand and never committed. Point
 `QS_REALDATA_DIR` at another folder to keep it elsewhere. Budgets can be loosened with
 `QS_REALDATA_GATE_SECONDS`, `QS_REALDATA_RETURNS_SECONDS` and `QS_REALDATA_MEMORY_MB`.
+
+## Instrument master
+
+Routes, all under `/api/market`:
+
+| Route | Roles |
+|---|---|
+| `GET /instruments?status=active\|retired`, `GET /instruments/{id}` | any signed-in role (`view_market_data`) |
+| `POST /instruments`, `PATCH /instruments/{id}`, `POST /instruments/{id}/retire` | admin (`manage_instruments`) |
+
+- The list returns what the POC Instruments page shows (`symbol`, `name`, `sector`, `price`, `change_pct`) plus `id`, `status`, `exchange` and `asset_class`. `price` is the latest stored close as an 8-decimal string and `change_pct` the percent change from the previous close with two decimals; each is `null` when the bars are missing (`change_pct` needs two bars).
+- Adding an existing symbol and exchange, even a retired one, is a 409 naming the existing id and status. `PATCH` changes only name, sector and notes. Retiring keeps the row and its bars and is idempotent.
+- Every write is audited with the acting user and request id and queues `instrument.created`, `instrument.annotated` or `instrument.retired` in the same transaction. A repeated retire queues nothing.
+- Symbols are not checked against the Nasdaq directory yet; only the formats the database enforces.
+
+Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe to repeat):
+
+```sh
+python -m qs_market.seed
+```
