@@ -90,3 +90,22 @@ The corpus goes to `tests/realdata/corpus/`, which git ignores: the free tier is
 personal use, so the data is fetched on demand and never committed. Point
 `QS_REALDATA_DIR` at another folder to keep it elsewhere. Budgets can be loosened with
 `QS_REALDATA_GATE_SECONDS`, `QS_REALDATA_RETURNS_SECONDS` and `QS_REALDATA_MEMORY_MB`.
+
+## Ingestion pipeline
+
+`qs_market.pipeline` executes ingestion runs (design: `docs/ingestion-plan.md` section 5).
+
+- **Queue** (`runs.py`): a run is an `ingestion_run` row. A scheduled mode uses one idempotency key per day, so two schedulers create one run; a second run for the same instruments and window while one is active is refused with the active run id (`RunConflict`). One worker executes at a time, enforced by a PostgreSQL advisory lock held on its own connection. A run left `running` by a dead worker is reset to `pending` by the next worker and repeated; instruments that already committed are skipped.
+- **Per instrument, one transaction** (`runner.py`): fetch, stage in `staging_bar`, clean through the gate, publish (new session inserted, same raw hash left alone, changed raw hash becomes a revision with the old values in `bar_revision` and a `bar.corrected` event), record rejected bars, gaps and corporate actions, recompute returns from the earliest changed session, and queue `bar.ingested`. A failure rolls back the bars and the events together. Restated adjusted prices refresh the stored values without a revision.
+- **Run statuses**: `succeeded` (every instrument succeeded or had no data), `partially_succeeded` (some failed or were deferred; five consecutive transient vendor failures open the circuit and defer the rest; an exhausted request budget defers the rest), `failed` (the vendor refused the key, recorded as `vendor_auth`, or nothing succeeded). Item statuses are `succeeded`, `no_data`, `deferred` and `failed`.
+- **Commands**: `python -m qs_market worker | relay | run-once`.
+
+Try it with the recorded fixtures (no network):
+
+```sh
+export QS_DATABASE_URL=postgresql+asyncpg://... QS_REDIS_URL=redis://localhost QS_VENDOR=fixture \
+  QS_FIXTURE_DIR=services/market/tests/fixtures
+python -m qs_market run-once --mode manual --start 2024-01-02 --end 2024-02-13 --symbol AAPL
+```
+
+Settings: `QS_INGEST_POLL_SECONDS` (5), `QS_INGEST_BACKFILL_START` (2015-01-02), `QS_INGEST_OUTLIER_LOG_RETURN` (0.405), `QS_INGEST_OUTLIER_POLICY` (`flag` or `reject`), `QS_INGEST_CIRCUIT_FAILURES` (5). Migration `0002` adds `ingestion_run_item.report`.
