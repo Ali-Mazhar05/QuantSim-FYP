@@ -68,10 +68,10 @@ erDiagram
         numeric low "23,8"
         numeric close "23,8"
         numeric volume "28,8"
-        numeric adj_open "23,8; optional"
-        numeric adj_high "23,8; optional"
-        numeric adj_low "23,8; optional"
-        numeric adj_close "23,8; optional"
+        numeric adj_open "23,10; optional"
+        numeric adj_high "23,10; optional"
+        numeric adj_low "23,10; optional"
+        numeric adj_close "23,10; optional"
         numeric adj_volume "28,8; optional"
         numeric split_factor "20,10"
         numeric dividend "23,8"
@@ -201,10 +201,10 @@ erDiagram
     return_series {
         uuid instrument_id PK, FK
         date session_date PK
-        float8 log_return "optional"
-        float8 adj_log_return "optional"
-        float8 vol_20d "optional"
-        float8 vol_60d "optional"
+        numeric log_return "20,12; optional"
+        numeric adj_log_return "20,12; optional"
+        numeric vol_20d "20,12; optional"
+        numeric vol_60d "20,12; optional"
         timestamptz computed_at
     }
     staging_bar {

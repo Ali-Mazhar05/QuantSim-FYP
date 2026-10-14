@@ -21,19 +21,10 @@ from qs_template.messaging import messaging_metadata
 
 from .conftest import run
 
-PRICE_COLUMNS = {
-    "open",
-    "high",
-    "low",
-    "close",
-    "dividend",
-    "adj_open",
-    "adj_high",
-    "adj_low",
-    "adj_close",
-    "adj_volume",
-    "volume",
-}
+PRICE_COLUMNS = {"open", "high", "low", "close", "dividend", "adj_volume", "volume"}
+# The vendor restates adjusted prices with ten decimals, so they keep ten
+ADJUSTED_PRICE_COLUMNS = {"adj_open", "adj_high", "adj_low", "adj_close"}
+RATIO_COLUMNS = {"log_return", "adj_log_return", "vol_20d", "vol_60d"}
 
 
 def test_prices_and_volumes_use_fixed_precision_with_8_decimals() -> None:
@@ -43,6 +34,24 @@ def test_prices_and_volumes_use_fixed_precision_with_8_decimals() -> None:
                 assert isinstance(column.type, Numeric), column
                 assert column.type.scale == 8, column
                 assert column.type.asdecimal, column
+
+
+def test_adjusted_prices_keep_the_vendors_10_decimals() -> None:
+    columns = [c for c in models.bar.columns if c.name in ADJUSTED_PRICE_COLUMNS]
+    assert {c.name for c in columns} == ADJUSTED_PRICE_COLUMNS
+    for column in columns:
+        assert isinstance(column.type, Numeric), column
+        assert column.type.scale == 10, column
+        assert column.type.asdecimal, column
+
+
+def test_returns_and_volatility_are_exact_decimals_not_floats() -> None:
+    columns = [c for c in models.return_series.columns if c.name in RATIO_COLUMNS]
+    assert {c.name for c in columns} == RATIO_COLUMNS
+    for column in columns:
+        assert isinstance(column.type, Numeric), column
+        assert column.type.scale == 12, column
+        assert column.type.asdecimal, column
 
 
 def _combined_metadata() -> MetaData:

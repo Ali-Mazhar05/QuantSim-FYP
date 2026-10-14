@@ -17,8 +17,12 @@ branch_labels = None
 depends_on = None
 
 PRICE = sa.Numeric(23, 8)
+# The vendor restates adjusted prices with ten decimals; storing eight would round them
+ADJUSTED_PRICE = sa.Numeric(23, 10)
 VOLUME = sa.Numeric(28, 8)
 FACTOR = sa.Numeric(20, 10)
+# Returns and volatility are small ratios; kept exact like every other stored number
+RATIO = sa.Numeric(20, 12)
 
 
 def _created_at(name: str = "created_at") -> "sa.Column[object]":
@@ -26,16 +30,9 @@ def _created_at(name: str = "created_at") -> "sa.Column[object]":
 
 
 def upgrade() -> None:
-    # In deployed environments db-init creates the extension as a superuser and this is a
-    # no-op; in the CI migration check the database user is a superuser and creates it.
-    op.execute(
-        "DO $$ BEGIN"
-        " IF NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'timescaledb') THEN"
-        " CREATE EXTENSION timescaledb;"
-        " END IF;"
-        " END $$"
-    )
-
+    # The timescaledb extension must already exist. Creating it needs a superuser, so
+    # db-init does it in deployed environments and the test fixtures do it in CI; this
+    # migration runs as the service's own role and only creates the hypertables.
     op.create_table(
         "instrument",
         sa.Column("id", sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
@@ -175,10 +172,10 @@ def upgrade() -> None:
         sa.Column("low", PRICE, nullable=False),
         sa.Column("close", PRICE, nullable=False),
         sa.Column("volume", VOLUME, nullable=False),
-        sa.Column("adj_open", PRICE),
-        sa.Column("adj_high", PRICE),
-        sa.Column("adj_low", PRICE),
-        sa.Column("adj_close", PRICE),
+        sa.Column("adj_open", ADJUSTED_PRICE),
+        sa.Column("adj_high", ADJUSTED_PRICE),
+        sa.Column("adj_low", ADJUSTED_PRICE),
+        sa.Column("adj_close", ADJUSTED_PRICE),
         sa.Column("adj_volume", VOLUME),
         sa.Column("split_factor", FACTOR, nullable=False, server_default=sa.text("1")),
         sa.Column("dividend", PRICE, nullable=False, server_default=sa.text("0")),
@@ -284,10 +281,10 @@ def upgrade() -> None:
         "return_series",
         sa.Column("instrument_id", sa.Uuid(), sa.ForeignKey("instrument.id"), nullable=False),
         sa.Column("session_date", sa.Date(), nullable=False),
-        sa.Column("log_return", sa.Float()),
-        sa.Column("adj_log_return", sa.Float()),
-        sa.Column("vol_20d", sa.Float()),
-        sa.Column("vol_60d", sa.Float()),
+        sa.Column("log_return", RATIO),
+        sa.Column("adj_log_return", RATIO),
+        sa.Column("vol_20d", RATIO),
+        sa.Column("vol_60d", RATIO),
         _created_at("computed_at"),
         sa.PrimaryKeyConstraint("instrument_id", "session_date"),
     )
