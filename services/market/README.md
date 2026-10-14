@@ -128,3 +128,16 @@ Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe
 ```sh
 python -m qs_market.seed
 ```
+
+## Read API
+
+`qs_market/api_data.py`, under `/api/market`. Every number is a decimal string, never a float. Lists are ascending by session date and paged by keyset: pass the `next_cursor` of one page as `cursor` of the next (default `limit` 500, maximum 2000).
+
+| Route | Roles | Returns |
+|---|---|---|
+| `GET /instruments/{id}/bars?from&to&limit&cursor` | all signed-in | Clean bars with adjusted close, flags, revision and content hash |
+| `GET /instruments/{id}/returns?from&to&limit&cursor` | all signed-in | Log return, adjusted log return, 20 and 60 session volatility |
+| `GET /instruments/{id}/corporate-actions` | all signed-in | Splits and dividends |
+| `GET /instruments/{id}/gaps?status=open\|resolved` | all signed-in | Sessions with no clean bar |
+| `GET /instruments/{id}/quote` | all signed-in | Latest and previous close, change in percent, session date |
+| `GET /data-quality` | admin, quant, analyst | One row per active instrument: last session, bar count, open gaps, flagged bars, rejected total, last run |
