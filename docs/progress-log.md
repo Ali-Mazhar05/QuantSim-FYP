@@ -4,6 +4,27 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-10-14
+
+**Decided**
+- **Ingestion plan revised** ([ingestion-plan.md](ingestion-plan.md), section 0 and
+  decisions D10 to D15):
+  - the gap grace period is close plus 12 hours, matching the built gate, not one hour;
+  - scheduled runs are enabled on TEST only and share one Tiingo budget per API key;
+  - until an always-on host exists, "ten days of scheduled runs" becomes at least three
+    scheduled runs plus a manual-run log;
+  - correlation (FR-MKT-004) is its own stretch work item, moving to Iteration 3 if cut;
+  - one shared `TIINGO_API_KEY` goes into the encrypted secrets, and its real limits are
+    verified by a one-symbol vendor check before the adapter is trusted.
+
+**Found**
+- The four open market pull requests (#14, #18, #31, #15) still target branches that are
+  already merged, and #14 and #18 carry red statuses from earlier runs on a laptop host.
+  They are re-pointed at `develop` and merged in order before new market work starts.
+- The Tiingo adapter, instrument master, run worker, scheduler, read API and deployment
+  of the market service are not built yet. Only the schema, calendar, cleaning gate,
+  returns and ERD are.
+
 ## 2026-10-12
 
 **Delivered**
