@@ -26,8 +26,11 @@ def test_log_returns_equal_an_independent_computation(
     adj = np.array([float(b.adj_close or b.close) for b in gated[symbol].clean])
     raw = np.array([float(b.close) for b in gated[symbol].clean])
     assert out[0].log_return is None and out[0].adj_log_return is None
-    assert np.allclose(np.diff(np.log(adj)), [p.adj_log_return for p in out[1:]], atol=1e-12)
-    assert np.allclose(np.diff(np.log(raw)), [p.log_return for p in out[1:]], atol=1e-12)
+    adj_returns = [p.adj_log_return for p in out[1:]]
+    raw_returns = [p.log_return for p in out[1:]]
+    assert None not in adj_returns and None not in raw_returns
+    assert np.allclose(np.diff(np.log(adj)), np.array(adj_returns, dtype=float), atol=1e-12)
+    assert np.allclose(np.diff(np.log(raw)), np.array(raw_returns, dtype=float), atol=1e-12)
 
 
 @pytest.mark.parametrize(("length", "attribute"), [(20, "vol_20d"), (60, "vol_60d")])
