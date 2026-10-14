@@ -55,7 +55,7 @@ def admin() -> dict[str, str]:
 
 async def add_instrument(db: Database, symbol: str) -> uuid.UUID:
     async with db.transaction() as session:
-        return (
+        new_id: uuid.UUID = (
             await session.execute(
                 insert(instrument)
                 .values(
@@ -71,6 +71,7 @@ async def add_instrument(db: Database, symbol: str) -> uuid.UUID:
                 .returning(instrument.c.id)
             )
         ).scalar_one()
+    return new_id
 
 
 def fixture_sessions(symbol: str, start: str, end: str) -> int:
