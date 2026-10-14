@@ -4,6 +4,10 @@ import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import { useNotifications } from '../../demo/notifications'
+import { changePassword } from '../../services/api/platform'
+import AuthField from '../auth/AuthField'
+import PasswordPair from '../auth/PasswordPair'
+import { errorMessage, passwordPairProblems } from '../auth/authShared'
 
 const TABS = ['General', 'Appearance', 'Notifications', 'Risk Thresholds', 'Simulation Defaults', 'Data Sources', 'Security'] as const
 
@@ -73,18 +77,73 @@ export default function Settings() {
             <Field label="Historical Archive" value="Internal Research Dataset" />
           </div>
         )}
-        {tab === 'Security' && (
-          <div className="flex flex-col gap-4 text-sm">
-            <Field label="Session Timeout" value="30 minutes" />
-            <Field label="Multi-Factor Authentication" value="Enabled" />
+        {tab === 'Security' && <ChangePassword />}
+
+        {tab !== 'Security' && (
+          <div className="mt-6 border-t border-[var(--color-border)] pt-4">
+            <Button onClick={() => push('Settings saved', 'success')}>Save Changes</Button>
           </div>
         )}
-
-        <div className="mt-6 border-t border-[var(--color-border)] pt-4">
-          <Button onClick={() => push('Settings saved', 'success')}>Save Changes</Button>
-        </div>
       </Panel>
     </div>
+  )
+}
+
+/** Change your own password; the platform signs out every other session. */
+function ChangePassword() {
+  const notify = useNotifications((s) => s.push)
+  const [current, setCurrent] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [errors, setErrors] = useState<{ current?: string; password?: string; confirm?: string }>({})
+  const [saving, setSaving] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const found = { ...(current ? {} : { current: 'Enter your current password' }), ...passwordPairProblems(password, confirm) }
+    setErrors(found)
+    if (Object.keys(found).length > 0) return
+    setSaving(true)
+    try {
+      await changePassword(current, password)
+      setCurrent('')
+      setPassword('')
+      setConfirm('')
+      notify('Password changed. Your other sessions were signed out.', 'success')
+    } catch (failure) {
+      setErrors({ current: errorMessage(failure) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="flex max-w-sm flex-col text-sm" aria-label="Change password">
+      <p className="mb-4 text-[var(--color-text-secondary)]">
+        Changing your password signs you out on every other device and browser.
+      </p>
+      <AuthField
+        label="Current password"
+        type="password"
+        value={current}
+        onChange={setCurrent}
+        error={errors.current}
+        autoComplete="current-password"
+      />
+      <PasswordPair
+        password={password}
+        confirm={confirm}
+        onPasswordChange={setPassword}
+        onConfirmChange={setConfirm}
+        errors={errors}
+        passwordLabel="New password"
+      />
+      <div className="mt-2">
+        <Button type="submit" loading={saving}>
+          Change password
+        </Button>
+      </div>
+    </form>
   )
 }
 

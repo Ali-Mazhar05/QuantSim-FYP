@@ -43,6 +43,14 @@ class ServiceSettings(BaseSettings):
     auth_audience: str = "quantsim"
     auth_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
+    # Websites allowed to call this API from a browser, comma-separated exact origins
+    # (scheme://host[:port]). Empty: no cross-site calls are allowed.
+    cors_origins: str = ""
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
+
     @property
     def api_prefix(self) -> str:
         """Every route of a service lives under /api/<service-name>."""

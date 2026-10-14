@@ -7,7 +7,9 @@ other service verifies tokens with (FR-PLT-001..008). Built on `libs/qs_template
 
 | Method and path | Who | Purpose |
 |---|---|---|
-| `POST /auth/login` | anyone | Username and password in, RS256 access token out (15 minutes) |
+| `POST /auth/login` | anyone | Username and password in; RS256 access token (15 minutes) and refresh token (12 hours) out |
+| `POST /auth/refresh` | anyone with a refresh token | New access and refresh token; the old refresh token stops working, and reusing it ends the whole session |
+| `POST /auth/logout` | anyone with a refresh token | Ends that session; always 204 |
 | `GET /.well-known/jwks.json` | anyone | Public signing keys (current and retired) |
 | `GET /auth/me` | signed in | The current user |
 | `GET /users` | admin | List users (`include_inactive`, `limit`, `offset`) |
@@ -49,6 +51,7 @@ Interactive documentation: `/api/platform/docs`.
 | `QS_RETIRED_PUBLIC_KEYS` | no | JWKS JSON of retired keys, during a rotation |
 | `QS_KAFKA_BOOTSTRAP_SERVERS` | relay | Redpanda address for the outbox relay |
 | `QS_ACCESS_TOKEN_TTL_SECONDS` | no | Default 900 |
+| `QS_REFRESH_TOKEN_TTL_SECONDS` | no | Default 43200 (12 hours), renewed on each refresh |
 | `QS_LOGIN_MAX_FAILURES`, `QS_LOGIN_LOCKOUT_SECONDS` | no | Defaults 5 and 900 |
 | `QS_BOOTSTRAP_ADMIN_PASSWORD` | first deploy | Password of the first `admin`, created only when no active admin exists |
 

@@ -1,21 +1,32 @@
 import clsx from 'clsx'
 import { ChevronDown, Radar } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useDemoStore } from '../../demo/demoState'
+import { canOpen } from '../../demo/permissions'
 import ExtendedScopeBadge from '../status/ExtendedScopeBadge'
 import { NAV_SECTIONS } from './navConfig'
 
 export default function Sidebar() {
   const location = useLocation()
+  const role = useDemoStore((s) => s.role)
+  // Only the pages this role may use; sections left empty disappear
+  const sections = useMemo(
+    () =>
+      NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => canOpen(role, i.path)) })).filter(
+        (s) => s.items.length > 0,
+      ),
+    [role],
+  )
   const [hovered, setHovered] = useState(false)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
 
   // Keep whichever section contains the current route expanded, without
   // collapsing sections the user has opened manually.
   useEffect(() => {
-    const active = NAV_SECTIONS.find((s) => s.items.some((i) => location.pathname.startsWith(i.path.split('/:')[0])))
+    const active = sections.find((s) => s.items.some((i) => location.pathname.startsWith(i.path.split('/:')[0])))
     if (active) setOpenSections((prev) => ({ ...prev, [active.title]: true }))
-  }, [location.pathname])
+  }, [location.pathname, sections])
 
   const toggleSection = (title: string) => setOpenSections((s) => ({ ...s, [title]: !s[title] }))
 
@@ -46,7 +57,7 @@ export default function Sidebar() {
         {!hovered ? (
           <nav className="qs-scrollbar-thin flex-1 overflow-y-auto py-3">
             <div className="flex flex-col items-center gap-1">
-              {NAV_SECTIONS.flatMap((s) => s.items).map((item) => (
+              {sections.flatMap((s) => s.items).map((item) => (
                 <NavLink
                   key={item.path}
                   to={item.path}
@@ -67,7 +78,7 @@ export default function Sidebar() {
           </nav>
         ) : (
           <nav className="qs-scrollbar-thin qs-fade-in flex-1 overflow-y-auto px-2 py-3">
-            {NAV_SECTIONS.map((section) => {
+            {sections.map((section) => {
               const solo = section.items.length === 1
               const open = solo || !!openSections[section.title]
               return (

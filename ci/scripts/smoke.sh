@@ -13,8 +13,15 @@ release="${2:?usage: smoke.sh <env> <release-file>}"
 load_env "$env"
 load_release "$release"
 
-ATTEMPTS="${SMOKE_ATTEMPTS:-20}"
-DELAY="${SMOKE_DELAY:-3}"
+# Cloudflare Pages needs a few minutes to issue the HTTPS certificate for a new site or
+# branch alias, so Pages targets get up to 5 minutes; local stacks answer within a minute.
+if [[ "$FRONTEND_TARGET" == "pages" ]]; then
+  ATTEMPTS="${SMOKE_ATTEMPTS:-60}"
+  DELAY="${SMOKE_DELAY:-5}"
+else
+  ATTEMPTS="${SMOKE_ATTEMPTS:-20}"
+  DELAY="${SMOKE_DELAY:-3}"
+fi
 
 body_of() { curl -fsS --max-time 10 "$1"; }
 
@@ -59,6 +66,30 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
     retry "$ATTEMPTS" "$DELAY" reports_hash "$url" "${!var}" || die "service $name failed its health check"
     log "service $name OK (${!var})"
   done < <(component_names)
+fi
+
+# The relay sends account email; it must be able to open a connection to the mail server
+if [[ "$COMPOSE_TARGET" == "local" && -n "${SMTP_HOST:-}" ]]; then
+  log "checking that $QS_PROJECT can reach the mail server $SMTP_HOST:${SMTP_PORT:-587}"
+  reaches_mail() {
+    docker exec "$QS_PROJECT-platform-relay-1" python -c \
+      "import socket; socket.create_connection(('$SMTP_HOST', ${SMTP_PORT:-587}), 10).close()" >/dev/null 2>&1
+  }
+  retry "$ATTEMPTS" "$DELAY" reaches_mail || die "the relay of $env cannot reach $SMTP_HOST"
+  log "mail server reachable"
+fi
+
+# Browsers reach the API through its public address, from the site's config.json
+if [[ "$FRONTEND_TARGET" == "pages" && "$COMPOSE_TARGET" == "local" ]]; then
+  config_url="$(pages_url)/config.json"
+  log "checking the public API address published at $config_url"
+  public_api() {
+    local api
+    api="$(body_of "$config_url" | sed -n 's/.*"apiBaseUrl":"\([^"]*\)".*/\1/p')"
+    [[ -n "$api" ]] && body_of "$api/api/platform/health" >/dev/null
+  }
+  retry "$ATTEMPTS" "$DELAY" public_api || die "the website's API address does not reach the platform"
+  log "public API OK"
 fi
 
 log "smoke test passed for $env"
