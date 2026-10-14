@@ -22,7 +22,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Identity,
+    Index,
+    MetaData,
+    Table,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # One statement per item: asyncpg (and so Alembic on asyncpg) runs one statement per call
@@ -80,6 +91,27 @@ AUDIT_SETUP_STATEMENTS: tuple[str, ...] = (
         BEFORE UPDATE OR DELETE OR TRUNCATE ON audit_log
         FOR EACH STATEMENT EXECUTE FUNCTION qs_audit_log_is_append_only()
     """,
+)
+
+
+# The audit log as a table definition, for diagrams and schema comparison only: the table
+# itself is created by AUDIT_SETUP_STATEMENTS above, and services' schema tests check the
+# two agree.
+audit_metadata = MetaData()
+audit_log = Table(
+    "audit_log",
+    audit_metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("table_name", Text, nullable=False),
+    Column("operation", Text, nullable=False),
+    Column("row_id", Text, nullable=False),
+    Column("old_data", JSONB),
+    Column("new_data", JSONB),
+    Column("changed_by", Text),
+    Column("request_id", Text),
+    Column("changed_at", DateTime(timezone=True), nullable=False),
+    Column("txid", BigInteger, nullable=False),
+    Index("audit_log_record", "table_name", "row_id", "id"),
 )
 
 

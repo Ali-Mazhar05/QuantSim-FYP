@@ -16,6 +16,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from qs_market import models
+from qs_template.audit import audit_metadata
 from qs_template.messaging import messaging_metadata
 
 from .conftest import run
@@ -46,22 +47,15 @@ def test_prices_and_volumes_use_fixed_precision_with_8_decimals() -> None:
 
 def _combined_metadata() -> MetaData:
     combined = MetaData()
-    for source in (models.metadata, messaging_metadata):
+    for source in (models.metadata, messaging_metadata, audit_metadata):
         for table in source.tables.values():
             table.to_metadata(combined)
     return combined
 
 
 def _diff(connection: Connection) -> list[Any]:
-    def include(obj: Any, name: str | None, type_: str, reflected: bool, compare_to: Any) -> bool:
-        # The audit trail is created from template SQL, not from SQLAlchemy models
-        return not (type_ == "table" and name == "audit_log") and not (
-            type_ == "index" and name == "audit_log_record"
-        )
-
-    context = MigrationContext.configure(
-        connection, opts={"include_object": include, "compare_type": True}
-    )
+    # The audit log is compared too: its template SQL must match qs_template.audit_log
+    context = MigrationContext.configure(connection, opts={"compare_type": True})
     return list(compare_metadata(context, _combined_metadata()))
 
 

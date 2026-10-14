@@ -1,0 +1,186 @@
+---
+title: market_db
+---
+erDiagram
+    bar ||..o{ bar_revision : "instrument_id + session_date"
+    ingestion_run ||--o{ ingestion_run_item : "run_id"
+    ingestion_run ||--o{ rejected_bar : "run_id"
+    ingestion_run ||--o{ staging_bar : "run_id"
+    ingestion_run ||..o{ bar : "run_id"
+    ingestion_run ||..o{ bar_revision : "superseded_by_run"
+    ingestion_run ||..o{ corporate_action : "run_id"
+    ingestion_run ||..o{ data_gap : "opened_by_run / resolved_by_run"
+    instrument ||--o{ bar : "instrument_id"
+    instrument ||--o{ corporate_action : "instrument_id"
+    instrument ||--o{ data_gap : "instrument_id"
+    instrument ||--o{ ingestion_run_item : "instrument_id"
+    instrument ||--o{ rejected_bar : "instrument_id"
+    instrument ||--o{ return_series : "instrument_id"
+    instrument ||--o{ staging_bar : "instrument_id"
+    audit_log {
+        bigint id PK
+        text table_name
+        text operation
+        text row_id
+        jsonb old_data "optional"
+        jsonb new_data "optional"
+        text changed_by "optional"
+        text request_id "optional"
+        timestamptz changed_at
+        bigint txid
+    }
+    bar {
+        uuid instrument_id PK, FK
+        date session_date PK
+        timestamptz ts
+        numeric open "23,8"
+        numeric high "23,8"
+        numeric low "23,8"
+        numeric close "23,8"
+        numeric volume "28,8"
+        numeric adj_open "23,8; optional"
+        numeric adj_high "23,8; optional"
+        numeric adj_low "23,8; optional"
+        numeric adj_close "23,8; optional"
+        numeric adj_volume "28,8; optional"
+        numeric split_factor "20,10"
+        numeric dividend "23,8"
+        int revision
+        text content_hash
+        jsonb quality_flags
+        uuid run_id
+        text vendor
+        text ruleset_version
+        timestamptz updated_at
+    }
+    bar_revision {
+        bigint id PK
+        uuid instrument_id
+        date session_date
+        int revision
+        jsonb previous
+        uuid superseded_by_run
+        timestamptz superseded_at
+    }
+    corporate_action {
+        uuid instrument_id PK, FK
+        date session_date PK
+        numeric split_factor "20,10"
+        numeric dividend "23,8"
+        text vendor
+        uuid run_id
+    }
+    data_gap {
+        uuid instrument_id PK, FK
+        date session_date PK
+        uuid opened_by_run
+        timestamptz opened_at
+        uuid resolved_by_run "optional"
+        timestamptz resolved_at "optional"
+    }
+    ingestion_run {
+        uuid id PK
+        text mode
+        text status
+        text vendor
+        text requested_by
+        date window_start "optional"
+        date window_end "optional"
+        jsonb instrument_ids "optional"
+        text ruleset_version "optional"
+        jsonb report "optional"
+        text error "optional"
+        text idempotency_key UK "optional"
+        timestamptz created_at
+        timestamptz started_at "optional"
+        timestamptz finished_at "optional"
+    }
+    ingestion_run_item {
+        uuid run_id PK, FK
+        uuid instrument_id PK, FK
+        text status
+        int received
+        int passed_untouched
+        int corrected
+        int duplicates_removed
+        int rejected
+        int new_bars
+        int revised
+        int gaps_opened
+        int gaps_resolved
+        text error "optional"
+    }
+    instrument {
+        uuid id PK
+        text symbol
+        text name
+        text sector
+        text exchange
+        text calendar
+        text currency
+        text asset_class
+        text vendor_symbol
+        text notes
+        text status
+        bool is_fixture
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz retired_at "optional"
+    }
+    market_environment {
+        uuid id PK
+        text name
+        text type
+        text universe
+        jsonb instrument_ids
+        date start_date
+        date end_date
+        text frequency
+        text status
+        uuid created_by
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    outbox {
+        bigint id PK
+        uuid event_id UK
+        text topic
+        text message_key
+        text event_type
+        jsonb payload
+        timestamptz created_at
+        timestamptz published_at "optional"
+        int attempts
+        text last_error "optional"
+    }
+    processed_events {
+        text consumer_group PK
+        uuid event_id PK
+        text event_type
+        timestamptz processed_at
+    }
+    rejected_bar {
+        bigint id PK
+        uuid run_id FK
+        uuid instrument_id FK
+        date session_date "optional"
+        jsonb rules
+        jsonb payload
+        timestamptz rejected_at
+    }
+    return_series {
+        uuid instrument_id PK, FK
+        date session_date PK
+        float8 log_return "optional"
+        float8 adj_log_return "optional"
+        float8 vol_20d "optional"
+        float8 vol_60d "optional"
+        timestamptz computed_at
+    }
+    staging_bar {
+        bigint id PK
+        uuid run_id FK
+        uuid instrument_id FK
+        jsonb payload
+        timestamptz received_at
+    }
