@@ -249,6 +249,8 @@ AUTO_APPROVE=true    # Jenkins signs off ACC / deploys PROD by itself
   git-ignored; **never commit them**, never paste them in chat.
 - Each environment's app secrets (database passwords, signing keys) are encrypted in
   `deploy/secrets/<env>.enc.env` with SOPS. Jenkins decrypts them during a deploy.
+  The market service needs `TIINGO_API_KEY` and `MARKET_DB_PASSWORD` there (see
+  `services/market/README.md`).
 - To edit them you need your own age key added to `.sops.yaml`; ask Ali.
 
 ## 10. When something goes wrong

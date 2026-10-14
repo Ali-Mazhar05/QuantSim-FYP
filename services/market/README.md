@@ -128,3 +128,45 @@ Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe
 ```sh
 python -m qs_market.seed
 ```
+
+## Deployment
+
+One image (`ci/components.conf` component `market`) runs as five compose services in `deploy/compose/docker-compose.yml`:
+
+| Service | Command | Where |
+|---|---|---|
+| `market` | `uvicorn qs_market.main:create --factory` (image default), routed by the gateway at `/api/market` | every environment |
+| `market-worker` | `python -m qs_market worker` | every environment |
+| `market-relay` | `python -m qs_market relay` | every environment |
+| `market-scheduler` | `python -m qs_market scheduler` | only where `QS_INGEST_SCHEDULER_ENABLED=true` (TEST); `deploy.sh` enables the `scheduler` profile from that setting |
+| `market-migrate` | `alembic upgrade head`, one shot before the new version starts | every deploy |
+
+`db-init` creates the `market` database, the `market` role and the TimescaleDB extension (idempotent).
+
+Settings come from `deploy/env/<env>.env` (not secret: `MARKET_VENDOR`, `TIINGO_REQUESTS_PER_HOUR`, `TIINGO_SCHEDULED_RESERVE`, `INGEST_BACKFILL_START`, `INGEST_OUTLIER_LOG_RETURN`, `INGEST_OUTLIER_POLICY`, `QS_INGEST_SCHEDULER_ENABLED`) and from the encrypted `deploy/secrets/<env>.enc.env` (secret: `TIINGO_API_KEY`, `MARKET_DB_PASSWORD`). DEV uses the `fixture` vendor; TEST, ACC and PROD use `tiingo` and share one key's budget, so only TEST runs the scheduler.
+
+`ci/scripts/smoke-market.sh` (called by `smoke.sh`) checks `/api/market/ready`; where the vendor is `fixture` it also seeds the instruments and does one manual run of AAPL over the recorded window and checks the run report. Set `SMOKE_ADMIN_USER` and `SMOKE_ADMIN_PASSWORD` to make that run go through the API instead of the container.
+
+## Runbook
+
+Run these against the environment's API (`<api>` is the address in the website's `config.json`; `$TOKEN` is an admin access token from `POST /api/platform/auth/login`). Only one run per instruments and window can be active; a second request answers 409 with the active run id.
+
+**Re-run a window** (the vendor restated prices, or a run failed):
+
+```sh
+curl -X POST "<api>/api/market/ingestion-runs" -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"mode":"manual","start":"2024-03-01","end":"2024-03-15"}'
+```
+
+Add `"symbols":["AAPL"]` to limit it. The call answers 202 with the run id at once; the worker executes it. Re-running is safe: unchanged bars are left alone and changed bars become revisions.
+
+**Backfill an instrument** (a newly added symbol): the same call with `"mode":"backfill"`, `"symbols":["XYZ"]` and an optional `"start"` (default `QS_INGEST_BACKFILL_START`). A backfill may not use the budget reserved for scheduled runs, so a long history can take several hours on the free tier; the run ends `partially_succeeded` with deferred instruments when the budget runs out, and repeating the call resumes it.
+
+**Retire a delisted symbol**: `POST <api>/api/market/instruments/{id}/retire`. Bars are kept; the scheduler stops fetching it. Retiring twice is harmless.
+
+**Read a run report**: `GET <api>/api/market/ingestion-runs/{id}` gives the status, the per-instrument items and the report (counts of received, passed, corrected, rejected, new and revised bars, and rejections by rule). `GET .../ingestion-runs/{id}/rejected` lists the rejected bars with the rules they broke. `failed` with `vendor_auth` means the key was refused (see below). Without a token, from the host: `docker exec <project>-market-1 python -m qs_market run-once --mode manual --symbol AAPL --start 2024-01-02 --end 2024-02-13` runs and prints a report.
+
+**Rotate the Tiingo key**:
+1. Create the new key at tiingo.com and check it with `TIINGO_API_KEY=<new> python services/market/scripts/vendor_check.py AAPL` (two requests at most).
+2. `ci/scripts/set-secret.sh TIINGO_API_KEY all`, then merge the changed `deploy/secrets/*.enc.env` files through a pull request.
+3. The next deploy of each environment restarts the worker with the new key. The hourly budget is counted in Redis per key (a hash of it), so the new key starts with a fresh count; avoid heavy runs in the first hour after rotating.
+4. Revoke the old key at Tiingo and trigger a manual run on TEST to confirm.
