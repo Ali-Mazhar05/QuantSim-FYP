@@ -70,6 +70,13 @@ def test_a_clean_week_passes_untouched() -> None:
         ({"date": "2025-10-28", "open": None}, "malformed"),
         ({"date": "not a date"}, "malformed"),
         ({"date": "2025-10-28", "close": "abc"}, "malformed"),
+        # What the database would refuse must never get past the gate
+        ({"date": "2025-10-28", "split_factor": 0}, "malformed"),
+        ({"date": "2025-10-28", "split_factor": -2}, "malformed"),
+        ({"date": "2025-10-28", "dividend": -0.5}, "malformed"),
+        ({"date": "2025-10-28", "high": 10**15, "close": 10**15 - 1}, "malformed"),
+        ({"date": "2025-10-28", "volume": 10**20}, "malformed"),
+        ({"date": "2025-10-28", "adj_close": 10**15}, "malformed"),
         ({"date": "2025-10-24"}, "outside_window"),
         ({"date": "2025-11-01"}, "non_trading_day"),
         ({"date": "2025-10-28", "low": 0}, "non_positive_price"),
@@ -195,11 +202,55 @@ def test_prices_keep_8_decimal_places() -> None:
     assert result.clean[0].close == Decimal("101.12345679")
 
 
+def test_adjusted_prices_keep_the_10_decimal_places_the_vendor_sends() -> None:
+    result = gate([bar("2025-10-28", adj_close="183.4133636527")], window_end=date(2025, 10, 28))
+    assert result.clean[0].adj_close == Decimal("183.4133636527")
+
+
 def test_identical_content_gives_an_identical_hash() -> None:
     first, second = gate(week()), gate(week())
     assert [b.content_hash for b in first.clean] == [b.content_hash for b in second.clean]
     changed = gate(week(**{"2025_10_29": {"close": 102}}))
     assert first.clean[2].content_hash != changed.clean[2].content_hash
+
+
+def test_a_restated_adjusted_price_does_not_change_the_hash() -> None:
+    # The vendor rewrites adjusted prices backwards at every dividend or split; that must
+    # not look like a correction of the bar
+    original = gate(week())
+    restated = gate(
+        week(
+            **{
+                "2025_10_29": {
+                    "adj_open": 99.9,
+                    "adj_high": 104.9,
+                    "adj_low": 94.9,
+                    "adj_close": 100.9,
+                    "adj_volume": 1_000_001,
+                }
+            }
+        )
+    )
+    assert [b.content_hash for b in original.clean] == [b.content_hash for b in restated.clean]
+    assert restated.clean[2].adj_close == Decimal("100.9000000000")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"open": 100.5},
+        {"high": 106},
+        {"low": 94},
+        {"close": 100},
+        {"volume": 999_999},
+        {"split_factor": 2},
+        {"dividend": 0.25},
+    ],
+)
+def test_a_change_to_any_raw_vendor_value_changes_the_hash(change: dict[str, Any]) -> None:
+    original = gate(week())
+    changed = gate(week(**{"2025_10_29": change}))
+    assert original.clean[2].content_hash != changed.clean[2].content_hash
 
 
 # --- properties: for any input whatsoever ----------------------------------------------

@@ -35,9 +35,18 @@ from qs_market import calendars
 
 RULESET_VERSION = "2026.10.1"
 PRICE_STEP = Decimal("0.00000001")  # 8 decimal places, as stored
+# The vendor restates adjusted prices with ten decimals, and the column keeps them
+ADJUSTED_PRICE_STEP = Decimal("0.0000000001")
 VOLUME_STEP = Decimal("0.00000001")
-# A session only counts as missing once its close plus this much has passed, so the 06:00
-# UTC catch-up run is the first to judge it (vendors publish end-of-day data late)
+FACTOR_STEP = Decimal("0.0000000001")
+# Largest magnitudes the database columns can hold (NUMERIC(23,8), (28,8) and (20,10)); a
+# value at or above them would pass the gate and then fail at insert, so it is malformed
+PRICE_LIMIT = Decimal(10) ** 15
+VOLUME_LIMIT = Decimal(10) ** 20
+FACTOR_LIMIT = Decimal(10) ** 10
+# A session only counts as missing once its close plus this much has passed, so the 09:30
+# UTC catch-up run is the first to judge it (vendors publish end-of-day data late). It
+# must stay later than the latest close (21:00 UTC) plus this grace.
 PUBLICATION_GRACE = timedelta(hours=12)
 ADJUSTED = ("adj_open", "adj_high", "adj_low", "adj_close", "adj_volume")
 
@@ -113,6 +122,7 @@ class _Parsed:
 
     @property
     def values(self) -> tuple[Decimal | None, ...]:
+        """Every value that is stored on the bar."""
         return (
             self.open,
             self.high,
@@ -128,21 +138,38 @@ class _Parsed:
             self.dividend,
         )
 
+    @property
+    def vendor_values(self) -> tuple[Decimal, ...]:
+        """What the vendor said happened on this session. The adjusted columns are left
+        out on purpose: the vendor restates them backwards at every dividend or split, so
+        hashing them would make a restatement look like a correction of every old bar."""
+        return (
+            self.open,
+            self.high,
+            self.low,
+            self.close,
+            self.volume,
+            self.split_factor,
+            self.dividend,
+        )
+
 
 def _text(value: Decimal | None) -> str | None:
     return None if value is None else str(value)
 
 
-def _optional(value: Any, step: Decimal) -> Decimal | None:
-    return None if value is None else _decimal(value, step)
+def _optional(value: Any, step: Decimal, limit: Decimal) -> Decimal | None:
+    return None if value is None else _decimal(value, step, limit)
 
 
-def _decimal(value: Any, step: Decimal) -> Decimal:
+def _decimal(value: Any, step: Decimal, limit: Decimal) -> Decimal:
     if value is None or isinstance(value, bool):
         raise ValueError("missing")
     number = Decimal(str(value))
     if not number.is_finite():
         raise ValueError("not finite")
+    if abs(number) >= limit:
+        raise ValueError("out of range")
     return number.quantize(step, rounding=ROUND_HALF_EVEN)
 
 
@@ -157,31 +184,40 @@ def _parse(record: dict[str, Any]) -> _Parsed:
     split = record.get("split_factor")
     dividend = record.get("dividend")
     try:
-        return _Parsed(
+        parsed = _Parsed(
             record=record,
             session_date=session_date,
-            open=_decimal(record["open"], PRICE_STEP),
-            high=_decimal(record["high"], PRICE_STEP),
-            low=_decimal(record["low"], PRICE_STEP),
-            close=_decimal(record["close"], PRICE_STEP),
-            volume=_decimal(record["volume"], VOLUME_STEP),
-            adj_open=_optional(record.get("adj_open"), PRICE_STEP),
-            adj_high=_optional(record.get("adj_high"), PRICE_STEP),
-            adj_low=_optional(record.get("adj_low"), PRICE_STEP),
-            adj_close=_optional(record.get("adj_close"), PRICE_STEP),
-            adj_volume=_optional(record.get("adj_volume"), VOLUME_STEP),
-            split_factor=Decimal("1") if split is None else _decimal(split, Decimal("1e-10")),
-            dividend=Decimal("0") if dividend is None else _decimal(dividend, PRICE_STEP),
+            open=_decimal(record["open"], PRICE_STEP, PRICE_LIMIT),
+            high=_decimal(record["high"], PRICE_STEP, PRICE_LIMIT),
+            low=_decimal(record["low"], PRICE_STEP, PRICE_LIMIT),
+            close=_decimal(record["close"], PRICE_STEP, PRICE_LIMIT),
+            volume=_decimal(record["volume"], VOLUME_STEP, VOLUME_LIMIT),
+            adj_open=_optional(record.get("adj_open"), ADJUSTED_PRICE_STEP, PRICE_LIMIT),
+            adj_high=_optional(record.get("adj_high"), ADJUSTED_PRICE_STEP, PRICE_LIMIT),
+            adj_low=_optional(record.get("adj_low"), ADJUSTED_PRICE_STEP, PRICE_LIMIT),
+            adj_close=_optional(record.get("adj_close"), ADJUSTED_PRICE_STEP, PRICE_LIMIT),
+            adj_volume=_optional(record.get("adj_volume"), VOLUME_STEP, VOLUME_LIMIT),
+            split_factor=Decimal("1")
+            if split is None
+            else _decimal(split, FACTOR_STEP, FACTOR_LIMIT),
+            dividend=Decimal("0")
+            if dividend is None
+            else _decimal(dividend, PRICE_STEP, PRICE_LIMIT),
         )
     except (InvalidOperation, ValueError) as exc:
         raise ValueError(str(exc)) from exc
+    # The database refuses these, so they must not get past the gate
+    if parsed.split_factor <= 0:
+        raise ValueError("split factor must be positive")
+    if parsed.dividend < 0:
+        raise ValueError("dividend must not be negative")
+    return parsed
 
 
 def content_hash(parsed: _Parsed) -> str:
-    """Fingerprint of a bar's vendor content; identical data gives an identical hash."""
-    canonical = "|".join(
-        [parsed.session_date.isoformat(), *("" if v is None else str(v) for v in parsed.values)]
-    )
+    """Fingerprint of what the vendor reported for the session; identical data gives an
+    identical hash. Restated adjusted prices do not change it (see ``vendor_values``)."""
+    canonical = "|".join([parsed.session_date.isoformat(), *(str(v) for v in parsed.vendor_values)])
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
