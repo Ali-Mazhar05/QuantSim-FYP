@@ -2,18 +2,28 @@ import { Bell, ChevronDown, LogOut, Radio, Search, Settings } from 'lucide-react
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDemoStore } from '../../demo/demoState'
+import { rolesUpTo } from '../../demo/permissions'
 import { useRiskAlerts } from '../../demo/useRiskAlerts'
-import type { Role } from '../../types'
+import { signOut } from '../../services/api/platform'
 import { MARKET_ENVIRONMENTS } from '../../services/mock/data'
 import StatusPill from '../status/StatusPill'
-
-const ROLES: Role[] = ['Viewer', 'Analyst', 'Quant', 'Admin']
 
 export default function Topbar() {
   const navigate = useNavigate()
   const role = useDemoStore((s) => s.role)
   const setRole = useDemoStore((s) => s.setRole)
   const logout = useDemoStore((s) => s.logout)
+  const account = useDemoStore((s) => s.account)
+  // A signed-in account may preview its own role or a lower one, never a higher one
+  const previewRoles = account ? rolesUpTo(account.role) : []
+  const profileName = account?.name ?? ''
+  const profileEmail = account?.email ?? ''
+  const initials = (account?.name ?? '')
+    .split(/\s+/)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
   const flowStep = useDemoStore((s) => s.flowStep)
   const { active: activeAlerts } = useRiskAlerts()
   const toggleSystemActivity = useDemoStore((s) => s.toggleSystemActivity)
@@ -21,6 +31,12 @@ export default function Topbar() {
   const [roleOpen, setRoleOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+
+  const handleSignOut = async () => {
+    setProfileOpen(false)
+    await signOut()
+    logout()
+  }
 
   const simStatus = flowStep === 'IDLE' ? 'Idle' : flowStep === 'SIMULATION_RUNNING' ? 'Running' : 'Ready'
   const activeEnv = MARKET_ENVIRONMENTS[0]
@@ -121,7 +137,7 @@ export default function Topbar() {
           </button>
           {roleOpen && (
             <div className="qs-fade-in qs-panel absolute right-0 top-full z-30 mt-2 w-40 rounded p-1 shadow-xl">
-              {ROLES.map((r) => (
+              {previewRoles.map((r) => (
                 <button
                   key={r}
                   onClick={() => {
@@ -132,7 +148,7 @@ export default function Topbar() {
                     r === role ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-strong)]' : 'text-[var(--color-text-secondary)] hover:bg-black/5'
                   }`}
                 >
-                  Demo as {r}
+                  Preview as {r}
                 </button>
               ))}
             </div>
@@ -142,14 +158,14 @@ export default function Topbar() {
         <div className="relative">
           <button onClick={() => setProfileOpen((v) => !v)} className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)]/20 text-xs font-semibold text-[var(--color-accent-strong)]">
-              AM
+              {initials}
             </div>
           </button>
           {profileOpen && (
             <div className="qs-fade-in qs-panel absolute right-0 top-full z-30 mt-2 w-52 rounded p-1 shadow-xl">
               <div className="px-3 py-2 text-xs">
-                <div className="font-semibold text-[var(--color-text-primary)]">Awais</div>
-                <div className="text-[var(--color-text-muted)]">Awais@powerbanclending.com</div>
+                <div className="font-semibold text-[var(--color-text-primary)]">{profileName}</div>
+                <div className="text-[var(--color-text-muted)]">{profileEmail}</div>
               </div>
               <div className="my-1 h-px bg-[var(--color-border)]" />
               <button
@@ -162,7 +178,7 @@ export default function Topbar() {
                 <Settings size={13} /> Settings
               </button>
               <button
-                onClick={logout}
+                onClick={handleSignOut}
                 className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-[var(--color-text-secondary)] hover:bg-black/5"
               >
                 <LogOut size={13} /> Sign out

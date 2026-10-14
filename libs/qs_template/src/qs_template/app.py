@@ -22,6 +22,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from qs_template.config import ServiceSettings
@@ -88,6 +89,7 @@ def create_app(
     )
     install_error_handlers(app)
     app.middleware("http")(_request_context)
+    _allow_cross_site_calls(app, settings.cors_origin_list)
 
     @app.get(f"{prefix}/health", tags=["operations"])
     async def health() -> dict[str, str]:
@@ -141,3 +143,18 @@ async def _request_context(
             duration_ms=round((time.perf_counter() - started) * 1000, 1),
         )
         structlog.contextvars.unbind_contextvars("request_id", "user_id")
+
+
+def _allow_cross_site_calls(app: FastAPI, origins: list[str]) -> None:
+    """Let the listed websites call the API from a browser (CORS), including Chrome's
+    private-network check, so a public site may reach an API on localhost."""
+    if not origins:
+        return
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+        allow_private_network=True,
+        max_age=600,
+    )

@@ -19,14 +19,19 @@ hotfix/*      branched from main, checked and built, merged into main and back i
 
 | Environment | Branch | Where it runs | Address |
 |---|---|---|---|
-| DEV | `develop` | Jenkins host, compose project `qs-dev` | http://localhost:8081 |
-| TEST | `test` | Jenkins host, compose project `qs-test` | http://localhost:8082 |
+| DEV | `develop` | Frontend on Cloudflare Pages, branch `develop`; backend on the Jenkins host, compose project `qs-dev` | `https://develop.<project>.pages.dev`; backend http://localhost:8081 |
+| TEST | `test` | Frontend on Cloudflare Pages, branch `test`; backend on the Jenkins host, compose project `qs-test` | `https://test.<project>.pages.dev`; backend http://localhost:8082 |
 | ACC | `acceptance` | Cloudflare Pages, branch `acceptance` | `https://acceptance.<project>.pages.dev` |
 | PROD | `main` | Cloudflare Pages, production branch | `https://<project>.pages.dev` |
 
-Each environment's settings live in `deploy/env/<env>.env`. ACC and PROD currently host
-only the frontend; backend services join them once a server exists (see
-[Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
+The Jenkins host is whichever machine runs `ci/jenkins/`: the always-on CI server, or
+a team member's laptop while there is none. See [Where Jenkins runs](#where-jenkins-runs).
+Each environment's settings live in `deploy/env/<env>.env`. All four environments run
+their backend (services, PostgreSQL + TimescaleDB, Redis, Redpanda) as a separate Docker
+Compose project on the Jenkins host: `qs-dev` (port 8081), `qs-test` (8082), `qs-acc`
+(8083) and `qs-prod` (8084), each with its own databases and secrets. ACC and PROD stay
+on the Jenkins host until the team decides to move them to a dedicated server (decision
+of 2026-10-12; see [Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-server)).
 
 ## What the pipeline does
 
@@ -37,6 +42,7 @@ only the frontend; backend services join them once a server exists (see
 | Frontend CI | every build | `npm ci`, `oxlint`, `tsc`, Vitest with coverage, `vite build`. Test and coverage reports are published in Jenkins |
 | Backend CI | every build with services | For each `services/<name>`, in parallel: `ruff`, `ruff format --check`, `mypy`, `pytest`, then the migration check: upgrade to head, downgrade to base, upgrade again, on an empty PostgreSQL + TimescaleDB |
 | Build images | `develop`, `hotfix/*` | Builds and pushes only the components whose content hash is new |
+| Sweep | every build, after the checks and builds | Removes stopped `qs-ci-*` test containers with their volumes (left behind when Docker or the agent dies mid-build), dangling images, and build cache beyond 3 GB (`sweep.sh`) |
 | Promote images | `develop`, `test`, `acceptance`, `main` | Points the environment tag (`dev`, `test`, `acc`, `prod`) at the image built on develop. Fails if it was never built there |
 | Approve production | `main` | Waits up to 24 hours for an approver. Holds no executor while waiting |
 | Deploy | environment branches | Writes the release file, decrypts secrets, deploys, smoke tests, records the known-good release. ACC and PROD roll back automatically on failure. Holds the `env-<name>` lock so two deploys never overlap |
@@ -72,8 +78,11 @@ a short hash of the git content of those paths (`content-hash.sh`), for example
 
 ### Ship a change
 1. Branch from `develop`: `feature/<short-name>`.
-2. Push; Jenkins runs the checks. Open a pull request into `develop`; it needs the Jenkins
-   check and one review. Squash merge.
+2. Run `.claude/skills/quantsim-git-flow/scripts/preflight.sh`, push, and open a pull
+   request into `develop` (`scripts/pr.sh`); it needs the Jenkins check and one review.
+   Merge with **Create a merge commit**, which keeps every commit and its author on `develop`.
+   The full procedure, for people and agents alike, is in
+   `.claude/skills/quantsim-git-flow/SKILL.md`.
 3. Jenkins builds, deploys DEV and posts `quantsim/dev-verified`.
 
 ### Promote
@@ -83,7 +92,16 @@ environment must be green first.
 
 ### Approve
 Open the running build in Jenkins (Pipeline Graph view) and answer the input step.
-Only users listed in `RELEASE_APPROVERS` (`ci/jenkins/casc.yaml`) can approve.
+Only release approvers can approve: admins and approvers in `secrets/team_users` on a
+laptop host, `--approvers` on the CI server.
+
+To skip the click, set `AUTO_APPROVE=true` in `deploy/env/acc.env` (ACC sign-off) or
+`deploy/env/prod.env` (PROD approval). The build then logs "Auto-approved" and carries
+on; ACC posts `quantsim/acceptance-signoff` as "Accepted automatically (AUTO_APPROVE)".
+Every other gate still applies: the required status from the previous environment, the
+smoke test and automatic rollback. Only the exact value `true` counts; anything else asks
+a person. Jenkins reads the file from the branch it is building, so the change takes
+effect once it has been promoted to that branch (`acceptance` or `main`).
 
 ### Release a new version
 Bump `VERSION` in a pull request into `develop` and promote as usual. `main` refuses to
@@ -94,15 +112,15 @@ Branch `hotfix/<name>` from `main`, open a pull request into `main`, and after r
 merge `main` back into `develop`.
 
 ### Roll back by hand
-From the Jenkins container:
+From the build agent on the Jenkins host:
 
 ```bash
-docker compose -f ci/jenkins/compose.yml exec jenkins bash
-cd /var/jenkins_home/workspace/<a checkout of the repository>
+docker compose -f ci/jenkins/compose.yml exec -u jenkins agent bash
+cd /home/jenkins/agent/workspace/<a checkout of the repository>
 ci/scripts/rollback.sh <env> previous   # the release before the current one
 ```
 
-Recorded releases are in `/var/jenkins_home/releases/<env>/`.
+Recorded releases are in `/home/jenkins/agent/releases/<env>/` on the agent.
 
 ### Change a secret
 Secrets are SOPS-encrypted per environment in `deploy/secrets/<env>.enc.env`.
@@ -149,7 +167,8 @@ Then:
 
 ## Moving ACC and PROD to a server
 
-When the Oracle Cloud (or Hetzner) server exists:
+Only when the team decides to (ACC and PROD run on the Jenkins host until then). Once a
+server exists:
 1. Create a `deploy` user that can run Docker, with SSH key login only; open ports 22,
    80 and 443.
 2. Add the `ssh-agent` plugin to `ci/jenkins/plugins.txt`, add the private key as a
@@ -159,11 +178,33 @@ When the Oracle Cloud (or Hetzner) server exists:
    `SMOKE_BASE_URL` to the server's address.
 4. If the server is ARM, set `PLATFORMS=linux/amd64,linux/arm64` for image builds.
 
+## Where Jenkins runs
+
+One Jenkins serves the whole team; pushes from anyone, anywhere, are built by it.
+
+| Host | When | Builds while… | Team access |
+|---|---|---|---|
+| **Team members' laptops, taking turns** (`ci/jenkins/host.sh start / stop`) | **Current setup** | the current host's laptop is on and awake | Results and log links on every pull request; `host.sh status` gives anyone the current public Jenkins link; each member signs in with their GitHub username |
+| **CI server** (any always-on Ubuntu machine, `ci/jenkins/bootstrap-server.sh`) | Optional, if a free server becomes available (Oracle Cloud sign-up failed at card verification) | always | `https://ci.<ci-domain>`, GitHub sign-in; webhooks start builds within seconds |
+
+Only one may run at a time. On laptops `host.sh` enforces that with a lease and hands
+Jenkins' history and recorded releases from one host to the next through Cloudflare R2,
+so Jenkins stays the same whoever runs it; its configuration always comes from
+`ci/jenkins/`. Builds run on a dedicated agent container,
+never on the Jenkins controller. Setup and handover steps are in `ci/jenkins/README.md`; the team's day-to-day guide is
+[`docs/ci-cd-team-guide.md`](ci-cd-team-guide.md).
+
+Laptop hosts need disk and memory headroom: Docker's disk file on Windows grows but never
+shrinks by itself (`ci/jenkins/compact-docker-disk.ps1` compacts it), and a `.wslconfig`
+that caps Docker's memory and raises `fs.aio-max-nr` keeps Windows' page file small and
+lets several Redpanda brokers run at once (see the team guide, section 5).
+
 ## One-time setup
 
 1. **Jenkins:** follow `ci/jenkins/README.md` and `ci/jenkins/secrets/README.md`.
 2. **Branches:** `develop` from `main`, then `test` and `acceptance` from `develop`.
-3. **GitHub repository settings:** default branch `develop`; protect `develop-poc` from
+3. **GitHub repository settings** (not enforced on a private repository with a free plan;
+   see [Known limitations](#known-limitations)): default branch `develop`; protect `develop-poc` from
    deletion and force pushes; protect the four environment branches:
 
    | Branch | Required checks | Reviews | Up to date | Linear history |
@@ -197,12 +238,30 @@ When the Oracle Cloud (or Hetzner) server exists:
 
 ## Known limitations
 
-- Jenkins can use the host's Docker socket, which is equivalent to root on that host, and
-  builds run on the controller. Acceptable for one machine; a separate build agent is the
-  next step.
-- DEV, TEST and Jenkins share one machine and stop when it is off.
-- Without a public URL, GitHub webhooks cannot reach Jenkins; it scans the repository
-  every 2 minutes instead.
+- Branch protection is not enforced. QuantSim-FYP is a private repository on a free
+  GitHub plan, where branch protection rules and rulesets are not applied. The promotion
+  rules are followed by team convention instead: every change goes through a pull
+  request, a pull request is merged only when its Jenkins check is green, and a
+  promotion pull request is merged only when the previous environment's status
+  (`quantsim/dev-verified`, `quantsim/test-verified`, `quantsim/acceptance-signoff`) is
+  green on it. Nobody pushes directly to `develop`, `test`, `acceptance` or `main`, and
+  `develop-poc` is never changed or deleted. Jenkins still posts every status, so each
+  pull request shows whether the rules were met. The rules in
+  [One-time setup](#one-time-setup) apply as written if the repository is made public or
+  moved to a paid plan.
+- The build agent can use the host's Docker, which is equivalent to root on that host;
+  keep the host dedicated to CI. The controller itself has no Docker access.
+- The DEV and TEST frontends stay up on Cloudflare Pages, but their backend services
+  and Jenkins share the Jenkins host. On a laptop host they stop when the laptop is off,
+  and nothing builds while nobody hosts.
+- ACC and PROD backends also run on the Jenkins host (ports 8083 and 8084) until the team
+  moves them to a server. The host hand-over moves Jenkins' state, not the environments'
+  databases: after a hand-over DEV and TEST are redeployed automatically with fresh
+  databases, and ACC and PROD come back with fresh databases on their next deploy.
+- The public Jenkins link is a free Cloudflare quick tunnel, so its address changes every
+  time someone starts hosting.
+- On a laptop host GitHub webhooks cannot reach Jenkins, so it scans the repository every
+  2 minutes instead.
 - The frontend was imported from `develop-poc` with a subtree merge. `git log` shows the
   full POC history, but per-file history (`git log -- frontend/src/...`) starts at the
   import.

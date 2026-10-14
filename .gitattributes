@@ -13,6 +13,7 @@ Dockerfile*  text eol=lf
 _headers     text eol=lf
 VERSION      text eol=lf
 ci/jenkins/plugins.txt  text eol=lf
+Caddyfile    text eol=lf
 
 # Binary documents and images
 *.pdf   binary

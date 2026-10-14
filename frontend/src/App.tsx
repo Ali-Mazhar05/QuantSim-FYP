@@ -1,7 +1,16 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout'
 import { useDemoStore } from './demo/demoState'
+import { canOpen } from './demo/permissions'
+import { storedRefreshToken } from './services/api/client'
+import { resumeSession } from './services/api/platform'
+import CheckEmail from './pages/auth/CheckEmail'
+import ForgotPassword from './pages/auth/ForgotPassword'
 import Login from './pages/auth/Login'
+import SetPassword from './pages/auth/SetPassword'
+import SignUp from './pages/auth/SignUp'
+import VerifyEmail from './pages/auth/VerifyEmail'
 import Dashboard from './pages/dashboard/Dashboard'
 
 import MarketEnvironmentsList from './pages/market/MarketEnvironmentsList'
@@ -46,16 +55,61 @@ import Roles from './pages/administration/Roles'
 import System from './pages/administration/System'
 import NotFound from './pages/other/NotFound'
 
-function RequireAuth({ children }: { children: React.ReactElement }) {
+/** After a page reload, pick up the session this tab already had; true while that is checked. */
+function useResumedSession(): boolean {
   const authenticated = useDemoStore((s) => s.authenticated)
-  if (!authenticated) return <Navigate to="/login" replace />
+  const startSession = useDemoStore((s) => s.startSession)
+  const [resuming, setResuming] = useState(() => !authenticated && storedRefreshToken() !== null)
+
+  useEffect(() => {
+    if (!resuming) return
+    let cancelled = false
+    resumeSession().then((account) => {
+      if (cancelled) return
+      if (account) startSession(account)
+      setResuming(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [resuming, startSession])
+
+  return resuming
+}
+
+/** Pages behind sign-in: only a real platform session opens them. */
+function RequireAuth({ children }: { children: React.ReactElement }) {
+  const signedIn = useDemoStore((s) => s.authenticated && s.account !== null)
+  const role = useDemoStore((s) => s.role)
+  const { pathname } = useLocation()
+  const resuming = useResumedSession()
+
+  if (resuming) return null
+  if (!signedIn) return <Navigate to="/login" replace />
+  // Pages the role may not use are not reachable by URL either
+  if (!canOpen(role, pathname)) return <Navigate to="/dashboard" replace />
+  return children
+}
+
+/** Sign-in, sign-up and the emailed-link pages: a signed-in visitor goes to the dashboard. */
+function PublicOnly({ children }: { children: React.ReactElement }) {
+  const signedIn = useDemoStore((s) => s.authenticated && s.account !== null)
+  const resuming = useResumedSession()
+
+  if (resuming) return null
+  if (signedIn) return <Navigate to="/dashboard" replace />
   return children
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
+      <Route path="/signup" element={<PublicOnly><SignUp /></PublicOnly>} />
+      <Route path="/check-email" element={<PublicOnly><CheckEmail /></PublicOnly>} />
+      <Route path="/verify-email" element={<PublicOnly><VerifyEmail /></PublicOnly>} />
+      <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
+      <Route path="/set-password" element={<PublicOnly><SetPassword /></PublicOnly>} />
       <Route
         element={
           <RequireAuth>

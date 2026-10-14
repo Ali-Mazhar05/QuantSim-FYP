@@ -1,19 +1,21 @@
 import { Plus, Settings2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
+import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import { STRATEGIES } from '../../services/mock/data'
 
 export default function Strategies() {
   const navigate = useNavigate()
+  const canEdit = useCan('create_strategies')
   return (
     <div className="qs-fade-in flex flex-col gap-6">
       <PageHeader
         title="Strategies"
         description="Trading strategies available for portfolio construction. Select one to configure its rules."
         action={
-          <Button icon={Plus} onClick={() => navigate('/trading/strategies/new')}>
+          <Button icon={Plus} disabled={!canEdit} title={canEdit ? undefined : "Your role cannot do this"} onClick={() => navigate('/trading/strategies/new')}>
             New Strategy
           </Button>
         }
@@ -29,6 +31,7 @@ export default function Strategies() {
                 variant="secondary"
                 size="sm"
                 icon={Settings2}
+                disabled={!canEdit}
                 onClick={() => navigate(`/trading/strategies/${s.id}`)}
               >
                 Configure

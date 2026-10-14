@@ -14,12 +14,12 @@ if [[ ! -f "$REPO_ROOT/services/$service/alembic.ini" ]]; then
   exit 0
 fi
 
-id="qs-ci-$(build_id)-$service"
+id="$(test_id)-$service"
 network="$id"
 db="$id-db"
 
 cleanup() {
-  docker rm -f "$db" >/dev/null 2>&1 || true
+  docker rm -fv "$db" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -39,7 +39,7 @@ retry 60 2 docker exec "$db" pg_isready -h 127.0.0.1 -U qs -d qs >/dev/null \
 # shellcheck disable=SC2016
 run_in_image "$UV_IMAGE" --network "$network" -e UV_LINK_MODE=copy -e SERVICE="$service" \
   -e "DATABASE_URL=postgresql+asyncpg://qs:qs@$db:5432/qs" -- bash -ec '
-  export UV_CACHE_DIR="$PWD/.ci/uv-cache"
+  export UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.ci/uv-cache}"
   export UV_PROJECT_ENVIRONMENT="$PWD/.ci/venv-$SERVICE"
   cd "services/$SERVICE"
   uv sync --frozen
