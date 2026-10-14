@@ -60,6 +60,14 @@ def _config(settings: MarketSettings) -> PipelineConfig:
     )
 
 
+def _on_signals(loop: asyncio.AbstractEventLoop, handler: Any) -> None:
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, handler)
+        except NotImplementedError:  # Windows event loops; the containers run on Linux
+            return
+
+
 def _redis(settings: MarketSettings) -> Any:
     from redis.asyncio import Redis
 
@@ -88,8 +96,7 @@ async def _worker() -> None:
     redis = _redis(settings)
     stopping = asyncio.Event()
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, stopping.set)
+    _on_signals(loop, stopping.set)
     make_source = _source_factory(settings, redis)
     config = _config(settings)
     try:
@@ -124,8 +131,7 @@ async def _relay() -> None:
     await publisher.start()
     relay = OutboxRelay(database, publisher)
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, relay.stop)
+    _on_signals(loop, relay.stop)
     try:
         await relay.run()
     finally:
