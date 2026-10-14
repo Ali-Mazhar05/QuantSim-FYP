@@ -16,23 +16,15 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from qs_market import models
+from qs_template.audit import audit_metadata
 from qs_template.messaging import messaging_metadata
 
 from .conftest import run
 
-PRICE_COLUMNS = {
-    "open",
-    "high",
-    "low",
-    "close",
-    "dividend",
-    "adj_open",
-    "adj_high",
-    "adj_low",
-    "adj_close",
-    "adj_volume",
-    "volume",
-}
+PRICE_COLUMNS = {"open", "high", "low", "close", "dividend", "adj_volume", "volume"}
+# The vendor restates adjusted prices with ten decimals, so they keep ten
+ADJUSTED_PRICE_COLUMNS = {"adj_open", "adj_high", "adj_low", "adj_close"}
+RATIO_COLUMNS = {"log_return", "adj_log_return", "vol_20d", "vol_60d"}
 
 
 def test_prices_and_volumes_use_fixed_precision_with_8_decimals() -> None:
@@ -44,24 +36,35 @@ def test_prices_and_volumes_use_fixed_precision_with_8_decimals() -> None:
                 assert column.type.asdecimal, column
 
 
+def test_adjusted_prices_keep_the_vendors_10_decimals() -> None:
+    columns = [c for c in models.bar.columns if c.name in ADJUSTED_PRICE_COLUMNS]
+    assert {c.name for c in columns} == ADJUSTED_PRICE_COLUMNS
+    for column in columns:
+        assert isinstance(column.type, Numeric), column
+        assert column.type.scale == 10, column
+        assert column.type.asdecimal, column
+
+
+def test_returns_and_volatility_are_exact_decimals_not_floats() -> None:
+    columns = [c for c in models.return_series.columns if c.name in RATIO_COLUMNS]
+    assert {c.name for c in columns} == RATIO_COLUMNS
+    for column in columns:
+        assert isinstance(column.type, Numeric), column
+        assert column.type.scale == 12, column
+        assert column.type.asdecimal, column
+
+
 def _combined_metadata() -> MetaData:
     combined = MetaData()
-    for source in (models.metadata, messaging_metadata):
+    for source in (models.metadata, messaging_metadata, audit_metadata):
         for table in source.tables.values():
             table.to_metadata(combined)
     return combined
 
 
 def _diff(connection: Connection) -> list[Any]:
-    def include(obj: Any, name: str | None, type_: str, reflected: bool, compare_to: Any) -> bool:
-        # The audit trail is created from template SQL, not from SQLAlchemy models
-        return not (type_ == "table" and name == "audit_log") and not (
-            type_ == "index" and name == "audit_log_record"
-        )
-
-    context = MigrationContext.configure(
-        connection, opts={"include_object": include, "compare_type": True}
-    )
+    # The audit log is compared too: its template SQL must match qs_template.audit_log
+    context = MigrationContext.configure(connection, opts={"compare_type": True})
     return list(compare_metadata(context, _combined_metadata()))
 
 

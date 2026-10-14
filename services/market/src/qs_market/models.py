@@ -14,7 +14,6 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
-    Float,
     ForeignKey,
     Identity,
     Index,
@@ -34,8 +33,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 metadata = MetaData()
 
 PRICE = Numeric(23, 8)
+# The vendor restates adjusted prices with ten decimals; storing eight would round them
+ADJUSTED_PRICE = Numeric(23, 10)
 VOLUME = Numeric(28, 8)
 FACTOR = Numeric(20, 10)
+# Returns and volatility are small ratios; kept exact like every other stored number
+RATIO = Numeric(20, 12)
 
 ASSET_CLASSES = ("equity", "etf")
 RUN_MODES = ("daily", "catchup", "manual", "backfill")
@@ -170,10 +173,10 @@ bar = Table(
     Column("close", PRICE, nullable=False),
     Column("volume", VOLUME, nullable=False),
     # Split- and dividend-adjusted values as the vendor reports them (FR-28)
-    Column("adj_open", PRICE),
-    Column("adj_high", PRICE),
-    Column("adj_low", PRICE),
-    Column("adj_close", PRICE),
+    Column("adj_open", ADJUSTED_PRICE),
+    Column("adj_high", ADJUSTED_PRICE),
+    Column("adj_low", ADJUSTED_PRICE),
+    Column("adj_close", ADJUSTED_PRICE),
     Column("adj_volume", VOLUME),
     Column("split_factor", FACTOR, nullable=False, server_default=text("1")),
     Column("dividend", PRICE, nullable=False, server_default=text("0")),
@@ -264,11 +267,10 @@ return_series = Table(
     metadata,
     Column("instrument_id", Uuid, ForeignKey("instrument.id"), nullable=False),
     Column("session_date", Date, nullable=False),
-    # Returns and volatility are ratios, not money, so double precision is right here
-    Column("log_return", Float),
-    Column("adj_log_return", Float),
-    Column("vol_20d", Float),
-    Column("vol_60d", Float),
+    Column("log_return", RATIO),
+    Column("adj_log_return", RATIO),
+    Column("vol_20d", RATIO),
+    Column("vol_60d", RATIO),
     Column("computed_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     PrimaryKeyConstraint("instrument_id", "session_date"),
 )
@@ -312,5 +314,14 @@ market_environment = Table(
 
 # Tables whose every change is written to the audit log (FR-PLT-006)
 AUDITED_TABLES = ("instrument",)
+# References that are deliberately not foreign keys (hypertables and append-only history
+# rows keep no foreign keys); drawn as dotted lines in the ERD, keyed (parent, child)
+LOGICAL_REFERENCES = {
+    ("ingestion_run", "bar"): "run_id",
+    ("bar", "bar_revision"): "instrument_id + session_date",
+    ("ingestion_run", "bar_revision"): "superseded_by_run",
+    ("ingestion_run", "data_gap"): "opened_by_run / resolved_by_run",
+    ("ingestion_run", "corporate_action"): "run_id",
+}
 # Partition column of each hypertable
 HYPERTABLES = {"bar": "session_date", "return_series": "session_date"}

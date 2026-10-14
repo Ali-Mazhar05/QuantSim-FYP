@@ -42,13 +42,14 @@ async def _execute_autocommit(url: str, statement: str) -> None:
 def migrated_database_url() -> Iterator[str]:
     """A brand-new database built by running every migration, dropped afterwards.
 
-    The CI database user is a superuser, so the first migration can create the
-    TimescaleDB extension itself, as db-init does in deployed environments.
+    The TimescaleDB extension is created here, as the superuser, the way db-init does in
+    deployed environments: the migration itself runs without that privilege.
     """
     base_url = os.environ["TEST_DATABASE_URL"]
     name = f"market_test_{uuid.uuid4().hex[:12]}"
     run(_execute_autocommit(base_url, f'CREATE DATABASE "{name}"'))
     url = make_url(base_url).set(database=name).render_as_string(hide_password=False)
+    run(_execute_autocommit(url, "CREATE EXTENSION IF NOT EXISTS timescaledb"))
 
     previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = url
