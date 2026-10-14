@@ -37,3 +37,13 @@ ci/jenkins/secrets/*
 
 # Recorded vendor data for the real-data tests: fetched on demand, never committed
 services/market/tests/realdata/corpus/
+
+# Personal BMAD settings (each member keeps their own)
+_bmad/config.user.toml
+_bmad/custom/config.user.toml
+
+# Shared hosting scratch files (host.sh)
+ci/jenkins/.state/
+
+# Jenkins admin password copied out of the container
+/admin_password

@@ -2,6 +2,7 @@ import { ArrowRight } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import MonteCarloFanChart from '../../components/charts/MonteCarloFanChart'
 import Button from '../../components/forms/Button'
+import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import StatusPill from '../../components/status/StatusPill'
@@ -10,6 +11,7 @@ import { useDemoStore } from '../../demo/demoState'
 export default function SimulationResults() {
   const { id = '1042' } = useParams()
   const navigate = useNavigate()
+  const canCreate = useCan('create_portfolios')
   const advanceTo = useDemoStore((s) => s.advanceTo)
 
   return (
@@ -48,6 +50,7 @@ export default function SimulationResults() {
       <div className="flex justify-end">
         <Button
           icon={ArrowRight}
+          disabled={!canCreate}
           onClick={() => {
             advanceTo('SIMULATION_COMPLETE')
             navigate('/trading/portfolios/new')

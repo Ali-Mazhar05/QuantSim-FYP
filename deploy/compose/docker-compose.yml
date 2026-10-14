@@ -183,7 +183,7 @@ services:
       - start
       - --mode=dev-container
       - --smp=1
-      - --memory=768M
+      - --memory=${REDPANDA_MEMORY:-768M}
       - --overprovisioned
       - --kafka-addr=internal://0.0.0.0:9092
       - --advertise-kafka-addr=internal://redpanda:9092
@@ -212,12 +212,24 @@ services:
     image: ${PLATFORM_IMAGE:?PLATFORM_IMAGE comes from the release file}
     environment: &platform-env
       QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
       QS_DATABASE_URL: postgresql+asyncpg://platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/platform
       QS_REDIS_URL: redis://redis:6379/0
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_SIGNING_KEY: ${PLATFORM_SIGNING_KEY:?PLATFORM_SIGNING_KEY comes from the environment's secrets}
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
+      # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
+      QS_SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
+      QS_PUBLIC_APP_URL: ${PUBLIC_APP_URL:?PUBLIC_APP_URL is the environment's website}
+      QS_EMAIL_REQUIRED: ${EMAIL_REQUIRED:-false}
+      QS_SMTP_HOST: ${SMTP_HOST:-}
+      QS_SMTP_PORT: ${SMTP_PORT:-587}
+      QS_SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      QS_SMTP_USERNAME: ${SMTP_USERNAME:-}
+      QS_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      QS_SMTP_FROM: ${SMTP_FROM:-QuantSim <alimazhar3005+QuantSim@gmail.com>}
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,7 +263,9 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    # default: outbound access for sending account email (SMTP); backend: database and broker
     networks:
+      - default
       - backend
     read_only: true
     tmpfs:
@@ -277,10 +291,58 @@ services:
       QS_BOOTSTRAP_ADMIN_USERNAME: admin
       QS_BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@quantsim.dev}
       QS_BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD comes from the environment's secrets}
+      # DEV and TEST only: test.admin, test.quant, test.analyst and test.viewer
+      QS_TEST_USERS_PASSWORD: ${TEST_USERS_PASSWORD:-}
+      QS_TEST_USERS_EMAIL: ${TEST_USERS_EMAIL:-alimazhar3005@gmail.com}
     networks:
       - backend
     entrypoint: ["sh", "-ec"]
-    command: ["alembic upgrade head && qs-platform bootstrap-admin"]
+    command:
+      - >-
+        alembic upgrade head && qs-platform bootstrap-admin &&
+        if [ -n "$$QS_TEST_USERS_PASSWORD" ]; then qs-platform seed-test-users; fi
+
+  # Public HTTPS address of this environment's API (a free Cloudflare quick tunnel to the
+  # gateway), so browsers anywhere can reach it. The address changes when the tunnel
+  # restarts; deploy.sh and host.sh publish the current one to the website's config.json.
+  api-tunnel:
+    <<: *defaults
+    image: cloudflare/cloudflared:2025.9.1@sha256:4604b477520dc8322af5427da68b44f0bf814938e9d2e4814f2249ee4b03ffdf
+    # The metrics port answers /quicktunnel with the current address
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--metrics", "0.0.0.0:2000", "--url", "http://gateway:8000"]
+    depends_on:
+      - gateway
+    networks:
+      - default
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # Optional local inbox (profile "mailpit"): catches every account email instead of
+  # sending it, for working offline. Its inbox is on the host only, at
+  # http://localhost:${MAILPIT_PORT}
+  mailpit:
+    <<: *defaults
+    image: axllent/mailpit:v1.27.11@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
+    profiles: ["mailpit"]
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data
+    deploy:
+      resources:
+        limits:
+          memory: 64M
 
   # Further backend services follow the platform pattern above: add the service to
   # ci/components.conf, a block here routed at /api/<name>, a <name>-relay and a

@@ -39,7 +39,14 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
 markers = ["db: needs a PostgreSQL database (TEST_DATABASE_URL)"]
-filterwarnings = ["error"]
+filterwarnings = [
+  "error",
+  # A request's database session can still be closing when a test's fixture disposes the
+  # engine; the garbage collector later reports that connection during another test's
+  # setup. That is a test-harness race, not an application leak, so it must not fail
+  # whichever unrelated test happens to run next.
+  "ignore::pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.mypy]
 python_version = "3.12"

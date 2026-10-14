@@ -293,6 +293,6 @@ export interface UserAccount {
   name: string
   email: string
   role: Role
-  status: 'Active' | 'Invited' | 'Disabled'
+  status: 'Active' | 'Invited' | 'Pending' | 'Disabled'
   lastActive: string
 }

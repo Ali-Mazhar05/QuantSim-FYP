@@ -22,11 +22,14 @@ npm test           # unit tests
 ## How changes are shipped
 
 `feature/*` → `develop` (DEV) → `test` (TEST) → `acceptance` (ACC) → `main` (PROD), through
-a Jenkins pipeline. See [docs/ci-cd.md](docs/ci-cd.md).
+a Jenkins pipeline. Start with [CONTRIBUTING.md](CONTRIBUTING.md) (daily routine and how to
+ship), then the [CI/CD team guide](docs/ci-cd-team-guide.md).
 
 ## Documentation
 
 - [Tech stack and implementation guide](docs/QuantSim_Tech_Stack_and_Implementation.md)
-- [CI/CD guide](docs/ci-cd.md)
+- [Contributing: staying up to date and shipping a change](CONTRIBUTING.md)
+- [CI/CD team guide](docs/ci-cd-team-guide.md)
+- [CI/CD technical reference](docs/ci-cd.md)
 - [Jenkins setup](ci/jenkins/README.md)
 - [Proposal documents](docs/proposal/)

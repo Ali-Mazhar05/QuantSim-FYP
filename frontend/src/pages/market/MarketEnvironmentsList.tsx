@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import DataTable, { type Column } from '../../components/tables/DataTable'
 import Button from '../../components/forms/Button'
+import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import StatusPill from '../../components/status/StatusPill'
@@ -27,13 +28,14 @@ const columns: Column<MarketEnvironment>[] = [
 
 export default function MarketEnvironmentsList() {
   const navigate = useNavigate()
+  const canCreate = useCan('launch_simulations')
   return (
     <div className="qs-fade-in flex flex-col gap-6">
       <PageHeader
         title="Market Environments"
         description="Historical replays and synthetic markets available for simulation."
         action={
-          <Button icon={Plus} onClick={() => navigate('/market/environments/new')}>
+          <Button icon={Plus} disabled={!canCreate} title={canCreate ? undefined : "Your role cannot do this"} onClick={() => navigate('/market/environments/new')}>
             New Environment
           </Button>
         }
@@ -43,7 +45,7 @@ export default function MarketEnvironmentsList() {
           columns={columns}
           rows={MARKET_ENVIRONMENTS}
           rowKey={(r) => r.id}
-          onRowClick={() => navigate('/market/environments/new')}
+          onRowClick={canCreate ? () => navigate('/market/environments/new') : undefined}
         />
       </Panel>
     </div>

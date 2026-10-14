@@ -20,11 +20,11 @@ describe('App routing', () => {
   it('sends a signed-out user from a protected page to the login screen', () => {
     renderAt('/dashboard')
     expect(screen.getByRole('heading', { name: 'QuantSim' })).toBeInTheDocument()
-    expect(screen.getByText('Username')).toBeInTheDocument()
+    expect(screen.getByText('Username or email')).toBeInTheDocument()
   })
 
   it('shows the not found page for an unknown route once signed in', () => {
-    useDemoStore.getState().login('Quant')
+    useDemoStore.getState().startSession({ username: 'q', name: 'Q', email: 'q@x', role: 'Quant', capabilities: [] })
     renderAt('/does-not-exist')
     expect(screen.getByText('Page not found')).toBeInTheDocument()
   })

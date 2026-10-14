@@ -20,10 +20,17 @@ def withGitHub(Closure body) {
   }
 }
 
+// Returns true when a person approved, false when AUTO_APPROVE=true in
+// deploy/env/<env>.env let it through; throws when rejected or timed out
 def approve(String message) {
+  if (env.QS_AUTO_APPROVE == 'true') {
+    echo "Auto-approved: AUTO_APPROVE=true in deploy/env/${env.QS_ENV}.env (${message})"
+    return false
+  }
   timeout(time: 24, unit: 'HOURS') {
     input message: message, ok: 'Approve', submitter: env.QS_APPROVERS
   }
+  return true
 }
 
 pipeline {
@@ -40,11 +47,10 @@ pipeline {
 
   stages {
     stage('Build') {
-      agent any
+      agent { label 'docker' }
       environment {
         // Registry login lives in the workspace and is deleted with it
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
-        BUILDX_CONFIG = "${JENKINS_HOME}/.buildx"
       }
       options { timeout(time: 45, unit: 'MINUTES') }
 
@@ -154,8 +160,12 @@ pipeline {
               if (env.QS_MISSING_LIST?.trim()) {
                 error("Not built on develop: ${env.QS_MISSING_LIST}. Merge the change into develop first so it is built and verified there.")
               }
-              for (c in env.QS_COMPONENTS.tokenize(' ')) {
-                sh "ci/scripts/promote.sh '${c}' '${env.QS_ENV}'"
+              // PROD's tag moves only after the approval, in Deploy, so a rejected release
+              // never becomes "prod"
+              if (env.QS_ENV != 'prod') {
+                for (c in env.QS_COMPONENTS.tokenize(' ')) {
+                  sh "ci/scripts/promote.sh '${c}' '${env.QS_ENV}'"
+                }
               }
             }
           }
@@ -165,6 +175,8 @@ pipeline {
       post {
         always {
           archiveArtifacts artifacts: '.ci/plan.env', allowEmptyArchive: true
+          // Leftover test containers and old cache would otherwise fill the host's disk
+          sh 'ci/scripts/sweep.sh || true'
           cleanWs(deleteDirs: true, notFailBuild: true)
         }
       }
@@ -181,7 +193,7 @@ pipeline {
 
     stage('Deploy') {
       when { beforeAgent true; expression { env.QS_ENV != 'none' } }
-      agent any
+      agent { label 'docker' }
       environment {
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
       }
@@ -196,6 +208,11 @@ pipeline {
               string(credentialsId: 'cloudflare-api-token', variable: 'CLOUDFLARE_API_TOKEN'),
               string(credentialsId: 'cloudflare-account-id', variable: 'CLOUDFLARE_ACCOUNT_ID'),
             ]) {
+              if (env.QS_ENV == 'prod') {
+                for (c in env.QS_COMPONENTS.tokenize(' ')) {
+                  sh "ci/scripts/promote.sh '${c}' prod"
+                }
+              }
               sh 'ci/scripts/make-release.sh "$QS_ENV" .ci/release.env'
               try {
                 sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
@@ -236,16 +253,18 @@ pipeline {
       steps {
         script {
           def accepted = true
+          def byPerson = true
           try {
-            approve("ACC is serving v${env.QS_VERSION} (frontend ${env.HASH_FRONTEND}). Accept it for production?")
+            byPerson = approve("ACC is serving v${env.QS_VERSION} (frontend ${env.HASH_FRONTEND}). Accept it for production?")
           } catch (err) {
             accepted = false
           }
-          node {
+          node('docker') {
             checkout scm
             withGitHub {
               def state = accepted ? 'success' : 'failure'
-              def text = accepted ? 'Accepted for production' : 'Rejected or timed out at acceptance'
+              def text = !accepted ? 'Rejected or timed out at acceptance'
+                : (byPerson ? 'Accepted for production' : 'Accepted automatically (AUTO_APPROVE)')
               sh "ci/scripts/github-status.sh quantsim/acceptance-signoff '${state}' '${text}'"
             }
             cleanWs(deleteDirs: true, notFailBuild: true)
@@ -260,7 +279,7 @@ pipeline {
 
     stage('Release') {
       when { beforeAgent true; branch 'main' }
-      agent any
+      agent { label 'docker' }
       environment {
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
       }
