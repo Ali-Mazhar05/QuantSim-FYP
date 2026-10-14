@@ -332,3 +332,33 @@ async def test_rejected_bars_are_listed_with_rules_and_payload_and_paginated(
     assert len(set(ids)) == 3
     over = await client.get(f"{RUNS}/{run_id}/rejected?limit=501", headers=admin())
     assert over.status_code == 422
+
+
+async def test_a_run_can_name_instruments_by_symbol(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    aapl = await add_instrument(database, "AAPL")
+    await add_instrument(database, "NVDA")
+    response = await client.post(
+        RUNS, json={"mode": "manual", "symbols": ["aapl"]}, headers=admin()
+    )
+    assert response.status_code == 202
+    detail = await client.get(f"{RUNS}/{response.json()['id']}", headers=admin())
+    assert detail.json()["instrument_ids"] == [str(aapl)]
+
+
+async def test_unknown_symbols_and_both_selectors_are_422(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    aapl = await add_instrument(database, "AAPL")
+    ghost = await client.post(
+        RUNS, json={"mode": "manual", "symbols": ["AAPL", "ZZZZ"]}, headers=admin()
+    )
+    assert ghost.status_code == 422
+    assert ghost.json()["unknown_symbols"] == ["ZZZZ"]
+    both = await client.post(
+        RUNS,
+        json={"mode": "manual", "symbols": ["AAPL"], "instrument_ids": [str(aapl)]},
+        headers=admin(),
+    )
+    assert both.status_code == 422

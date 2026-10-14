@@ -40,12 +40,16 @@ class RunRequest(BaseModel):
     start: date | None = None
     end: date | None = None
     instrument_ids: list[uuid.UUID] | None = Field(default=None, min_length=1)
+    # The same thing by ticker, for people and scripts that do not know the ids
+    symbols: list[str] | None = Field(default=None, min_length=1)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
 
     @model_validator(mode="after")
     def _window_makes_sense(self) -> Self:
         if self.start and self.end and self.start > self.end:
             raise ValueError("start must not be after end")
+        if self.instrument_ids is not None and self.symbols is not None:
+            raise ValueError("give instrument_ids or symbols, not both")
         if self.mode == "backfill" and self.start is None:
             raise ValueError("a backfill needs a start date")
         return self
@@ -158,8 +162,28 @@ def build_routers(*, auth: Authenticator, database: Database, vendor: str) -> li
         responses={401: {}, 403: {}, 409: {}, 422: {}},
     )
     async def enqueue_run(body: RunRequest, actor: Admin, session: Writer) -> RunAccepted:
-        if body.instrument_ids is not None:
-            wanted = set(body.instrument_ids)
+        instrument_ids = body.instrument_ids
+        if body.symbols is not None:
+            symbols = {s.strip().upper() for s in body.symbols}
+            found = {
+                row.symbol: row.id
+                for row in await session.execute(
+                    select(instrument.c.symbol, instrument.c.id).where(
+                        instrument.c.symbol.in_(symbols)
+                    )
+                )
+            }
+            if missing_symbols := sorted(symbols - set(found)):
+                raise ServiceError(
+                    422,
+                    "Unknown instruments",
+                    f"No instrument has the symbol {', '.join(missing_symbols)}.",
+                    type_="urn:quantsim:problem:validation",
+                    extra={"unknown_symbols": missing_symbols},
+                )
+            instrument_ids = list(found.values())
+        if instrument_ids is not None:
+            wanted = set(instrument_ids)
             known = set(
                 (await session.execute(select(instrument.c.id).where(instrument.c.id.in_(wanted))))
                 .scalars()
@@ -178,7 +202,7 @@ def build_routers(*, auth: Authenticator, database: Database, vendor: str) -> li
                 session,
                 mode=body.mode,
                 window=(body.start, body.end) if body.start or body.end else None,
-                instrument_ids=body.instrument_ids,
+                instrument_ids=instrument_ids,
                 idempotency_key=body.idempotency_key,
                 requested_by=str(actor.user_id),
                 vendor=vendor,
