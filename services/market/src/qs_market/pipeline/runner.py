@@ -12,6 +12,7 @@ Instruments that already succeeded in a previous attempt of the same run (the wo
 crashed) are skipped, so a recovered run ends in the same state as an uninterrupted one.
 """
 
+import json
 import uuid
 from collections import Counter
 from collections.abc import Awaitable, Callable
@@ -336,19 +337,39 @@ async def ingest_instrument(
         changed_sessions.extend(r["session_date"] for r in new_rows)
 
     if gate.rejected:
-        await session.execute(
-            insert(rejected_bar),
-            [
+        # The same bad record seen again by a later run is stored once, not once per run
+        known = {
+            (r.session_date, json.dumps(r.rules), json.dumps(r.payload, sort_keys=True))
+            for r in (
+                await session.execute(
+                    select(
+                        rejected_bar.c.session_date, rejected_bar.c.rules, rejected_bar.c.payload
+                    ).where(rejected_bar.c.instrument_id == instrument_id)
+                )
+            )
+        }
+        fresh = []
+        for rej in gate.rejected:
+            payload = jsonable(rej.payload)
+            key = (
+                rej.session_date,
+                json.dumps(list(rej.rules)),
+                json.dumps(payload, sort_keys=True),
+            )
+            if key in known:
+                continue
+            known.add(key)
+            fresh.append(
                 {
                     "run_id": run.id,
                     "instrument_id": instrument_id,
                     "session_date": rej.session_date,
                     "rules": list(rej.rules),
-                    "payload": jsonable(rej.payload),
+                    "payload": payload,
                 }
-                for rej in gate.rejected
-            ],
-        )
+            )
+        if fresh:
+            await session.execute(insert(rejected_bar), fresh)
 
     # Gaps open once and resolve when the bar arrives
     gaps_opened = 0
