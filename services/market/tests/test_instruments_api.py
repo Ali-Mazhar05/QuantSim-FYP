@@ -41,6 +41,7 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("GET", "/instruments/{instrument_id}/corporate-actions"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/gaps"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/quote"): ALL_ROLES,
+    ("POST", "/correlations"): ALL_ROLES,
     ("GET", "/data-quality"): frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST}),
 }
 
@@ -62,6 +63,9 @@ def body_for(method: str, path: str, n: int) -> dict[str, Any] | None:
         return {**NEW_INSTRUMENT, "symbol": f"T{n}"}
     if method == "PATCH":
         return {"notes": "hello"}
+    if path == "/correlations":
+        # a basket of one: a signed-in caller gets past authorisation and is refused with 422
+        return {"symbols": ["ZZTEST"], "windows": [{"start": "2024-01-01", "end": "2024-02-01"}]}
     return None
 
 
@@ -88,7 +92,8 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
                 continue
             assert isinstance(rule, frozenset)
             if who in {role.value for role in rule}:
-                assert response.status_code in (200, 201), where
+                accepted = (422,) if path == "/correlations" else (200, 201)
+                assert response.status_code in accepted, where
             elif who in ("anonymous", "forged"):
                 assert response.status_code == 401, where
             else:

@@ -7,6 +7,7 @@ tests call :func:`build_app` with their own pieces.
 from fastapi import FastAPI
 
 from qs_market.api import build_routers
+from qs_market.api_correlation import build_correlation_routers
 from qs_market.api_data import build_data_routers
 from qs_market.settings import MarketSettings
 from qs_template import Database, ReadinessCheck, create_app
@@ -30,6 +31,7 @@ def build_app(
         routers=[
             *build_routers(auth=auth, database=database),
             *build_data_routers(auth=auth, database=database),
+            *build_correlation_routers(auth=auth, database=database),
         ],
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],
         on_shutdown=[revocations.close],
