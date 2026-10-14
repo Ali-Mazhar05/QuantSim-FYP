@@ -1,0 +1,255 @@
+<title>Architecture Stack Narration</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+  :root{
+    /* QuantSim app tokens */
+    --paper:#ffffff; --paper-2:#f6f6f6; --ink:#0a0a0a; --ink-2:#52525a; --ink-3:#6b6b73;
+    --rule:#e2e2e2; --rule-2:#cfcfcf; --accent:#0b6f5b; --accent-soft:#eff7f4;
+    --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+    --read:"Newsreader",Georgia,"Iowan Old Style",serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0f1113; --paper-2:#15181b; --ink:#f0f2f4; --ink-2:#b9bec4; --ink-3:#868c93;
+      --rule:#24282c; --rule-2:#383e44; --accent:#67caaf; --accent-soft:#11211d;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0f1113; --paper-2:#15181b; --ink:#f0f2f4; --ink-2:#b9bec4; --ink-3:#868c93;
+    --rule:#24282c; --rule-2:#383e44; --accent:#67caaf; --accent-soft:#11211d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper-2);color:var(--ink);font:16px/1.6 var(--sans)}
+  .page{max-width:860px;margin:0 auto;padding:0 40px 96px;background:var(--paper)}
+
+  header{padding:56px 0 28px;border-bottom:2px solid var(--ink)}
+  .kicker{font:600 11px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+  h1{font:600 34px/1.14 var(--sans);margin:14px 0 10px;letter-spacing:-.02em}
+  .sub{font-size:16px;color:var(--ink-2);max-width:58ch;margin:0}
+  .facts{display:flex;flex-wrap:wrap;gap:0 36px;margin-top:22px;font:12.5px/1.7 var(--mono);color:var(--ink-3)}
+  .facts b{color:var(--ink);font-weight:600}
+
+  .delivery{margin:26px 0 0;padding:14px 18px;border:1px solid var(--rule);border-left:3px solid var(--accent);
+    background:var(--paper-2);border-radius:0 4px 4px 0}
+  .delivery span{display:block;font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:9px}
+  .delivery p{margin:0 0 7px;font-size:14px;line-height:1.55;color:var(--ink-2)}
+  .delivery p:last-child{margin-bottom:0}
+
+  .script{margin-top:14px}
+  .beat{display:grid;grid-template-columns:74px 1fr;gap:0 26px;padding:30px 0;border-bottom:1px solid var(--rule)}
+  .beat:last-child{border-bottom:none}
+  .t{padding-top:6px}
+  .t .at{display:block;font:600 14px/1 var(--mono);color:var(--accent)}
+  .t .len{display:block;margin-top:6px;font:11px/1 var(--mono);color:var(--ink-3)}
+  .cue{font:600 10px/1 var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px}
+  .line{font:400 20px/1.66 var(--read);color:var(--ink);margin:0 0 15px;max-width:54ch}
+  .line:last-child{margin-bottom:0}
+  .beat.close .line{font-weight:500}
+
+  .cues{margin:18px 0 0;padding:13px 17px;background:var(--paper-2);border:1px solid var(--rule);border-radius:4px;max-width:54ch}
+  .cues span{display:block;font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+  .cues ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .cues li{font:500 13.5px/1.45 var(--sans);color:var(--ink-2);padding-left:17px;position:relative}
+  .cues li::before{content:"";position:absolute;left:0;top:9px;width:7px;height:1.5px;background:var(--accent)}
+  .cues li b{color:var(--ink);font-weight:600}
+
+  footer{margin-top:44px;padding-top:20px;border-top:2px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+
+  @media (max-width:620px){
+    .page{padding:0 20px 70px}
+    .beat{grid-template-columns:1fr;gap:8px 0}
+    .t{padding-top:0;display:flex;gap:12px;align-items:baseline}
+    .t .len{margin-top:0}
+    .line{font-size:18px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="page">
+
+<header>
+  <div class="kicker">Narration &middot; Architecture Stack Diagram</div>
+  <h1>QuantSim Architecture &mdash; Spoken Walkthrough</h1>
+  <p class="sub">A continuous two-and-a-half minute narration for the five-layer stack diagram, with a
+  short cue list under each beat. Read the prose to rehearse; take only the cues in with you.</p>
+  <div class="facts">
+    <div><b>Runtime</b><br>2:52 at a measured pace</div>
+    <div><b>Words</b><br>431</div>
+    <div><b>Pairs with</b><br>QuantSim-Architecture-Stack.png</div>
+  </div>
+</header>
+
+<div class="delivery">
+  <span>Delivery</span>
+  <p>Have the diagram on screen before you begin. Move down it as you speak &mdash; the audience should
+  never be looking at a layer you are not currently on.</p>
+  <p>The three sentences worth slowing down for are the one about the gateway not authorising, the one
+  about Kafka's position, and the one about credentials. Everything else can run at pace.</p>
+</div>
+
+<div class="script">
+
+  <div class="beat">
+    <div class="t"><span class="at">0:00</span><span class="len">0:20</span></div>
+    <div>
+      <p class="cue">Opening</p>
+      <p class="line">This is the QuantSim architecture in a single view. It reads top to bottom, five
+      layers, and a request only ever travels in one direction through them. The thing worth watching as
+      we go down is not how many boxes there are &mdash; it is which boxes are permitted to talk to
+      which.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li>Whole architecture, <b>one view</b></li>
+          <li>Top to bottom, five layers</li>
+          <li>A request travels <b>one direction</b></li>
+          <li>Frame: <b>who may talk to whom</b></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="t"><span class="at">0:20</span><span class="len">0:18</span></div>
+    <div>
+      <p class="cue">1 &middot; Browser</p>
+      <p class="line">At the top is the browser. A single-page application holding no business logic and
+      no database access of its own &mdash; it renders state and it collects intent. It addresses one
+      origin, and only one. It never speaks to an individual service, which means anything below this
+      line can change without a frontend release.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li>SPA &mdash; <b>no logic, no database</b></li>
+          <li>Renders state, collects intent</li>
+          <li><b>One origin only</b></li>
+          <li>So anything below can change freely</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="t"><span class="at">0:38</span><span class="len">0:27</span></div>
+    <div>
+      <p class="cue">2 &middot; Gateway</p>
+      <p class="line">Everything enters through the gateway, which is the only component in the system
+      with a public address. It terminates TLS, verifies the token, applies rate limiting, and routes
+      each request to the one service that owns it. What it deliberately does not do is authorise. It
+      establishes identity and passes that inward; what you are permitted to do is decided by the
+      service that owns the action, where the rules actually live.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li>The <b>only public address</b></li>
+          <li>TLS, token, rate limit, route</li>
+          <li>Authenticates &mdash; <b>does not authorise</b></li>
+          <li>Permission decided where the rules live</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="t"><span class="at">1:05</span><span class="len">0:43</span></div>
+    <div>
+      <p class="cue">3 &middot; Services</p>
+      <p class="line">The third layer carries all of the business meaning &mdash; eight services,
+      divided by domain rather than by technical function. Platform holds identity and audit. Market
+      holds instruments, prices and derived series. Simulation, calibration and path generation.
+      Trading, the strategies and the ordered record of what was executed. ML, the model registry and
+      the feature store. Risk, stress testing and the topological pipeline. Explainability, attribution
+      and narration. And Dashboard, the read models, the alert rules, and every open client
+      connection.</p>
+      <p class="line">Each of these is independently deployable and independently scalable, and none of
+      them reaches into another's data. A service either calls a published API, or it reacts to an
+      event.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li>Eight services &mdash; <b>split by domain, not function</b></li>
+          <li>Platform &middot; identity, audit</li>
+          <li>Market &middot; prices, derived series</li>
+          <li>Simulation &middot; calibration, paths</li>
+          <li>Trading &middot; strategies, ordered record</li>
+          <li>ML &middot; registry, feature store</li>
+          <li>Risk &middot; stress, topology</li>
+          <li>Explainability &middot; attribution, narration</li>
+          <li>Dashboard &middot; read models, alerts, connections</li>
+          <li>Independently deployable and scalable</li>
+          <li>Never another's data &mdash; <b>API or event</b></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="t"><span class="at">1:48</span><span class="len">0:26</span></div>
+    <div>
+      <p class="cue">4 &middot; Kafka</p>
+      <p class="line">Which brings us to the fourth layer. Kafka sits beside the request path rather
+      than beneath it, and that placement is the point &mdash; it is how services tell one another that
+      something has happened, not a hop a user's request passes through on its way to data. The arrow
+      runs both ways because every service both publishes and consumes. Delivery is at-least-once, so
+      every consumer is built to be idempotent.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li><b>Beside</b> the request path, not beneath</li>
+          <li>How services say something happened</li>
+          <li>Not a hop on the way to data</li>
+          <li>Arrow both ways &mdash; all publish and consume</li>
+          <li>At-least-once &rarr; <b>consumers idempotent</b></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="t"><span class="at">2:14</span><span class="len">0:23</span></div>
+    <div>
+      <p class="cue">5 &middot; Storage</p>
+      <p class="line">At the bottom is storage, in three tiers: Postgres with TimescaleDB for
+      operational and time-series data, Redis for caching and job state, and object storage for large,
+      write-once artefacts. This layer is partitioned by owner. Each service holds credentials to its
+      own database and to nothing else &mdash; so there are no cross-service joins and no shared tables
+      anywhere in the system.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li>Postgres + TimescaleDB &middot; operational, time-series</li>
+          <li>Redis &middot; cache, job state</li>
+          <li>Object store &middot; large, write-once</li>
+          <li><b>Partitioned by owner</b></li>
+          <li>Own credentials only &mdash; no joins, no shared tables</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="beat close">
+    <div class="t"><span class="at">2:37</span><span class="len">0:15</span></div>
+    <div>
+      <p class="cue">Close</p>
+      <p class="line">And the dashed line up the right-hand side closes the loop &mdash; Dashboard
+      pushes state back to the browser rather than the client polling for it. One way in, one owner per
+      capability, one store per owner.</p>
+      <div class="cues">
+        <span>Cues</span>
+        <ul>
+          <li>Dashed line &mdash; Dashboard <b>pushes</b> to browser</li>
+          <li>Pushed, not polled</li>
+          <li>Land it: <b>one way in, one owner per capability, one store per owner</b></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  QuantSim &mdash; Architecture &amp; Physical Design v0.2 &middot; narration for the architecture stack diagram
+</footer>
+
+</div>

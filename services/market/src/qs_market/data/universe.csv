@@ -1,0 +1,43 @@
+# Starting universe: 40 liquid US instruments, sized for Tiingo's free tier
+# (one request per instrument per day, 45 requests per hour). Loaded by: qs-market seed-instruments
+symbol,name,exchange,calendar,currency,asset_class
+AAPL,Apple Inc.,XNAS,XNYS,USD,equity
+MSFT,Microsoft Corp.,XNAS,XNYS,USD,equity
+NVDA,NVIDIA Corp.,XNAS,XNYS,USD,equity
+AMZN,Amazon.com Inc.,XNAS,XNYS,USD,equity
+GOOGL,Alphabet Inc. Class A,XNAS,XNYS,USD,equity
+META,Meta Platforms Inc.,XNAS,XNYS,USD,equity
+TSLA,Tesla Inc.,XNAS,XNYS,USD,equity
+AVGO,Broadcom Inc.,XNAS,XNYS,USD,equity
+ADBE,Adobe Inc.,XNAS,XNYS,USD,equity
+NFLX,Netflix Inc.,XNAS,XNYS,USD,equity
+AMD,Advanced Micro Devices Inc.,XNAS,XNYS,USD,equity
+INTC,Intel Corp.,XNAS,XNYS,USD,equity
+CSCO,Cisco Systems Inc.,XNAS,XNYS,USD,equity
+COST,Costco Wholesale Corp.,XNAS,XNYS,USD,equity
+PEP,PepsiCo Inc.,XNAS,XNYS,USD,equity
+JPM,JPMorgan Chase & Co.,XNYS,XNYS,USD,equity
+V,Visa Inc.,XNYS,XNYS,USD,equity
+JNJ,Johnson & Johnson,XNYS,XNYS,USD,equity
+XOM,Exxon Mobil Corp.,XNYS,XNYS,USD,equity
+WMT,Walmart Inc.,XNYS,XNYS,USD,equity
+PG,Procter & Gamble Co.,XNYS,XNYS,USD,equity
+MA,Mastercard Inc.,XNYS,XNYS,USD,equity
+HD,Home Depot Inc.,XNYS,XNYS,USD,equity
+CVX,Chevron Corp.,XNYS,XNYS,USD,equity
+KO,Coca-Cola Co.,XNYS,XNYS,USD,equity
+BAC,Bank of America Corp.,XNYS,XNYS,USD,equity
+ABBV,AbbVie Inc.,XNYS,XNYS,USD,equity
+MRK,Merck & Co. Inc.,XNYS,XNYS,USD,equity
+CRM,Salesforce Inc.,XNYS,XNYS,USD,equity
+ORCL,Oracle Corp.,XNYS,XNYS,USD,equity
+SPY,SPDR S&P 500 ETF Trust,ARCX,XNYS,USD,etf
+QQQ,Invesco QQQ Trust,XNAS,XNYS,USD,etf
+IWM,iShares Russell 2000 ETF,ARCX,XNYS,USD,etf
+DIA,SPDR Dow Jones Industrial Average ETF,ARCX,XNYS,USD,etf
+XLF,Financial Select Sector SPDR Fund,ARCX,XNYS,USD,etf
+XLK,Technology Select Sector SPDR Fund,ARCX,XNYS,USD,etf
+XLE,Energy Select Sector SPDR Fund,ARCX,XNYS,USD,etf
+XLV,Health Care Select Sector SPDR Fund,ARCX,XNYS,USD,etf
+XLI,Industrial Select Sector SPDR Fund,ARCX,XNYS,USD,etf
+XLY,Consumer Discretionary Select Sector SPDR Fund,ARCX,XNYS,USD,etf

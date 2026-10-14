@@ -1,0 +1,2168 @@
+<title>QuantSim Panel Walkthrough</title>
+<style>
+  :root{
+    --ink:#14181d; --ink-2:#3d4650; --ink-3:#6b7683; --rule:#e2e6ea; --rule-2:#c9d0d7;
+    --paper:#ffffff; --paper-2:#f7f9fa; --accent:#0b6f5b; --accent-soft:#e8f4f0;
+    --say:#0b6f5b; --warn:#a85205; --warn-soft:#fdf4ec; --stop:#b81f1a; --stop-soft:#fcf0ef;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:Georgia,"Iowan Old Style",serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper-2);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 32px 120px;background:var(--paper)}
+
+  /* ---- masthead ---- */
+  .mast{padding:64px 0 40px;border-bottom:3px solid var(--ink)}
+  .mast .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .mast h1{font:600 42px/1.1 var(--serif);margin:14px 0 12px;letter-spacing:-.02em}
+  .mast .sub{font-size:18px;color:var(--ink-2);max-width:62ch}
+  .meta{display:flex;flex-wrap:wrap;gap:0 40px;margin-top:26px;font:13px/1.7 var(--mono);color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:600}
+
+  /* ---- table of contents ---- */
+  .toc{margin:40px 0 0;padding:24px 28px;background:var(--paper-2);border:1px solid var(--rule);border-radius:4px}
+  .toc h2{font:600 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 16px}
+  .toc ol{margin:0;padding-left:22px;columns:2;column-gap:44px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--rule-2)}
+  .toc a:hover{color:var(--accent);border-color:var(--accent)}
+  .toc .t{font:11px/1 var(--mono);color:var(--ink-3);margin-left:6px}
+
+  /* ---- acts & sections ---- */
+  .act{margin-top:76px;padding-top:26px;border-top:3px solid var(--ink)}
+  .act .no{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .act h2{font:600 30px/1.15 var(--serif);margin:12px 0 10px;letter-spacing:-.015em}
+  .act .lede{color:var(--ink-2);max-width:70ch;font-size:16.5px}
+  .act .clock{display:inline-block;margin-top:14px;font:11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-3);border:1px solid var(--rule-2);border-radius:99px;padding:6px 12px}
+
+  section{margin-top:52px;scroll-margin-top:20px}
+  section h3{font:600 21px/1.25 var(--serif);margin:0 0 4px;letter-spacing:-.01em}
+  section h3 .num{font:600 12px/1 var(--mono);color:var(--accent);margin-right:10px;letter-spacing:.06em}
+  .where{font:12px/1.5 var(--mono);color:var(--ink-3);margin:0 0 20px}
+  .where b{color:var(--ink-2);font-weight:600}
+
+  /* ---- screenshot ---- */
+  figure{margin:0 0 24px}
+  figure img{width:100%;display:block;border:1px solid var(--rule-2);border-radius:5px;background:#fff}
+  figcaption{font:12px/1.5 var(--mono);color:var(--ink-3);margin-top:9px}
+  figcaption b{color:var(--ink-2);font-weight:600}
+
+  /* ---- gist ---- */
+  .gist{border-left:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 22px}
+  .gist .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:7px}
+  .gist p{margin:0;font-size:16.5px;font-weight:500;color:var(--ink)}
+
+  /* ---- say this ---- */
+  .say{margin:0 0 22px}
+  .say .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:10px}
+  .say p{font:17px/1.72 var(--serif);color:var(--ink);margin:0 0 15px;max-width:74ch}
+  .say p:last-child{margin-bottom:0}
+  .say em{font-style:italic;color:var(--ink-2)}
+  .say strong{font-weight:600}
+  .stage{display:block;font:12px/1.5 var(--mono);color:var(--accent);margin:0 0 13px;letter-spacing:.01em}
+  .stage::before{content:"▸ ";}
+
+  /* ---- remember ---- */
+  .rem{border:1px solid var(--rule);border-radius:4px;padding:16px 20px 16px;margin:0 0 22px;background:var(--paper-2)}
+  .rem .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:11px}
+  .rem ul{margin:0;padding-left:19px}
+  .rem li{margin-bottom:7px;font-size:15px;line-height:1.55;color:var(--ink-2)}
+  .rem li:last-child{margin-bottom:0}
+  .rem li b{color:var(--ink);font-weight:600}
+
+  /* ---- ask / caution ---- */
+  .ask{border:1px solid var(--rule-2);border-left:4px solid var(--warn);background:var(--warn-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 22px}
+  .ask .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--warn);display:block;margin-bottom:9px}
+  .ask p{margin:0 0 10px;font-size:15px;line-height:1.6;color:var(--ink-2)}
+  .ask p:last-child{margin-bottom:0}
+  .ask .q{font-weight:600;color:var(--ink)}
+
+  .stopbox{border:1px solid var(--rule-2);border-left:4px solid var(--stop);background:var(--stop-soft);padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 22px}
+  .stopbox .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--stop);display:block;margin-bottom:9px}
+  .stopbox p,.stopbox li{font-size:15px;line-height:1.6;color:var(--ink-2);margin:0 0 9px}
+  .stopbox ul{margin:0;padding-left:19px}
+
+  /* ---- misc ---- */
+  code{font:13.5px/1 var(--mono);background:var(--paper-2);border:1px solid var(--rule);border-radius:3px;padding:2px 5px;color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 22px}
+  th{text-align:left;font:600 10px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+     padding:0 12px 9px 0;border-bottom:1.5px solid var(--rule-2)}
+  td{padding:10px 12px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top;color:var(--ink-2)}
+  td b{color:var(--ink);font-weight:600}
+  .end{margin-top:80px;padding-top:26px;border-top:3px solid var(--ink);font:12px/1.7 var(--mono);color:var(--ink-3)}
+
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:100%;padding:0}
+    .act,section{break-inside:avoid-page}
+    figure{break-inside:avoid-page}
+    .toc ol{columns:2}
+  }
+  @media (max-width:760px){
+    .wrap{padding:0 18px 80px}
+    .toc ol{columns:1}
+    .mast h1{font-size:32px}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">Presenter Script &middot; Panel Review</div>
+  <h1>QuantSim — Full Interface Walkthrough</h1>
+  <p class="sub">A complete, spoken-word script for demonstrating every screen of the QuantSim
+  interactive proof of concept to a panel with quantitative finance and risk domain expertise.</p>
+  <div class="meta">
+    <div><b>Build</b><br>develop-poc &middot; poc-1.0.0</div>
+    <div><b>Screens covered</b><br>35 routes &middot; 51 captures</div>
+    <div><b>Run time</b><br>~42 min walkthrough + Q&amp;A</div>
+    <div><b>Demo user</b><br>Quant role &middot; Research Environment</div>
+  </div>
+</header>
+
+<div class="toc">
+  <h2>Running order</h2>
+  <ol>
+    <li><a href="#act0">Before you walk in</a><span class="t">—</span></li>
+    <li><a href="#act1">Opening &amp; the shell</a><span class="t">5 min</span></li>
+    <li><a href="#act2">The data foundation</a><span class="t">6 min</span></li>
+    <li><a href="#act3">The golden path: market to portfolio</a><span class="t">10 min</span></li>
+    <li><a href="#act4">Three independent risk lenses</a><span class="t">12 min</span></li>
+    <li><a href="#act5">Synthesis: explain, score, alert</a><span class="t">5 min</span></li>
+    <li><a href="#act6">Governance, audit &amp; operations</a><span class="t">4 min</span></li>
+    <li><a href="#act7">Extended scope &amp; honest boundaries</a><span class="t">2 min</span></li>
+    <li><a href="#act8">Closing</a><span class="t">2 min</span></li>
+    <li><a href="#act9">Question bank</a><span class="t">—</span></li>
+    <li><a href="#act10">Appendix: things to know before they ask</a><span class="t">—</span></li>
+  </ol>
+</div>
+
+
+<!-- ============================================================ ACT 0 -->
+<div class="act" id="act0">
+  <div class="no">Act 0</div>
+  <h2>Before you walk in</h2>
+  <p class="lede">Five minutes of preparation that removes ninety percent of the ways a live demo
+  goes wrong. Do this while the room is still filling up.</p>
+</div>
+
+<section>
+  <h3><span class="num">0.1</span>Machine setup checklist</h3>
+  <div class="rem">
+    <span class="lbl">Do this first</span>
+    <ul>
+      <li>Run <code>npm run dev</code> and leave it running. Confirm the app loads before the panel sits down.</li>
+      <li>Browser at <b>100% zoom, full screen, 1600&times;900 or wider</b>. The layout caps at 1600px and the
+      sidebar behaves differently below the <code>lg</code> breakpoint — the Activity button hides on narrow screens.</li>
+      <li>Start on the <b>login page</b>, signed out. The entire demo state lives in memory, so a
+      hard refresh signs you out and resets the flow. That is your emergency reset — and also your
+      biggest hazard. <b>Do not press F5 mid-demo.</b></li>
+      <li>Close every other tab. Silence notifications. The interface is white and clean; a Slack
+      popup in the corner is the only thing that will look unprofessional.</li>
+      <li>Have this script on a second screen or printed. Do not read it word for word — read the
+      <b>gist</b> line, then talk.</li>
+    </ul>
+  </div>
+  <div class="stopbox">
+    <span class="lbl">The one rule</span>
+    <p>The demo is a <b>state machine</b>. Screens unlock as you advance through the flow — the Risk
+    Breakdown panel on the dashboard is empty until you have run all three analyses; the TDA pipeline
+    stages are locked until you step through them in order. If you jump ahead by clicking the sidebar,
+    you will land on a half-populated screen and have to explain why. <b>Follow the flow buttons at
+    the bottom-right of each page.</b> They are the intended path and they carry the state forward.</p>
+  </div>
+</section>
+
+<section>
+  <h3><span class="num">0.2</span>Framing — say this before you touch anything</h3>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Set expectations honestly in the first thirty seconds: this is a working interface over
+    deterministic demo data, not a computational engine. Say it once, clearly, and you will never be
+    accused of overselling.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Before I open anything, let me be precise about what you are about to see, because I would
+    rather set the boundary myself than have you discover it.</p>
+    <p>What I am showing you is a <strong>high-fidelity, click-through proof of concept</strong> for
+    QuantSim — an AI-assisted market simulation and portfolio risk analytics platform. Every screen is
+    real, built React code. Every interaction is real. The navigation, the state transitions, the
+    role model, the progressive disclosure through the analysis pipeline — all of that is genuinely
+    implemented and you can break it if you try.</p>
+    <p>What is <em>not</em> real is the mathematics behind the numbers. There is no backend, no
+    message bus, no distributed compute. There is no live Monte Carlo engine, no live persistent
+    homology computation, no trained model doing inference. Every figure you see comes from a single
+    centralised mock data layer, and the values are deterministic — the same on every run, so the
+    demo behaves identically for each of you.</p>
+    <p>So the question I am asking this panel to answer is not 'are these numbers correct'. It is:
+    <strong>is this the right interface for the workflow?</strong> Does the sequence match how a quant
+    and a risk analyst actually work? Is the information architecture right? Is anything missing that
+    would stop you from using this? That is what I need from you today."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Say the boundary first.</b> Volunteering the limitation buys you credibility for the next forty minutes.</li>
+      <li><b>Three words for what it is:</b> real interface, mock data, honest scope.</li>
+      <li><b>Redirect the question</b> from "is the maths right" to "is the workflow right". That is genuinely what a UI POC answers.</li>
+      <li><b>Deterministic, not random.</b> Mention this — a quant panel will immediately wonder whether numbers shift between screens. They do not.</li>
+      <li>Do not apologise for the mock data. State it as a design decision, because it is one.</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 1 -->
+<div class="act" id="act1">
+  <div class="no">Act 1</div>
+  <h2>Opening &amp; the shell</h2>
+  <p class="lede">Sign in, establish the role model, orient the panel in the workspace, then show the
+  dashboard in its cold state so that the transformation at the end of the demo lands.</p>
+  <span class="clock">≈ 5 minutes</span>
+</div>
+
+<section id="s-login">
+  <h3><span class="num">1.1</span>Sign in — and the role model</h3>
+  <p class="where"><b>Route</b> /login &nbsp;·&nbsp; <b>Action</b> Leave the credentials as they are, select <b>Quant</b>, click Sign In</p>
+  <figure>
+    <img src="screenshots/01-login.png" alt="QuantSim login screen with username, password and four role tiles">
+    <figcaption><b>01</b> — Login. Four role tiles: Viewer, Analyst, Quant, Admin. Quant is preselected.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The login screen is not a formality — it is where the permission model is introduced. The four
+    role tiles tell the panel that QuantSim is designed as a multi-persona platform before they have
+    seen a single chart.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Land on the login page. Do not click yet — let them read the four tiles.</span>
+    <p>"This is the entry point. Standard credentials at the top — and I want to draw your attention
+    to the four tiles underneath, because they are the first design decision worth discussing.</p>
+    <p>QuantSim is not built for a single user. It is built for four distinct personas with genuinely
+    different needs, and the platform enforces that separation as a capability model rather than as a
+    cosmetic label.</p>
+    <p>A <strong>Viewer</strong> consumes: dashboards, reports, alerts. They see risk, they cannot
+    create it. An <strong>Analyst</strong> is the risk practitioner — they run stress tests, they run
+    topological analysis, they compute metrics, they configure dashboards and set up alert rules, but
+    they do not author strategies or launch simulations. A <strong>Quant</strong> is the model builder
+    — everything an analyst can do, plus creating trading strategies, calibrating stochastic models,
+    launching simulations, constructing portfolios and managing the model registry. An
+    <strong>Admin</strong> adds the platform layer on top: user management, role assignment, instrument
+    reference data, system configuration.</p>
+    <p>The important point is that this is not four hard-coded menus. It is a capability matrix —
+    seventeen named capabilities mapped to roles — and I will show you that matrix explicitly later
+    in the administration section. In production this is exactly where you would bind to your
+    enterprise identity provider.</p>
+    <span class="stage">Select Quant. Click Sign In. There is a deliberate half-second transition — narrate over it.</span>
+    <p>"I am signing in as a Quant, because the Quant sees the widest slice of the platform and that
+    gives us the most to talk about."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Four personas:</b> Viewer consumes → Analyst analyses → Quant builds → Admin governs.</li>
+      <li>The role model is a <b>capability matrix of 17 named permissions</b>, not four hard-coded menus.</li>
+      <li>Roles are <b>cumulative</b> — each tier is a strict superset of the one below it.</li>
+      <li>Say <b>"this is where SSO/your IdP binds in production"</b> — it pre-answers the security question.</li>
+      <li>You are demoing as <b>Quant</b> because it has the widest visibility. Mention it, so nobody wonders.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-shell">
+  <h3><span class="num">1.2</span>The workspace shell — sidebar and top bar</h3>
+  <p class="where"><b>Route</b> /dashboard &nbsp;·&nbsp; <b>Action</b> Hover the left rail to expand it, then move the mouse away to collapse it again</p>
+  <figure>
+    <img src="screenshots/03-sidebar-expanded.png" alt="Sidebar expanded on hover showing seven grouped navigation sections">
+    <figcaption><b>03</b> — Sidebar expanded on hover. Seven sections: Overview, Market, Simulation, Trading, Intelligence, Risk, Monitoring, Administration.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The shell buys back screen real estate for charts. A 64-pixel icon rail that expands to a full
+    labelled menu on hover — you get orientation when you need it and maximum canvas when you do not.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Hover the left rail. Let it expand. Hold the mouse there while you talk.</span>
+    <p>"Two things about the shell before we go anywhere.</p>
+    <p>First, the navigation. It sits collapsed as an icon rail by default and expands to full labels
+    on hover. That is deliberate: analytics screens are dense — correlation matrices, fan charts,
+    persistence diagrams — and every pixel of horizontal space matters. You get the full labelled menu
+    the instant you reach for it, and you get it out of the way the instant you do not.</p>
+    <p>Second, look at how it is <em>grouped</em>, because the grouping is the product architecture
+    made visible. Overview. Market. Simulation. Trading. Intelligence. Risk. Monitoring.
+    Administration. That is not an alphabetical list of screens — it is the actual pipeline, in
+    order, top to bottom. A new user can read the sidebar and infer the workflow without being taught
+    it. The section containing your current page stays expanded automatically as you navigate, so you
+    never lose your place.</p>
+    <p>You will also notice two items carry a dashed <strong>'Extended Scope'</strong> badge — News
+    Extraction and Explainability. That badge appears throughout the interface, and it is a deliberate
+    honesty mechanism: it marks capabilities that are part of the product vision and are represented
+    here, but that sit outside the core build this POC focuses on. I will come back to both.</p>
+    <span class="stage">Move the mouse away. Sidebar collapses. Now point at the top bar.</span>
+    <p>"Across the top: the active research environment on the left — 'US Technology Basket'. A global
+    search spanning simulations, portfolios and instruments. Then on the right, four controls: an
+    <strong>Activity</strong> button that opens the system event stream — I will save that for the
+    end, because it is more meaningful once we have generated events. A live <strong>simulation
+    status pill</strong>, currently reading Idle, which will change as we run. A notification bell.
+    And a role switcher — I can demo as any of the four personas without signing out, which is useful
+    if you want to see a restricted view later."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Hover-to-expand rail</b> — density is the justification, not decoration. Say "every pixel matters on a correlation matrix".</li>
+      <li><b>Sidebar grouping = the pipeline.</b> Market → Simulation → Trading → Intelligence → Risk → Monitoring → Administration.</li>
+      <li>The active section <b>auto-expands</b>; you never lose your place.</li>
+      <li><b>"Extended Scope" dashed badge</b> = in the vision, not in this build. Flag it early, so it reads as honesty, not as a gap.</li>
+      <li>Top bar: environment · search · <b>Activity</b> · status pill · bell · role switcher.</li>
+      <li>Save the Activity drawer for Act 6 — it is empty of meaning until you have generated events.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-dash-cold">
+  <h3><span class="num">1.3</span>The dashboard — cold state</h3>
+  <p class="where"><b>Route</b> /dashboard &nbsp;·&nbsp; <b>Note</b> Point explicitly at the two empty panels at the bottom — you will return to them</p>
+  <figure>
+    <img src="screenshots/02-dashboard-initial.png" alt="Dashboard before any analysis: four KPI cards, equity curve, drawdown chart, two empty panels">
+    <figcaption><b>02</b> — Dashboard, cold. Note the two bottom panels: "No active run" and "Available once risk analysis completes".</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Show the dashboard <em>before</em> anything has been run, so that when you return at the end of
+    the walkthrough and it is populated with a HIGH risk badge and a live alert banner, the panel sees
+    the payoff rather than just another screen.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"This is the landing dashboard, and I want you to look at it carefully now because we are going
+    to come back to this exact screen at the end and it will look different.</p>
+    <p>The header line gives you your working context in one row — which market environment you are
+    in, which simulation is active, and a colour-coded composite risk badge. Right now it reads
+    MODERATE, amber, because no analysis has been run yet.</p>
+    <p>Underneath, four headline metrics: net profit in dollars, total return, variance of returns,
+    and annualised volatility. Deliberately just four. This is the number a portfolio manager glances
+    at between meetings, not the number they sit down to interrogate.</p>
+    <p>Then the two charts that matter most for a first read of a portfolio: the <strong>equity
+    curve</strong> — cumulative portfolio value across the last sixty sessions — and directly beside
+    it the <strong>drawdown chart</strong>, showing peak-to-trough decline over the same window.
+    Pairing them side by side is intentional. An equity curve alone flatters a strategy; the drawdown
+    underneath tells you what you had to survive to get it. Each panel carries its headline figure in
+    the corner — latest portfolio value, and maximum drawdown.</p>
+    <span class="stage">Point at the two bottom panels. This is the beat that pays off later.</span>
+    <p>"And now the part I actually want you to notice. These two bottom panels are
+    <strong>empty</strong>. 'Latest Analysis' says <em>no active run</em>. 'Risk Breakdown' says
+    <em>available once risk analysis completes</em>.</p>
+    <p>That is not an unfinished screen — that is the product's core position. QuantSim does not
+    invent a risk number for you. Risk is something you <em>produce</em>, by running an explicit,
+    auditable analysis. Until you do, the platform tells you honestly that it does not know. Hold that
+    thought; we are going to fill both of those panels, and I will bring you back here."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Show the cold state deliberately.</b> The empty panels are the setup for your closing beat.</li>
+      <li><b>Equity curve + drawdown, side by side</b> — "an equity curve flatters, the drawdown tells you what you survived".</li>
+      <li>Four KPIs only: <b>net profit, return, variance, volatility</b>. Restraint is the design argument.</li>
+      <li>Empty panels are a <b>stated product position</b>: risk is produced, never assumed.</li>
+      <li>Explicitly promise "<b>we will come back to this screen</b>" — then deliver in Act 5.</li>
+    </ul>
+  </div>
+  <div class="ask">
+    <span class="lbl">If they ask</span>
+    <p><span class="q">"Is the dashboard configurable?"</span> — Yes, in the capability model:
+    <code>configure_dashboards</code> is granted to Analyst and above. The layout you are seeing is
+    the default; per-user panel configuration is a build item, not an architectural one.</p>
+    <p><span class="q">"Why sixty sessions?"</span> — It is the demo window, chosen so the drawdown
+    structure is visible without compressing the chart. Window length is a display parameter.</p>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 2 -->
+<div class="act" id="act2">
+  <div class="no">Act 2</div>
+  <h2>The data foundation</h2>
+  <p class="lede">Before running anything, show the panel that QuantSim has a real reference-data
+  layer underneath it. This is the section that earns you credibility with the quants in the room —
+  it proves the product is not just a chart gallery.</p>
+  <span class="clock">≈ 6 minutes</span>
+</div>
+
+<section id="s-envs">
+  <h3><span class="num">2.1</span>Market Environments</h3>
+  <p class="where"><b>Route</b> /market/environments &nbsp;·&nbsp; <b>Sidebar</b> Market → Market Environments</p>
+  <figure>
+    <img src="screenshots/04-market-environments.png" alt="Market Environments table with three environments and status pills">
+    <figcaption><b>04</b> — Three environments: one Synthetic Market (Active), two Historical Replays (Ready, Draft).</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>A market environment is the container everything else runs inside. Establish this concept
+    properly now and the rest of the demo has somewhere to stand.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Everything in QuantSim happens inside a <strong>market environment</strong>, so let me define
+    that term before we use it forty more times.</p>
+    <p>A market environment is a bounded, reproducible world: a defined universe of instruments, a
+    fixed date window, and a data frequency. It is the container. Simulations run inside it, strategies
+    trade inside it, and risk is measured inside it. Two analyses run against the same environment are
+    directly comparable; two run against different environments are not, and the platform makes that
+    distinction explicit rather than leaving it to a naming convention in a spreadsheet.</p>
+    <p>There are two kinds, and the distinction matters analytically. A <strong>Historical
+    Replay</strong> steps through recorded market data over a fixed window — real observed prices, one
+    single realised path, useful for backtesting against what actually happened. A <strong>Synthetic
+    Market</strong> generates data from a stochastic process calibrated to historical statistics —
+    which lets you generate thousands of alternative paths and ask what <em>could</em> happen, not just
+    what did. Historical replay tells you about the past. Synthetic markets are how you get a
+    distribution.</p>
+    <p>Each row carries a lifecycle status — Active, Ready, Draft — so an environment being prepared
+    is visibly distinct from one that is validated and in use.</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Definition:</b> environment = universe + date window + frequency. The reproducible container.</li>
+      <li><b>Historical Replay</b> = one realised path, what <i>did</i> happen. Backtesting.</li>
+      <li><b>Synthetic Market</b> = calibrated stochastic process, thousands of paths, what <i>could</i> happen. Distributions.</li>
+      <li>One line that lands: "<b>Historical tells you about the past. Synthetic gets you a distribution.</b>"</li>
+      <li>Lifecycle status (Active / Ready / Draft) = governance, not decoration.</li>
+      <li>Comparability is enforced by the container, not by file naming.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-instruments">
+  <h3><span class="num">2.2</span>Instruments and market data</h3>
+  <p class="where"><b>Routes</b> /market/instruments, then /market/data &nbsp;·&nbsp; <b>Action</b> On Market Data, click through two or three symbols to show the chart re-render</p>
+  <figure>
+    <img src="screenshots/06-market-instruments.png" alt="Instruments reference table with symbol, name, sector, price, change">
+    <figcaption><b>06</b> — Instrument reference universe: symbol, name, sector, last price, change with directional colour.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/05-market-data.png" alt="Market Data page with symbol selector and 90-session candlestick chart">
+    <figcaption><b>05</b> — Market Data. Symbol chips across the top; 90-session daily OHLC candlestick below.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Two screens, one point: QuantSim owns its reference universe and can render true OHLC price
+    series for any instrument in it. This is the raw material the entire pipeline consumes.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Start on Instruments.</span>
+    <p>"The <strong>instruments</strong> screen is the reference universe — the master list of tradable
+    securities available across all environments. Symbol, name, sector classification, last price, and
+    daily change with directional colour: green for positive, red for negative, applied consistently
+    everywhere in the platform.</p>
+    <p>Sector is on this table for a specific reason that becomes important two acts from now. When we
+    reach stress testing, one of the scenarios is a sector collapse, and when we reach topological
+    analysis, the clusters that emerge tend to be sector clusters. Sector is not metadata here — it is
+    a risk dimension.</p>
+    <span class="stage">Navigate to Market Data. Click AAPL, then NVDA, then MSFT. Let them see the chart change.</span>
+    <p>"And this is the price data itself. Chips across the top for each instrument, and beneath it a
+    proper daily OHLC candlestick series — ninety sessions. Open, high, low, close, with the body and
+    wick rendered correctly, not a smoothed line pretending to be price data.</p>
+    <p>Watch it re-render as I switch symbols. Each instrument's series is generated from a
+    deterministic seed, which is why AAPL looks the same every time you open this screen. In
+    production this panel is fed by the market data service — the interface contract is identical."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Instruments = the <b>master reference universe</b> shared across all environments.</li>
+      <li><b>Sector is a risk dimension</b>, not metadata — it returns in stress testing and in TDA clustering. Plant this seed here.</li>
+      <li>Directional colour (green up / red down) is applied <b>consistently platform-wide</b>.</li>
+      <li>Real <b>OHLC candlesticks</b>, 90 sessions — say "not a smoothed line pretending to be price data".</li>
+      <li><b>Deterministic per-symbol seed</b> — same chart every time. Pre-empts "did that number just change?"</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-replay">
+  <h3><span class="num">2.3</span>Replay</h3>
+  <p class="where"><b>Route</b> /market/replay &nbsp;·&nbsp; <b>Action</b> Click Play, let it sit for a beat, then move on. Keep this one short.</p>
+  <figure>
+    <img src="screenshots/07-market-replay.png" alt="Replay page with candlestick chart, play control, progress bar and session counter">
+    <figcaption><b>07</b> — Replay: transport control, progress bar, session counter at 315 / 750.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Time is a first-class control. A quant can step through a historical window session by session
+    rather than only seeing the endpoint.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Replay is a small screen with a specific purpose: it makes <strong>time</strong> something you
+    can drive rather than something you only see the end of.</p>
+    <p>Transport control, a progress bar, and a session counter — currently three hundred and fifteen
+    of seven hundred and fifty sessions. You scrub through a historical window and watch structure
+    develop. That matters when you are investigating <em>when</em> a regime changed rather than
+    confirming <em>that</em> it changed — the same transport metaphor reappears in the trade replay
+    later, where you watch execution unfold order by order."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Purpose: <b>time as a controllable axis</b>, not just an endpoint.</li>
+      <li>Answers "<b>when</b> did structure change", not just "did it".</li>
+      <li>Same transport pattern <b>recurs in Trade Replay</b> — call the consistency out.</li>
+      <li>Keep this screen to 30 seconds. It is a supporting actor.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-calibrations">
+  <h3><span class="num">2.4</span>Calibrations and Models</h3>
+  <p class="where"><b>Routes</b> /simulation/calibrations, then /simulation/models &nbsp;·&nbsp; <b>Warning</b> This is the screen your quants will scrutinise. Slow down here.</p>
+  <figure>
+    <img src="screenshots/08-simulation-calibrations.png" alt="Calibrations table with drift, volatility, window and validity status">
+    <figcaption><b>08</b> — Calibrations: instrument, drift, volatility, estimation window, and a validity status. Note AMZN is flagged <b>Stale</b>.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/09-simulation-models.png" alt="Models page with four stochastic model cards and usage counts">
+    <figcaption><b>09</b> — Four stochastic models. Jump Diffusion carries the Extended Scope badge.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Calibration is treated as a governed, versioned, expiring artefact — not a parameter someone
+    typed into a form. The <b>Stale</b> flag on the AMZN row is the single most credible detail in this
+    entire section. Point at it.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Open Calibrations. Move the cursor to the AMZN row before you start talking.</span>
+    <p>"This screen matters more than its size suggests, so let me spend a moment on it.</p>
+    <p>A <strong>calibration</strong> is the set of statistical parameters fitted to historical data
+    that a stochastic model consumes. For a geometric Brownian motion that is a drift term and a
+    volatility term, estimated over a defined lookback window. Those numbers are not typed into a
+    configuration form — they are <em>fitted</em>, and they are the difference between a simulation
+    that reflects the asset and a simulation that is decorative noise.</p>
+    <p>So QuantSim treats calibration as a first-class, governed object. Every calibration is stored
+    with its instrument, its fitted drift, its fitted volatility, its estimation window in trading
+    days, and — critically — a <strong>validity status</strong>.</p>
+    <span class="stage">Point directly at the AMZN row.</span>
+    <p>"Look at this row. AMZN, fitted over a one-hundred-and-eighty-day window, flagged
+    <strong>Stale</strong>. Calibrations decay. Volatility regimes shift, and a parameter set fitted
+    to last year's market silently produces a confidently wrong distribution this year. The most
+    dangerous failure mode in this entire class of system is not a model that crashes — it is a model
+    that runs cleanly on expired parameters and hands you a number you believe.</p>
+    <p>So the platform surfaces staleness at the point of selection, before the run, rather than
+    burying it in a log afterwards. The other three are Valid, with a two-hundred-and-fifty-two-day
+    window — one full trading year.</p>
+    <span class="stage">Navigate to Models.</span>
+    <p>"And these are the stochastic processes available. Four of them.</p>
+    <p><strong>Geometric Brownian Motion</strong> — constant drift and volatility, log-normal
+    dynamics. The workhorse, and by usage count the most-run model here by a wide margin.
+    <strong>Ornstein-Uhlenbeck</strong> — mean-reverting, appropriate for range-bound assets, spreads,
+    anything with a gravitational centre. <strong>Regime Switching</strong> — Markov-modulated
+    volatility, so the process moves between distinct volatility states rather than assuming one
+    constant regime. And <strong>Jump Diffusion</strong> — diffusion with discrete Poisson-driven jump
+    events, which is how you model gap risk that a continuous process structurally cannot produce.</p>
+    <p>Note that Jump Diffusion carries the Extended Scope badge. It is represented in the interface,
+    it is selectable in the configuration screen, but its implementation sits outside this build's
+    core scope. I would rather show you the intended model shelf and mark what is not built than show
+    you three models and imply that is the ceiling."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Calibration = fitted parameters, not typed parameters.</b> This is the credibility line.</li>
+      <li><b>Point at the Stale AMZN row.</b> Your strongest single detail: the platform warns you <i>before</i> the run.</li>
+      <li>The killer line: "<b>the dangerous failure is not a model that crashes — it is one that runs cleanly on expired parameters.</b>"</li>
+      <li>252-day window = one trading year. 180-day = stale. Know both numbers.</li>
+      <li>Four models, one sentence each: <b>GBM</b> constant drift/vol · <b>OU</b> mean-reverting · <b>Regime Switching</b> Markov vol states · <b>Jump Diffusion</b> Poisson gap risk.</li>
+      <li>Jump Diffusion is <b>Extended Scope</b> — say so before anyone clicks it.</li>
+    </ul>
+  </div>
+  <div class="ask">
+    <span class="lbl">If they ask</span>
+    <p><span class="q">"What triggers the Stale flag?"</span> — In this POC it is a data attribute. The
+    intended rule is window age relative to a per-model recalibration policy — a 180-day fit outside
+    its revalidation period. That policy threshold is exactly the kind of thing that belongs in
+    Settings, where there is already a Risk Thresholds tab.</p>
+    <p><span class="q">"Can you calibrate from this screen?"</span> — <code>calibrate_models</code> is
+    a Quant-level capability in the matrix. The trigger action is not wired in this build; the
+    artefact, its lifecycle and its consumption point are.</p>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 3 -->
+<div class="act" id="act3">
+  <div class="no">Act 3</div>
+  <h2>The golden path — from market to portfolio</h2>
+  <p class="lede">This is the spine of the demo. Eight numbered steps, each screen leading to the next
+  by a single primary button at the bottom right. From here on, <b>always click the flow button</b> —
+  never the sidebar.</p>
+  <span class="clock">≈ 10 minutes</span>
+</div>
+
+<section>
+  <h3><span class="num">3.0</span>Set up the path before you start it</h3>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Return to the dashboard. Put your cursor on the "Run New Analysis" button and pause.</span>
+    <p>"Everything so far has been reference material — the world the platform knows about. Now I am
+    going to run the actual workflow, end to end, exactly as a quant would on a Monday morning.</p>
+    <p>It is an eight-step path, and the interface numbers each step for you in the header — you will
+    see 'Step 1 of 8', 'Step 2 of 8' and so on, so you always know where you are in the sequence and
+    how much is left. Each screen has exactly one primary action at the bottom right that carries you
+    forward. Market environment, simulation configuration, simulation run, results, portfolio
+    construction, trade execution, risk analysis, and finally the composite risk decision.</p>
+    <p>I want you watching for one thing as we go: <strong>the interface never asks you for something
+    it already knows.</strong> Each step inherits the context of the one before it. Watch the
+    calibration carry from the market environment, the strategy carry into the portfolio, the
+    portfolio carry into every risk screen. Let us start."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Eight steps, numbered in the UI</b> — the panel can always see where they are.</li>
+      <li><b>One primary action per screen, bottom right.</b> Never navigate by sidebar during this act.</li>
+      <li>Give them <b>one thing to watch for</b>: context inheritance, step to step.</li>
+      <li>Frame it as "what a quant does on a Monday morning" — a workflow, not a feature tour.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-step1">
+  <h3><span class="num">3.1</span>Step 1 of 8 — Create Market Environment</h3>
+  <p class="where"><b>Route</b> /market/environments/new &nbsp;·&nbsp; <b>Action</b> Toggle between the two market types; deselect and reselect a ticker chip; then click <b>Continue to Simulation</b></p>
+  <figure>
+    <img src="screenshots/16-flow-1-create-market-environment.png" alt="Create Market Environment: market type cards, universe chips, data window and preview chart">
+    <figcaption><b>16</b> — Step 1. Market type selection, universe chips, data window summary, live reference preview.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Four decisions on one screen — type, universe, window, frequency — with an immediate visual
+    preview so you are never configuring blind.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Step one. Define the world.</p>
+    <p>Two choices at the top, and this is the historical-versus-synthetic decision we discussed
+    earlier, now presented as an actual fork in the workflow. <em>Historical Replay</em>: replay
+    recorded market data over a fixed window. <em>Synthetic Market</em>: generate a market from a
+    process calibrated to historical statistics. I am selecting Synthetic, because the whole point of
+    what follows is generating a distribution of outcomes rather than re-reading one realised path.</p>
+    <span class="stage">Click a ticker chip to deselect it, then click it again to reselect. Small gesture, real point.</span>
+    <p>"Below that, the universe. Seven instruments available, five selected — Apple, Microsoft,
+    Nvidia, Amazon, Alphabet. These are toggles, so composing a universe takes seconds. And this
+    matters more than it looks: <strong>the universe you pick here is the universe the topological
+    analysis operates on</strong>. Five assets gives you ten pairwise correlations, which is the point
+    cloud that persistent homology will consume in Act 4. Universe selection is not cosmetic — it
+    determines the dimensionality of everything downstream.</p>
+    <p>Then the data window — start, end, frequency, and the resolved universe label — and beside it a
+    live preview of a reference series so you can see the character of the data before you commit to
+    it. You are never configuring blind.</p>
+    <span class="stage">Click "Continue to Simulation". Notice the header on the next screen now says Step 2 of 8.</span>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Four decisions on one screen: <b>type, universe, window, frequency</b>.</li>
+      <li>Choose <b>Synthetic</b> and say why: "because I want a distribution, not one path".</li>
+      <li><b>Universe = TDA dimensionality.</b> 5 assets → 10 pairwise correlations. This is the strongest line on the screen — it links Act 3 to Act 4.</li>
+      <li><b>Live preview</b> = "never configuring blind".</li>
+      <li>Toggle a chip on and off while talking. Movement holds attention.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-step2">
+  <h3><span class="num">3.2</span>Step 2 of 8 — Simulation Configuration</h3>
+  <p class="where"><b>Route</b> /simulation/configure &nbsp;·&nbsp; <b>Action</b> Click through the four model cards, land back on GBM, then click <b>Run Simulation</b></p>
+  <figure>
+    <img src="screenshots/17-flow-2-configure-simulation.png" alt="Simulation Configuration: four model cards, run parameters, calibration summary">
+    <figcaption><b>17</b> — Step 2. Model shelf on top; run parameters and the inherited calibration summary below.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>This is where the calibration story you set up in Act 2 pays off: the fitted parameters appear
+    beside the run configuration, validated, before you launch. Model risk is made visible at the
+    moment of the decision.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Step two. Choose the process.</p>
+    <p>Here is the model shelf again, now as a live selector — GBM, Jump Diffusion with its Extended
+    Scope badge, Ornstein-Uhlenbeck, Regime Switching. I am staying with geometric Brownian motion for
+    this run because it is the transparent baseline, and because the point of this walkthrough is the
+    workflow rather than the process.</p>
+    <p>Underneath, the run parameters. Instrument: AAPL. <strong>Ten thousand paths. Two hundred and
+    fifty-two time steps</strong> — one trading year, daily. Confidence level ninety-five percent. Ten
+    thousand paths is a meaningful ensemble: enough that your fifth and ninety-fifth percentiles are
+    stable rather than noisy, which is exactly what you need if you are going to quote a VaR off the
+    resulting distribution.</p>
+    <span class="stage">Move to the right panel — the calibration summary. This is the callback.</span>
+    <p>"And here — this is the panel I set you up for earlier. The <strong>calibration summary</strong>
+    is carried into this screen automatically. Drift, zero point zero eight four. Volatility, zero
+    point two three one. Window, two hundred and fifty-two days. Status: <em>Valid</em>, with a green
+    pill.</p>
+    <p>I did not select this calibration on this screen. It was inherited from the environment I built
+    in step one. And I cannot launch a run without seeing, at the moment of launch, exactly which
+    fitted parameters I am about to use and whether they are still trusted. That is model risk
+    governance expressed as interface design — the check is in your path, not in a report you read
+    afterwards."</p>
+    <span class="stage">Click "Run Simulation".</span>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Numbers to have ready: <b>10,000 paths · 252 steps · 95% confidence</b>.</li>
+      <li>Justify 10,000: "<b>enough that the 5th and 95th percentiles are stable, not noisy</b>" — matters if you quote VaR off it.</li>
+      <li>252 steps = one trading year, daily. Say it, do not make them work it out.</li>
+      <li><b>The calibration is inherited, not re-entered.</b> This is your context-inheritance proof point.</li>
+      <li>Closing line: "<b>model risk governance expressed as interface design — the check is in your path, not in a report afterwards.</b>"</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-step3">
+  <h3><span class="num">3.3</span>Step 3 of 8 — the simulation runs</h3>
+  <p class="where"><b>Route</b> /simulation/run/1042 &nbsp;·&nbsp; <b>Timing</b> Roughly 8 seconds of live progress. Talk over it — do not stand in silence.</p>
+  <figure>
+    <img src="screenshots/18-flow-3-simulation-running.png" alt="Simulation running: progress bar mid-way, worker stats, partially revealed fan chart, event log">
+    <figcaption><b>18</b> — Mid-run. Progress bar, live path counter, four active workers, fan chart revealing progressively, event log streaming.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/19-flow-4-simulation-complete.png" alt="Simulation complete at 100 percent with full fan chart and complete event log">
+    <figcaption><b>19</b> — Complete. 10,000 / 10,000 paths, full ensemble rendered, event log closed out.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>A long-running distributed job is rendered as an <em>observable</em> process — progress, worker
+    count, elapsed and remaining time, a streaming event log, and a chart that fills in as the
+    ensemble builds. This is the screen that makes the system feel real.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">The run starts immediately. Start talking straight away — you have about eight seconds.</span>
+    <p>"And it is running. Watch four things at once, because this screen is deliberately doing four
+    jobs.</p>
+    <p>The <strong>progress bar and path counter</strong> — paths generated against ten thousand,
+    climbing live. The <strong>worker count</strong>, four active: this is Monte Carlo, it is
+    embarrassingly parallel, and the architecture distributes the ensemble across workers. Elapsed
+    time and estimated remaining time, so a quant running a serious job knows whether to wait or go
+    and do something else.</p>
+    <p>Then the <strong>fan chart</strong> in the middle, and this is my favourite detail on the
+    screen: it is not a spinner that gets replaced by a result. The ensemble <em>reveals itself
+    progressively</em> as paths complete. You are watching the distribution take shape. If something
+    pathological were happening in the process, you would see it here rather than in a summary
+    statistic ten minutes later.</p>
+    <p>And underneath, the <strong>event log</strong>, streaming with timestamps: calibration
+    validated, job queued, worker one started, worker two, three, four, twenty-five hundred paths,
+    five thousand, seventy-five hundred, ten thousand. Every one of those lines corresponds to an
+    event that would be published on the message bus in the production architecture. This log is the
+    user-facing surface of an event-driven backend, and I will show you the same events again from the
+    system side at the end.</p>
+    <span class="stage">It completes. The status pill flips to green, the "View Results" button appears.</span>
+    <p>"Complete. Ten thousand of ten thousand. The status pill has flipped to green, and a new action
+    has appeared — the interface only offers you the next step once the current one has genuinely
+    finished. Note also that the failure path is built: if a worker were unavailable, this screen shows
+    a failure state with a retry action rather than hanging silently."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Talk continuously through the ~8 seconds.</b> Silence during a progress bar kills momentum.</li>
+      <li>Four things happening at once: <b>progress · workers · fan chart revealing · event log streaming</b>.</li>
+      <li>"<b>Monte Carlo is embarrassingly parallel</b>" — justifies the 4-worker display to a technical panel.</li>
+      <li>Best line: "<b>it is not a spinner replaced by a result — the ensemble reveals itself as paths complete.</b>"</li>
+      <li>The event log = <b>the user-facing surface of the event-driven backbone</b>. Promise the callback in Act 6.</li>
+      <li>Mention the <b>failure + retry state exists</b> — panels always ask what happens when it breaks.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-step4">
+  <h3><span class="num">3.4</span>Step 4 of 8 — Simulation Results</h3>
+  <p class="where"><b>Route</b> /simulation/results/1042 &nbsp;·&nbsp; <b>Action</b> Read the four percentiles aloud, then the two risk figures, then click <b>Create Portfolio</b></p>
+  <figure>
+    <img src="screenshots/20-flow-5-simulation-results.png" alt="Simulation Results: large fan chart, terminal price statistics, VaR and CVaR">
+    <figcaption><b>20</b> — Step 4. Fan chart at full size; terminal price distribution and risk summary on the right.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Ten thousand paths collapsed into the four numbers a risk practitioner actually uses — and
+    then, critically, into VaR and CVaR side by side.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Step four. The ensemble, summarised.</p>
+    <p>The <strong>fan chart</strong> now at full size. Every path is one simulated trajectory of AAPL
+    over a trading year; the density of the fan is the probability mass. Narrow early, spreading as
+    uncertainty compounds — which is the correct shape and the intuitive one.</p>
+    <p>On the right, the <strong>terminal price distribution</strong> reduced to four numbers. Mean,
+    two hundred thirty-eight forty-one. Median, two hundred thirty-four eighty. The mean sitting above
+    the median is the right-skew you expect from a log-normal process — worth saying out loud in this
+    room, because it tells you the summary is behaving consistently with the model that produced it.
+    Then the fifth percentile at one eighty-one twenty-two and the ninety-fifth at three hundred twelve
+    seventeen — the ninety percent confidence interval on where this asset lands in a year.</p>
+    <span class="stage">Move to the Risk Summary panel underneath.</span>
+    <p>"And underneath, the two figures a risk function actually reports on. <strong>Value at
+    Risk</strong> at ninety-five percent: minus eight point seven percent — the loss you do not expect
+    to exceed nineteen days out of twenty. And directly beneath it <strong>Conditional VaR</strong>,
+    minus twelve point nine — the average loss <em>given</em> that you are in that worst five percent.</p>
+    <p>The reason those two sit adjacent rather than on separate screens is that VaR alone is a
+    genuinely dangerous number. It tells you the threshold and says nothing about the depth of the
+    tail behind it. CVaR tells you how bad it gets once you are through. Displaying them apart invites
+    exactly the misreading that this discipline has spent fifteen years trying to unlearn."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Numbers: <b>mean $238.41 · median $234.80 · P5 $181.22 · P95 $312.17</b>.</li>
+      <li><b>Mean &gt; median = right skew = consistent with log-normal.</b> Say this; a quant panel will notice you noticed.</li>
+      <li>P5–P95 = the <b>90% confidence interval</b> on terminal price.</li>
+      <li><b>VaR −8.7%</b> = threshold, 19 days out of 20. <b>CVaR −12.9%</b> = average loss given you breached it.</li>
+      <li>The argument for the layout: "<b>VaR alone is a dangerous number — it gives the threshold and says nothing about the depth of the tail.</b>"</li>
+    </ul>
+  </div>
+  <div class="ask">
+    <span class="lbl">If they ask</span>
+    <p><span class="q">"Historical, parametric or Monte Carlo VaR?"</span> — Monte Carlo, computed from
+    this ensemble's terminal distribution, which is the internally consistent choice given the
+    simulation you just watched. In this POC the figure is fixed demo data; the placement and the
+    method are the design statement.</p>
+  </div>
+</section>
+
+<section id="s-strategies">
+  <h3><span class="num">3.5</span>Interlude — the strategy library</h3>
+  <p class="where"><b>Routes</b> /trading/strategies and /trading/strategies/strat-momentum-1 &nbsp;·&nbsp; <b>Action</b> Optional detour. Drag the Maximum Position slider — it is the only tactile control in the demo.</p>
+  <figure>
+    <img src="screenshots/11-trading-strategies.png" alt="Strategies library: three strategy cards with plain-language rules">
+    <figcaption><b>11</b> — Three strategies: Momentum, Value, Pairs. Rules stated in plain language.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/12-trading-configure-strategy.png" alt="Configure Strategy: name, rebalance frequency, max position slider, editable rule list">
+    <figcaption><b>12</b> — Strategy editor: rebalance cadence, position limit slider, add/remove rule rows.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Strategies are declarative and readable. A risk officer who does not code can audit what a
+    strategy does by reading three bullet points — which is the whole argument for stating rules in
+    plain language.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Quick detour, because the next step asks me to choose a strategy and I should show you where
+    they come from.</p>
+    <p>Three strategies in the library. <strong>Momentum</strong> — buy positive twenty-day momentum,
+    rebalance weekly, cap any position at twenty-five percent. <strong>Value</strong> — buy below the
+    trailing two-hundred-day average valuation, rebalance monthly, cap at twenty percent.
+    <strong>Pairs</strong> — trade the spread between two historically correlated instruments,
+    rebalance daily, cap at fifteen percent.</p>
+    <p>Notice that each one is stated in three plain-language lines: an entry rule, a rebalance
+    cadence, a position limit. That is deliberate. A risk officer who does not read Python can audit
+    what this strategy does by reading three bullet points. And note the cadence and the cap move
+    together with the strategy's character — pairs trading rebalances daily and carries the tightest
+    position limit, because it is the highest-turnover, highest-concentration approach of the three.</p>
+    <span class="stage">Open the Momentum strategy in the editor. Drag the Maximum Position slider.</span>
+    <p>"And the editor. Name, rebalance frequency, a position limit on a live slider — watch the
+    percentage update as I drag it — and the rules as an editable list you can add to and remove from.
+    The strategy definition and the risk constraint live in the same form, so you cannot author a
+    strategy without confronting its concentration limit."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Three strategies, each = <b>entry rule + rebalance cadence + position cap</b>.</li>
+      <li>The argument: "<b>a risk officer who does not read Python can audit this by reading three bullet points.</b>"</li>
+      <li>Cadence and cap <b>track the strategy's character</b>: pairs = daily + tightest 15% cap.</li>
+      <li><b>Drag the slider.</b> It is the only genuinely tactile control in the demo — use it.</li>
+      <li>Constraint and definition <b>in the same form</b> — you cannot author without confronting concentration.</li>
+      <li>Cut this section entirely if you are running long. It is the one dispensable stop.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-step5">
+  <h3><span class="num">3.6</span>Step 5 of 8 — Create Portfolio</h3>
+  <p class="where"><b>Route</b> /trading/portfolios/new &nbsp;·&nbsp; <b>Action</b> Point at the weight bars, then at the execution assumptions, then click <b>Run Strategy</b></p>
+  <figure>
+    <img src="screenshots/21-flow-6-create-portfolio.png" alt="Create Portfolio: strategy rules, capital, position weight bars, execution assumptions">
+    <figcaption><b>21</b> — Step 5. Inherited strategy at top; capital and weights left; transaction cost and slippage right.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The execution assumptions panel is the most important thing on this screen. Transaction cost
+    and slippage are stated <em>before</em> the run, on the same screen as the weights — which is how
+    you prevent a backtest that quietly assumes frictionless trading.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Step five. Turn the simulation into a portfolio.</p>
+    <p>At the top, the strategy — inherited, with its rules restated so you are looking at them at the
+    moment you commit capital rather than remembering them from another screen.</p>
+    <p>On the left, one million dollars starting capital, base currency USD, and the position weights
+    as horizontal bars: Apple twenty-four, Microsoft twenty-one, Nvidia twenty-five, Amazon fifteen,
+    Alphabet fifteen. Bars rather than a table because concentration is a <em>shape</em> — you can see
+    in a fraction of a second that this is a top-heavy book with three positions in the low-to-mid
+    twenties. And every one of them sits inside the strategy's twenty-five percent cap, so the
+    constraint we just set is visibly binding on Nvidia.</p>
+    <span class="stage">Move to the right panel and slow down. This is the screen's real argument.</span>
+    <p>"And on the right — the panel I would like this panel to notice. <strong>Execution
+    assumptions</strong>. Transaction cost, five basis points. Slippage, two basis points.</p>
+    <p>These are stated <em>before</em> the run, on the same screen as the weights, as a first-class
+    input rather than a footnote in a methodology document. The reason is that the single most common
+    way a backtest lies to you is by quietly assuming frictionless execution. A strategy that
+    rebalances weekly across five positions incurs real cost, and if that cost is invisible at
+    configuration time it is invisible in the result. Here it is a declared parameter of the run, and
+    it is auditable afterwards."</p>
+    <span class="stage">Click "Run Strategy".</span>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>$1,000,000 · USD · weights <b>AAPL 24 / MSFT 21 / NVDA 25 / AMZN 15 / GOOGL 15</b>.</li>
+      <li><b>NVDA at 25% is exactly on the strategy cap</b> — point this out; it proves the constraint binds.</li>
+      <li>Bars not tables because "<b>concentration is a shape</b>".</li>
+      <li>The headline argument: <b>transaction cost 5bp + slippage 2bp, declared before the run</b>.</li>
+      <li>Killer line: "<b>the most common way a backtest lies to you is by quietly assuming frictionless execution.</b>"</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-step6">
+  <h3><span class="num">3.7</span>Step 6 of 8 — Trade Replay</h3>
+  <p class="where"><b>Route</b> /trading/replay/1042 &nbsp;·&nbsp; <b>Action</b> It auto-plays. Click <b>20&times;</b> if you are behind schedule. Talk over the fills.</p>
+  <figure>
+    <img src="screenshots/22-flow-7-trade-replay-running.png" alt="Trade replay running: transport controls, event pipeline highlight, live portfolio value, partial order table">
+    <figcaption><b>22</b> — Mid-replay. Speed controls, the five-stage event pipeline highlighting live, orders filling one by one.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/23-flow-8-trade-replay-complete.png" alt="Trade replay complete: all ten fills, final portfolio value, analyze risk button">
+    <figcaption><b>23</b> — Complete. Ten of ten fills, final value, and the handoff into risk analysis.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The execution pipeline — tick, signal, order, fill, portfolio update — is animated live above
+    the order blotter. This is the screen where the panel can see the event-driven architecture rather
+    than be told about it.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">It starts playing on load. Begin immediately.</span>
+    <p>"Step six, and this is the strategy executing inside the simulated market. It is running now.</p>
+    <p>Transport controls on the left — play, pause, and speed at one, five or twenty times. The
+    speed control exists because a quant investigating a specific fill needs to slow down and step,
+    while a quant reviewing a whole session needs to skip.</p>
+    <span class="stage">Point at the highlighted pipeline on the right of the control bar.</span>
+    <p>"Now look at the right of that control bar, because this is the important part. Five stages,
+    highlighting in sequence as the replay runs: <strong>Market Tick</strong> → <strong>Strategy
+    Signal</strong> → <strong>Order Placed</strong> → <strong>Order Filled</strong> →
+    <strong>Portfolio Updated</strong>.</p>
+    <p>That is the actual event chain of the trading engine, animated live. A market tick arrives. The
+    strategy evaluates it and may emit a signal. A signal becomes an order. An order fills. The fill
+    updates portfolio state. Each of those is a discrete event on the bus, and each is independently
+    observable — which is what makes execution debuggable. When a fill looks wrong you can ask which
+    of those five stages produced the wrong thing, rather than staring at a P&amp;L number.</p>
+    <p>Below, three live counters — portfolio value ticking up, fill count, session window nine-thirty
+    to sixteen hundred — and the order blotter filling in row by row: timestamp, buy or sell in
+    directional colour, instrument, quantity, execution price, fill status.</p>
+    <span class="stage">It completes at ten fills. The "Analyze Portfolio Risk" button appears.</span>
+    <p>"Ten fills, session closed. And now the handoff that the whole first half of this demo has been
+    building toward: <em>Analyze Portfolio Risk</em>. We have a portfolio with a real position set,
+    a real execution history and declared costs. The question stops being 'what did it return' and
+    becomes 'what could go wrong with it'."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Speeds <b>1× / 5× / 20×</b> — justify with "slow to investigate a fill, fast to review a session".</li>
+      <li><b>The five-stage pipeline is the centrepiece:</b> Tick → Signal → Order → Fill → Portfolio Update.</li>
+      <li>Why it matters: "<b>each stage is independently observable, which is what makes execution debuggable.</b>"</li>
+      <li>Ten fills, session 09:30–16:00, blotter with timestamp / side / instrument / qty / price / status.</li>
+      <li>The pivot line into Act 4: "<b>the question stops being what did it return, and becomes what could go wrong.</b>"</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 4 -->
+<div class="act" id="act4">
+  <div class="no">Act 4</div>
+  <h2>Three independent risk lenses</h2>
+  <p class="lede">The intellectual core of QuantSim and the longest act. Three methodologically
+  independent views of the same portfolio — scenario stress, topological structure, machine learning
+  — each answering a question the other two cannot.</p>
+  <span class="clock">≈ 12 minutes</span>
+</div>
+
+<section id="s-step7">
+  <h3><span class="num">4.1</span>Step 7 of 8 — Risk Overview, the fork</h3>
+  <p class="where"><b>Route</b> /risk/overview &nbsp;·&nbsp; <b>Action</b> Read the three taglines aloud. Then click <b>Run Full Risk Analysis</b>.</p>
+  <figure>
+    <img src="screenshots/24-flow-9-risk-overview.png" alt="Risk Overview: four portfolio KPIs and three analysis choice cards with taglines">
+    <figcaption><b>24</b> — Step 7. Portfolio summary on top; three analysis cards, each posed as a question.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Three cards, three questions. Read the taglines aloud — they are the clearest statement of
+    QuantSim's thesis anywhere in the product.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Step seven, and this screen is the thesis of the entire platform, so let me be slow and clear.</p>
+    <p>At the top, the portfolio as it now stands: one million eighty-three thousand four hundred and
+    twenty-one dollars, up eight point three four percent, eighteen point two percent annualised
+    volatility, maximum drawdown minus eleven point seven percent. A perfectly respectable result. A
+    strategy you would be pleased to show someone.</p>
+    <p>And the position of this product is that <strong>those four numbers tell you almost nothing
+    about the risk you are carrying</strong>. They are backward-looking. They describe what happened.
+    They are silent on what is about to.</p>
+    <span class="stage">Move to the three cards. Read each tagline out loud, deliberately.</span>
+    <p>"So QuantSim offers three analyses, and read what is written under each one, because these
+    taglines are the clearest articulation of the product's argument.</p>
+    <p><strong>Stress Testing</strong> — <em>'What if disaster strikes?'</em> A hypothetical,
+    scenario-driven view. You impose a shock and measure what breaks.</p>
+    <p><strong>TDA Analysis</strong> — <em>'Is market structure changing?'</em> A structural,
+    geometric view. Not the level of risk, but whether the <em>shape</em> of the relationships between
+    your assets is deforming.</p>
+    <p><strong>ML Prediction</strong> — <em>'What does the data suggest?'</em> A statistical,
+    forward-looking view learned from historical patterns.</p>
+    <p>Three questions. Three methodologies with genuinely different failure modes. And that
+    independence is the design point: a scenario test only finds what you thought to imagine, a
+    topological signal is agnostic about causes and can flag structural change nobody scripted, and a
+    machine learning model finds patterns neither of the first two encode — but only patterns
+    resembling its training data. Each covers a blind spot in the others. Run one and you have an
+    opinion; run all three and where they agree, you have something worth acting on.</p>
+    <span class="stage">Point at the Recommended Path panel and click "Run Full Risk Analysis".</span>
+    <p>"The interface makes that recommendation explicitly rather than leaving it to discipline. You
+    can open any lens individually — and once one has run, its card carries a coloured risk badge so
+    you can see at a glance which analyses are complete. But the recommended path runs all three and
+    then composes them."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Portfolio: <b>$1,083,421 · +8.34% · 18.2% vol · −11.7% max DD</b>.</li>
+      <li>Set-up line: "<b>a perfectly respectable result — and those four numbers tell you almost nothing about the risk you are carrying.</b>"</li>
+      <li><b>Read the three taglines verbatim.</b> Stress: what if disaster strikes. TDA: is structure changing. ML: what does the data suggest.</li>
+      <li>Each lens's blind spot: <b>stress only finds what you imagined</b> · <b>TDA is agnostic about cause</b> · <b>ML only sees patterns like its training data</b>.</li>
+      <li>The thesis in one sentence: "<b>run one and you have an opinion; run all three and where they agree, you have something worth acting on.</b>"</li>
+      <li>Cards gain a <b>risk badge once run</b> — completeness is visible.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-stress">
+  <h3><span class="num">4.2</span>Lens one — Stress Testing</h3>
+  <p class="where"><b>Route</b> /risk/stress-testing &nbsp;·&nbsp; <b>Action</b> Click through the five scenarios to show the descriptions change; land on <b>Correlated Failure</b>; click Run Stress Test</p>
+  <figure>
+    <img src="screenshots/25-flow-10-stress-scenario-select.png" alt="Stress Testing scenario selection: five scenario cards with description">
+    <figcaption><b>25</b> — Five scenarios. Correlated Failure selected; its description resolves below the row.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/26-flow-11-stress-processing.png" alt="Stress test processing with four sequential steps">
+    <figcaption><b>26</b> — Processing: applying scenario → revaluing portfolio → calculating losses → generating recovery profile.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/27-flow-12-stress-complete.png" alt="Stress test complete: max loss, VaR, CVaR, recovery time, contribution bars">
+    <figcaption><b>27</b> — Result: −21.4% max loss, ELEVATED badge, and per-position loss contribution.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Five named scenarios, then four numbers and an attribution chart. The recovery-time figure and
+    the contribution breakdown are what separate this from a single scary percentage.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Click Flash Crash, then Liquidity Shock, then back to Correlated Failure. The description text updates each time.</span>
+    <p>"Lens one. Stress testing, and five named scenarios — each with a description that resolves
+    underneath as you select it.</p>
+    <p><strong>Flash Crash</strong> — a sudden sharp decline across the book within minutes, with
+    partial recovery. <strong>Liquidity Shock</strong> — spreads widen, market depth collapses,
+    execution cost explodes. <strong>Volatility Spike</strong> — realised and implied volatility surge
+    across the universe, compressing risk-adjusted returns. <strong>Sector Collapse</strong> — a
+    concentrated drawdown in one sector propagating to portfolio level. And <strong>Correlated
+    Failure</strong> — diversification collapses as correlations converge toward one.</p>
+    <p>I am selecting Correlated Failure deliberately, and I want to say why in this room. It is the
+    scenario that breaks portfolios which look well diversified on paper. Our book holds five names
+    across four sectors. Under normal conditions that is genuine diversification. In a correlated
+    failure, every one of those positions moves together, the diversification benefit you were
+    counting on evaporates precisely when you need it, and your effective concentration turns out to
+    be far higher than your position weights suggested. It is the scenario most likely to surprise
+    the person who built the portfolio.</p>
+    <span class="stage">Click Run Stress Test. The four processing steps take about two seconds.</span>
+    <p>"And notice the processing is not a spinner — it names the four stages as it works through
+    them: applying the scenario, revaluing the portfolio, calculating losses, generating the recovery
+    profile. That is the actual sequence of a stress computation, and showing it makes the operation
+    legible rather than magical.</p>
+    <span class="stage">The result appears. Take the four numbers one at a time.</span>
+    <p>"The result. <strong>Maximum loss, minus twenty-one point four percent.</strong> VaR minus
+    eighteen point seven. CVaR minus twenty-five point one. And a fourth number I want to dwell on:
+    <strong>recovery time, forty-seven days</strong>.</p>
+    <p>Recovery time is the number that turns a stress test into a business decision. Minus twenty-one
+    percent is a shock; minus twenty-one percent that takes forty-seven trading days to recover is a
+    liquidity and mandate problem. It determines whether you can hold through it, whether you breach
+    a drawdown limit, whether a client redeems at the bottom. Loss magnitude tells you what happened
+    to the book. Recovery time tells you what happens to you.</p>
+    <p>The whole result carries an <strong>ELEVATED</strong> badge — the platform's five-level scale,
+    from LOW through MODERATE, ELEVATED, HIGH to SEVERE, applied consistently across every risk
+    signal in the product.</p>
+    <span class="stage">Point at the contribution bars at the bottom.</span>
+    <p>"And underneath, attribution: <strong>which positions produced the loss</strong>. Nvidia
+    thirty-four percent of it, Apple twenty-four, Microsoft twenty, Amazon thirteen, Alphabet nine.
+    That converts the analysis from a warning into an instruction. A headline of minus twenty-one
+    percent tells a portfolio manager to worry. 'Nvidia is a third of your downside' tells them what
+    to actually do — and note that Nvidia is also the position sitting exactly on the twenty-five
+    percent concentration cap we saw two screens ago. The two observations reinforce each other."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Five scenarios: <b>Flash Crash · Liquidity Shock · Volatility Spike · Sector Collapse · Correlated Failure</b>.</li>
+      <li><b>Justify choosing Correlated Failure</b>: "it breaks portfolios that look diversified on paper".</li>
+      <li>Results: <b>max loss −21.4% · VaR −18.7% · CVaR −25.1% · recovery 47 days</b>.</li>
+      <li>Dwell on recovery time: "<b>loss magnitude tells you what happened to the book; recovery time tells you what happens to you.</b>"</li>
+      <li>Five-level scale: <b>LOW → MODERATE → ELEVATED → HIGH → SEVERE</b>, used consistently platform-wide.</li>
+      <li>Attribution <b>NVDA 34 / AAPL 24 / MSFT 20 / AMZN 13 / GOOGL 9</b> — and NVDA is the position on the 25% cap. <b>Make that link.</b></li>
+      <li>"<b>A headline tells a PM to worry. Attribution tells them what to do.</b>"</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-tda">
+  <h3><span class="num">4.3</span>Lens two — Topological Data Analysis, in seven stages</h3>
+  <p class="where"><b>Route</b> /risk/tda-analysis &nbsp;·&nbsp; <b>Action</b> Step through all seven stages with the button at the bottom of each panel. Do not skip. This is the centrepiece.</p>
+  <div class="stopbox">
+    <span class="lbl">Presenter note — read before this section</span>
+    <p>This is the most differentiated and the most technically demanding part of the demo, and it is
+    the part your panel is most likely to interrogate. Two rules. <b>First, do not rush it</b> — budget
+    five of your twelve Act 4 minutes here. <b>Second, do not oversell it</b>: there is an explicit
+    disclaimer on the final stage stating that this is a visual demonstration of the pipeline rather
+    than a live computation. Read that disclaimer aloud yourself. If a topologist in the room finds it
+    before you point at it, you lose the room.</p>
+  </div>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Seven stages, each one screen, each with an on-demand plain-language explainer: returns →
+    correlation → distance → complex → homology → landscape → risk signal. The pipeline is the
+    argument. Walk it in order and the panel arrives at persistent homology without ever feeling
+    lost.</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/28-flow-13-tda-returns.png" alt="TDA stage 1: returns, with the seven-stage pipeline navigator across the top">
+    <figcaption><b>28</b> — Stage 1 of 7. Note the pipeline navigator: later stages are visibly locked until you reach them.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 1, Returns</span>
+    <p>"Lens two, and this is the piece of QuantSim that does not exist in the tools you are currently
+    using, so I am going to walk it slowly.</p>
+    <p>First, look at the navigator across the top. Seven stages, and the later ones are visibly
+    <strong>locked</strong>. You cannot jump to persistent homology from a standing start — the
+    interface makes you walk the pipeline, because each stage only makes sense in terms of the one
+    before it. Once you have walked it, every stage stays clickable, so you can go back and re-examine
+    any step. Progressive disclosure the first time, random access afterwards.</p>
+    <p>Stage one. <strong>Returns.</strong> We compute daily log-returns for each instrument in the
+    portfolio universe — the five names we selected back in step one. That is the raw input, and
+    everything downstream is derived purely from how these five return series move together over
+    time. No prices, no fundamentals, no news. Just co-movement."</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/29-flow-14-tda-correlation.png" alt="TDA stage 2: rolling correlation heatmap with What is this explainer button">
+    <figcaption><b>29</b> — Stage 2. Rolling correlation heatmap, 60-day window stepping 5 days. Note the "What is this?" explainer control.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 2, Rolling Correlation</span>
+    <span class="stage">Click the "What is this?" button in the panel header. It expands an inline explanation.</span>
+    <p>"Stage two. <strong>Rolling correlation</strong>, sixty-day window stepping forward five days at
+    a time.</p>
+    <p>Every cell is the correlation between one pair of assets over the trailing sixty sessions.
+    Because the window rolls, this matrix is not a snapshot — it is a <em>film</em>. We are watching
+    the relationship structure evolve.</p>
+    <p>And note this control in the corner — <em>'What is this?'</em>. Every non-obvious stage of this
+    pipeline carries an inline plain-language explainer. That is a deliberate accessibility decision:
+    topological data analysis is unfamiliar to most people who need to act on its output. A portfolio
+    manager should be able to understand what they are looking at without a topology course, and
+    without leaving the screen to find documentation."</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/30-flow-15-tda-distance.png" alt="TDA stage 3: distance matrix heatmap">
+    <figcaption><b>30</b> — Stage 3. Correlation converted to topological distance — same layout, inverted colour ramp.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 3, Distance Matrix</span>
+    <p>"Stage three, and this is the conceptual pivot of the whole pipeline. <strong>We convert
+    correlation into distance.</strong></p>
+    <p>Two assets that are highly correlated are, in this construction, <em>close together</em>. Two
+    that move independently are <em>far apart</em>. And that single transformation is what lets us
+    stop doing statistics and start doing geometry — because now the five assets in this portfolio are
+    five points in a metric space, and a portfolio has a <em>shape</em>.</p>
+    <p>The heatmap looks similar to the previous one by design, with the colour ramp inverted so that
+    hot means close. Same data, reframed. Everything from here forward is a statement about that
+    shape."</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/31-flow-16-tda-rips-complex.png" alt="TDA stage 4: Vietoris-Rips complex network graph">
+    <figcaption><b>31</b> — Stage 4. Vietoris–Rips complex: assets joined when their distance falls below a threshold.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 4, Vietoris–Rips Complex</span>
+    <p>"Stage four. The <strong>Vietoris–Rips complex</strong> — and despite the name, the idea is
+    simple. Draw an edge between any two assets whose distance falls below a threshold. Then grow the
+    threshold and watch what happens.</p>
+    <p>At a small threshold you have five isolated points — nothing is close enough to anything else.
+    As the threshold grows, edges appear, clusters form, and eventually everything connects to
+    everything. The structure that emerges <em>along the way</em> is the information.</p>
+    <p>And the risk reading is immediate and intuitive: <strong>a dense, tightly connected graph at a
+    low threshold means the market is moving as one thing</strong>. That is diversification failing,
+    rendered as a picture. You do not need to interpret a correlation coefficient — you can see it."</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/32-flow-17-tda-persistence-diagram.png" alt="TDA stage 5: persistence diagram with H0 and H1 features">
+    <figcaption><b>32</b> — Stage 5. Persistence diagram. H0 (components) in green, H1 (loops) in red; distance from the diagonal is significance.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 5, Persistence Diagram</span>
+    <p>"Stage five. <strong>Persistent homology</strong>, and this is the mathematical core.</p>
+    <p>As we grew that threshold, features appeared and disappeared. Two assets that were separate
+    merge into one cluster. A loop forms in the network and later fills in. Every one of those events
+    has a <em>birth</em> — the threshold at which it appeared — and a <em>death</em> — the threshold at
+    which it merged or closed.</p>
+    <p>This diagram plots every feature as a point: birth on the horizontal axis, death on the
+    vertical. Green points are <strong>H0</strong> features, connected components — clusters. Red
+    points are <strong>H1</strong> features, loops.</p>
+    <span class="stage">Trace the dashed diagonal with your finger or cursor. This is the key reading.</span>
+    <p>"And here is the single thing to understand about this chart. That dashed diagonal is where
+    birth equals death — a feature that appeared and immediately vanished. Points sitting near the
+    diagonal are <strong>noise</strong>. Points sitting far above it <strong>persisted</strong> across
+    a wide range of thresholds, and that persistence is what makes them structurally real rather than
+    an artefact of where you happened to set a cutoff.</p>
+    <p>That is why this method is powerful for market structure: it is <em>scale-free</em>. You are
+    not asking 'are these assets correlated above zero point seven'. You are asking 'what structure
+    exists regardless of the threshold I choose'. It removes the single most arbitrary parameter in
+    conventional correlation analysis."</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/33-flow-18-tda-landscape.png" alt="TDA stage 6: persistence landscape curves">
+    <figcaption><b>33</b> — Stage 6. Persistence landscape: the scattered diagram rendered as comparable functional curves.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 6, Persistence Landscape</span>
+    <p>"Stage six. The <strong>persistence landscape</strong>, which solves a practical problem.</p>
+    <p>A persistence diagram is a scatter of points, and scatters of points are hard to compare and
+    almost impossible to feed into anything downstream. You cannot easily average them, subtract one
+    from another, or track them over time.</p>
+    <p>The landscape transforms that scatter into a set of <em>functional curves</em>. Curves live in
+    a vector space. They can be compared, differenced, averaged, and — critically —
+    <strong>tracked</strong>. Which means you can compute today's landscape, compare it to last
+    week's, and quantify how much the topology of your market has moved.</p>
+    <p>That is the bridge from an interesting geometric observation to an operational risk signal.
+    Without this step, TDA is a picture. With it, it is a monitorable time series."</p>
+  </div>
+
+  <figure>
+    <img src="screenshots/34-flow-19-tda-signal.png" alt="TDA stage 7: topology risk signal at 84 out of 100 with HIGH badge and shift timeline">
+    <figcaption><b>34</b> — Stage 7. Topology risk signal: 84 / 100, HIGH, with the detected shift marked on the timeline. The scope disclaimer sits directly beneath.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — stage 7, the Topology Signal</span>
+    <p>"Stage seven. Everything collapses into one number.</p>
+    <p><strong>Eighty-four out of one hundred. HIGH.</strong> 'Structural deformation detected.' And
+    beneath it, a timeline marking <em>when</em> the shift occurred — because knowing that structure
+    changed is only half the finding; knowing the date lets you correlate it with what else happened
+    that week.</p>
+    <p>This is the highest of the three risk scores we will generate, and that turns out to matter in
+    the composite. Note the direction of the pipeline: we went from five return series, through
+    geometry, to a single monitorable number with a date attached — without ever asking anyone to
+    specify what kind of crisis to look for. That is what distinguishes this from scenario testing.
+    Stress testing finds what you imagined. This finds structural change you did not think to script.</p>
+    <span class="stage">Now read the small print at the bottom of the panel aloud. Do not skip this.</span>
+    <p>"And I want to read you the disclaimer the interface puts on this screen itself, because it is
+    important and I would rather say it than have you find it: <em>'This is a visual demonstration of
+    the QuantSim topology pipeline, not a live mathematical computation. The persistence landscape
+    values above are controlled demo data.'</em></p>
+    <p>The pipeline is correct — the stages are the right stages, in the right order, and the
+    interface for each is designed against what the real output would look like. The computation
+    behind it is not live in this build. That distinction is stated in the product, not just in my
+    narration."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember — the seven stages in order</span>
+    <ul>
+      <li><b>1 Returns</b> — daily log-returns for the five names. Only co-movement, nothing else.</li>
+      <li><b>2 Rolling correlation</b> — 60-day window, 5-day step. "Not a snapshot, a film."</li>
+      <li><b>3 Distance matrix</b> — the pivot. Correlated = close. "We stop doing statistics and start doing geometry."</li>
+      <li><b>4 Vietoris–Rips complex</b> — connect below a threshold, then grow it. "Dense graph at low threshold = the market moving as one thing."</li>
+      <li><b>5 Persistence diagram</b> — birth vs death. <b>H0 = clusters (green), H1 = loops (red).</b> Near the diagonal = noise; far from it = real. <b>Scale-free</b> — removes the arbitrary correlation cutoff.</li>
+      <li><b>6 Persistence landscape</b> — scatter → functional curves → comparable and trackable. "From a picture to a monitorable time series."</li>
+      <li><b>7 Topology signal</b> — <b>84 / 100, HIGH</b>, with the shift date on a timeline.</li>
+    </ul>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember — how to hold the room</span>
+    <ul>
+      <li>Stages are <b>locked until reached</b>, then all clickable. Progressive disclosure, then random access.</li>
+      <li>Click <b>"What is this?"</b> at least once — it is the accessibility argument, live.</li>
+      <li><b>Trace the diagonal</b> physically. It is the one visual gesture that makes stage 5 land.</li>
+      <li><b>Read the disclaimer aloud yourself.</b> Non-negotiable. Owning it protects everything else you said.</li>
+      <li>The differentiator, one sentence: "<b>stress testing finds what you imagined; this finds structural change nobody scripted.</b>"</li>
+    </ul>
+  </div>
+  <div class="ask">
+    <span class="lbl">If they ask</span>
+    <p><span class="q">"Which homology dimensions do you compute?"</span> — H0 and H1 are shown
+    explicitly in the diagram legend: connected components and loops. For a five-asset point cloud,
+    those are the dimensions carrying interpretable signal.</p>
+    <p><span class="q">"How is the 84 derived from the landscape?"</span> — In this build the score is
+    fixed demo data; the intended derivation is a norm on the landscape difference between the current
+    and reference windows. The honest answer is that the scoring function is a specification item, and
+    the interface is built to receive it.</p>
+    <p><span class="q">"Why TDA over a rolling eigenvalue or PCA approach?"</span> — They are
+    complementary. The distinguishing property here is threshold-independence: PCA on a correlation
+    matrix still requires you to pick a window and read components at a chosen level. Persistence
+    asks what survives across <em>all</em> thresholds.</p>
+    <p><span class="q">"Does it work with five assets?"</span> — Fair challenge. Five points is a small
+    cloud; the method is designed for larger universes where cluster structure is richer. The universe
+    selector on step one is where you would scale that up.</p>
+  </div>
+</section>
+
+<section id="s-ml">
+  <h3><span class="num">4.4</span>Lens three — Machine Learning Intelligence</h3>
+  <p class="where"><b>Route</b> /ml/predictions &nbsp;·&nbsp; <b>Optional detour</b> /ml/models and /ml/features if the panel presses on model governance</p>
+  <figure>
+    <img src="screenshots/35-flow-20-ml-prediction.png" alt="ML Prediction: four forecast metrics, regime timeline, confidence, feature importance">
+    <figcaption><b>35</b> — Volatility forecast, drawdown probability, regime, health score; regime timeline, confidence and feature importance below.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Every model output is shown with its confidence and its feature attribution attached. There is
+    no unexplained number on this screen — that is the entire design position on machine learning in
+    a risk context.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Lens three. The statistical, forward-looking view — Portfolio Risk Model, version one point
+    four.</p>
+    <p>Four outputs across the top. <strong>Volatility forecast, twenty-seven point four
+    percent</strong> — and hold that against the eighteen point two percent realised volatility we saw
+    on the portfolio. The model is forecasting a material expansion in volatility.
+    <strong>Drawdown probability, sixty-three percent.</strong> <strong>Market regime:
+    Stress.</strong> And a composite <strong>portfolio health score of sixty-one out of a
+    hundred</strong>.</p>
+    <span class="stage">Point at the regime timeline.</span>
+    <p>"Below that, the <strong>regime timeline</strong>, and this is the most useful single element on
+    the screen. Calm, Calm, Transition, Stress. That is a trajectory, not a label. A model that tells
+    you 'the regime is Stress' is much less actionable than one that shows you the market was calm,
+    then transitioned, and is now in stress — because the second version tells you the direction of
+    travel and roughly when it turned. And note it agrees with the topological finding: TDA detected
+    structural deformation, and an independently trained regime classifier independently says the
+    market moved from calm through transition into stress. Two different methods, same conclusion.</p>
+    <span class="stage">Move to the two panels at the bottom.</span>
+    <p>"And the two panels underneath are, for me, the reason to trust anything on this screen.</p>
+    <p>On the left, <strong>prediction confidence: eighty-seven percent</strong>, on a bar. Every model
+    output in QuantSim is displayed with its own uncertainty attached. A drawdown probability of
+    sixty-three percent at eighty-seven percent confidence is a different object from the same number
+    at forty percent confidence, and the interface refuses to let you forget that.</p>
+    <p>On the right, <strong>feature importance</strong>: rolling volatility highest, then correlation
+    change, drawdown, momentum, volume. This is the model showing its work. It is not asserting
+    sixty-three percent — it is saying <em>sixty-three percent, driven primarily by rolling volatility
+    and correlation change</em>.</p>
+    <p>And look at what the second-strongest feature is: <strong>correlation change</strong>. That is
+    the same underlying phenomenon the topological analysis flagged, arrived at completely
+    independently, by a different method, and surfaced here as a driver. When three methodologies
+    converge on the same cause, that is the strongest signal this platform can produce."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Outputs: <b>vol forecast 27.4% · drawdown probability 63% · regime Stress · health 61/100</b>.</li>
+      <li><b>27.4% forecast vs 18.2% realised</b> — say the comparison explicitly; it is the whole point of the number.</li>
+      <li>Regime timeline <b>Calm → Calm → Transition → Stress</b> = "a trajectory, not a label".</li>
+      <li><b>Confidence 87%</b> shown beside every output. "The same number at 40% confidence is a different object."</li>
+      <li>Feature importance ranks <b>rolling volatility, then correlation change</b>.</li>
+      <li><b>The convergence beat:</b> TDA found structural change; ML independently ranks correlation change second. Different methods, same cause. Land this hard — it sets up the composite.</li>
+    </ul>
+  </div>
+  <figure>
+    <img src="screenshots/14-ml-models.png" alt="ML model registry with version, task, accuracy, last trained, lifecycle status">
+    <figcaption><b>14</b> — Optional detour: the model registry. Version, task, accuracy, last trained date, and Production / Staging / Archived lifecycle.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this — only if they press on model governance</span>
+    <p>"If model governance is a concern for this panel, there is a registry behind that prediction.
+    Four models, each with a version, a task type, a measured accuracy, a last-trained date, and a
+    lifecycle status — Production, Staging, Archived. So a reviewer can ask 'which model version
+    produced this number, how accurate is it, and when was it last trained' and get an answer from the
+    interface. Same governance instinct as the calibration staleness flag we saw earlier: the metadata
+    that determines whether you should trust the output is surfaced, not buried."</p>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 5 -->
+<div class="act" id="act5">
+  <div class="no">Act 5</div>
+  <h2>Synthesis — explain, score, alert</h2>
+  <p class="lede">Three lenses become one decision. This act is short, and it is where the demo pays
+  off everything you have set up. Do not rush it and do not pad it.</p>
+  <span class="clock">≈ 5 minutes</span>
+</div>
+
+<section id="s-xai">
+  <h3><span class="num">5.1</span>Explainability</h3>
+  <p class="where"><b>Route</b> /risk/explanations &nbsp;·&nbsp; <b>Note</b> This page carries an Extended Scope banner. Acknowledge it as you arrive.</p>
+  <figure>
+    <img src="screenshots/36-flow-21-explainability.png" alt="Explainability: three explanation panels and a primary risk drivers chart">
+    <figcaption><b>36</b> — "Why is risk elevated?" Three per-lens explanations, then the ranked primary drivers.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The page is titled with the question a human actually asks — <em>"Why is risk elevated?"</em> —
+    and answers it in prose, per lens, before showing a ranked driver chart.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Before the platform gives me a single composite number, it explains itself. And look at the
+    page title, because it is not 'Explainability Report' — it is <strong>'Why is risk
+    elevated?'</strong>. That is the question an actual human asks, so that is the question the page
+    is named after.</p>
+    <span class="stage">Acknowledge the Extended Scope banner immediately, before anyone reads it themselves.</span>
+    <p>"You will see the Extended Scope banner at the top, and I will be direct about it: the
+    narrative you are about to read is generated from the demo scenario. The production explainability
+    service that would generate this from live model internals is planned beyond this build. What is
+    real here is the structure — what an explanation must contain and where it sits in the workflow.</p>
+    <p>Three panels, one per lens, and each answers in plain English. <strong>TDA</strong>: market
+    structure has become significantly more interconnected across recent rolling windows, which
+    reduces diversification and indicates a transition toward a synchronised market state.
+    <strong>Stress</strong>: under correlated failure, losses increase because several large positions
+    become exposed to the same market movement. <strong>ML</strong>: predicted drawdown probability
+    increased primarily because correlation change and volatility moved sharply higher.</p>
+    <p>Read those three together. They are three independent methods, and they are describing
+    <em>the same underlying phenomenon in three vocabularies</em>. Correlation structure is
+    collapsing. Topology calls it interconnection. Stress testing calls it common exposure. The model
+    calls it correlation change. That agreement is the finding.</p>
+    <p>And underneath, the <strong>primary risk drivers</strong>, ranked and quantified: structural
+    change from TDA at thirty-eight percent, correlation convergence from stress at thirty-one,
+    drawdown probability from ML at twenty-two, volatility trend at nine. So the explanation is not
+    only qualitative — you can see exactly how much of the composite score each contributor is
+    responsible for, which means you can argue with it."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>The page is named after <b>the question, not the feature</b>: "Why is risk elevated?"</li>
+      <li><b>Own the Extended Scope banner before they read it.</b> Structure is real; narrative generation is planned.</li>
+      <li>The synthesis line: "<b>three independent methods describing the same phenomenon in three vocabularies.</b>"</li>
+      <li>Drivers: <b>TDA structural change 38% · stress correlation convergence 31% · ML drawdown probability 22% · volatility trend 9%</b>.</li>
+      <li>Why quantified drivers matter: "<b>you can argue with it.</b>" Unfalsifiable explanations are worthless in risk.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-composite">
+  <h3><span class="num">5.2</span>Step 8 of 8 — Composite Risk</h3>
+  <p class="where"><b>Route</b> /risk/composite &nbsp;·&nbsp; <b>Action</b> Let the 76 sit on screen for a beat before you speak. This is the destination.</p>
+  <figure>
+    <img src="screenshots/37-flow-22-composite-risk.png" alt="Composite Risk: score 76 out of 100 HIGH, component breakdown, radar chart, interpretation">
+    <figcaption><b>37</b> — Step 8. Composite 76 / 100 HIGH, the three component scores, radar contribution, and written interpretation.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>One number, with the three components that produced it always shown beside it. The composite is
+    never presented alone — that is the design commitment.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Arrive. Say nothing for two seconds. Let them read the 76.</span>
+    <p>"Step eight. The destination.</p>
+    <p><strong>Seventy-six out of one hundred. HIGH.</strong></p>
+    <p>And directly underneath it, always, the components that produced it: stress testing seventy-two,
+    TDA eighty-four, ML sixty-eight, composite seventy-six. The composite is <em>never</em> displayed
+    without its decomposition. You are never handed a number you cannot take apart — and you can see
+    immediately that TDA at eighty-four is pulling the composite upward while ML at sixty-eight is
+    pulling it down.</p>
+    <span class="stage">Move to the radar chart.</span>
+    <p>"The radar makes the balance visible as a shape. A roughly equilateral triangle would mean three
+    methods in agreement. A distorted one — which is what we have — means one lens is seeing something
+    the others are not, and the distortion points at the topological axis. That is a prompt to
+    investigate rather than a conclusion, and the interface positions it that way.</p>
+    <span class="stage">Move to the interpretation panel.</span>
+    <p>"And then the written interpretation. Four sentences: the portfolio is exposed to elevated
+    systemic risk; the strongest contributor is the structural change detected by topology; stress
+    testing confirms diversification benefits deteriorate under correlation convergence; and ML
+    independently identifies elevated drawdown probability.</p>
+    <p>Note the word <strong>'independently'</strong> in that last line. The platform is explicitly
+    telling you these are corroborating rather than circular findings. When three methods with
+    different failure modes agree, the confidence you should place in the conclusion is higher than
+    any one of them alone would justify.</p>
+    <span class="stage">Point at the italic line at the very bottom.</span>
+    <p>"And finally, the small print, which I will read: <em>'This interpretation describes model
+    output only and does not constitute investment advice.'</em> In any regulated environment that
+    line is not optional, and it is placed where the recommendation is, not buried in a footer three
+    clicks away."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>76 / 100, HIGH.</b> Components: <b>stress 72 · TDA 84 · ML 68</b>.</li>
+      <li><b>Pause before speaking.</b> Let the number land. This is the emotional peak of the demo.</li>
+      <li>The commitment: "<b>the composite is never displayed without its decomposition.</b>"</li>
+      <li>Radar: equilateral = agreement; <b>distorted = one lens sees something the others do not</b>. It is a prompt, not a conclusion.</li>
+      <li>Stress the word <b>"independently"</b> — corroborating, not circular.</li>
+      <li><b>Read the disclaimer aloud.</b> "Placed where the recommendation is, not three clicks away."</li>
+    </ul>
+  </div>
+  <div class="ask">
+    <span class="lbl">If they ask</span>
+    <p><span class="q">"How is 76 weighted from 72, 84 and 68?"</span> — Be straight: in this build the
+    composite is fixed demo data, not a live formula, and 76 is deliberately not the simple mean of
+    74.7. The weighting function is a specification decision — and I would argue it should be
+    configurable, which is why Settings already carries a Risk Thresholds tab. What the interface
+    commits to is that whatever the weighting is, the components are always displayed alongside it.</p>
+  </div>
+</section>
+
+<section id="s-alert">
+  <h3><span class="num">5.3</span>The alert</h3>
+  <p class="where"><b>Route</b> /alerts &nbsp;·&nbsp; <b>Do not click Dismiss</b> — you want the alert live when you return to the dashboard</p>
+  <figure>
+    <img src="screenshots/38-flow-23-alerts.png" alt="Alerts page with active high-severity alert and three action buttons, plus alert history">
+    <figcaption><b>38</b> — Active HIGH alert with Investigate / View Analysis / Dismiss, and the alert history beneath.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The alert is not a notification — it is a workstation. Every alert carries provenance and the
+    two actions that move an analyst forward.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"And the analysis terminates in an <strong>alert</strong>. Because a risk score sitting on a
+    dashboard nobody happens to open is not a risk control.</p>
+    <p>Read what it contains. Title: RISK ALERT, HIGH severity. Message: structural market change
+    detected. Detail: <strong>topology risk crossed threshold, seventy-five to eighty-two</strong> —
+    so it tells you not just that a threshold was breached, but the value before and after and which
+    threshold. Portfolio: Momentum Strategy. Source: <strong>TDA Analysis</strong>. Timestamp.</p>
+    <p>That source attribution is the part I would emphasise. An analyst receiving this at eight in
+    the morning knows immediately which of the three lenses fired and can go straight there. Alerts
+    without provenance generate investigation work; alerts with provenance eliminate it.</p>
+    <span class="stage">Point at the three buttons but do not click Dismiss.</span>
+    <p>"Three actions. <em>Investigate</em> — jumps directly into the TDA analysis that produced it.
+    <em>View Analysis</em> — opens the composite risk view for context. <em>Dismiss</em> — which
+    acknowledges and clears it, and I am deliberately not clicking that, because I want this alert
+    live for the next screen.</p>
+    <p>The alert is not a passive notification. It is an entry point into the exact analysis that
+    generated it. And underneath, a history — this alert plus prior ones, each with severity, time
+    and current status, including a stale-calibration alert, which closes the loop with the AMZN row
+    we looked at in Act 2."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Alert content: <b>severity · message · before-and-after values (75 → 82) · portfolio · source lens · timestamp</b>.</li>
+      <li>The line: "<b>alerts without provenance generate investigation work; alerts with provenance eliminate it.</b>"</li>
+      <li>Three actions: <b>Investigate</b> (into TDA) · <b>View Analysis</b> (composite) · <b>Dismiss</b>.</li>
+      <li><b>Do not click Dismiss.</b> You need the alert live for the dashboard callback.</li>
+      <li>The history includes a <b>stale-calibration alert</b> — closes the loop with Act 2. Point at it.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-dash-warm">
+  <h3><span class="num">5.4</span>Back to the dashboard — the payoff</h3>
+  <p class="where"><b>Route</b> /dashboard &nbsp;·&nbsp; <b>Action</b> This is the callback you promised in Act 1. Deliver it deliberately.</p>
+  <figure>
+    <img src="screenshots/39-dashboard-after-analysis.png" alt="Dashboard after analysis: HIGH risk badge, active alert banner, populated Latest Analysis and Risk Breakdown panels">
+    <figcaption><b>39</b> — The same dashboard as capture 02. Risk status now HIGH, an alert banner across the top, and both bottom panels populated.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Same screen as Act 1, transformed. This is the single most effective moment in the entire
+    presentation. Say "same screen" explicitly and let them compare.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Navigate to the dashboard. Then stop and let them look.</span>
+    <p>"This is the same screen I showed you at the start of the demo. Same dashboard, same route,
+    nothing reconfigured. Look at what has changed.</p>
+    <p>The risk status in the header was amber MODERATE. It is now red <strong>HIGH</strong>. There is
+    an <strong>alert banner</strong> across the top that was not there before — one active high-risk
+    alert, structural market change detected, and it is clickable straight through to the alert.</p>
+    <p>The 'Latest Analysis' panel that said <em>no active run</em> now reads Completed, sixteen
+    twenty-one, Momentum Strategy, US Technology Basket. And 'Risk Breakdown', which said
+    <em>available once risk analysis completes</em>, now shows all three lenses with their scores and
+    their individual risk badges — stress seventy-two, TDA eighty-four, ML sixty-eight.</p>
+    <p>That is the loop closing. We started at a dashboard that honestly told us it did not know. We
+    defined a market, ran a simulation, built a portfolio, executed a strategy, analysed it through
+    three independent lenses, explained the result, composed it into one score and raised an alert.
+    And the dashboard now reflects every one of those steps.</p>
+    <p>The portfolio's return did not change. It is still up eight point three four percent. What
+    changed is that we now know what it costs us — and the platform got there through a process you
+    could hand to a regulator."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Say "this is the same screen" explicitly.</b> The comparison does not land unless you name it.</li>
+      <li>Three visible changes: <b>MODERATE → HIGH</b> · <b>alert banner appears</b> · <b>both empty panels populate</b>.</li>
+      <li><b>Pause and let them look</b> before narrating. Silence is doing work here.</li>
+      <li>The closing line of the act: "<b>the return did not change — what changed is that we now know what it costs us.</b>"</li>
+      <li>Optional add: "<b>through a process you could hand to a regulator.</b>" Use it if the panel skews compliance.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-attribution">
+  <h3><span class="num">5.5</span>Attribution — the standalone view</h3>
+  <p class="where"><b>Route</b> /risk/attribution &nbsp;·&nbsp; <b>Action</b> Thirty seconds. Skip entirely if you are behind.</p>
+  <figure>
+    <img src="screenshots/40-risk-attribution.png" alt="Attribution page: composite risk drivers and per-position loss contribution side by side">
+    <figcaption><b>40</b> — Signal-level and position-level attribution on one screen.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"One short screen worth showing. <strong>Attribution</strong> puts both decompositions side by
+    side: on the left, which <em>signals</em> drive the composite score; on the right, which
+    <em>positions</em> drive the loss. Those are two different questions — 'what is telling me I am at
+    risk' versus 'what is actually going to lose me money' — and an analyst needs both in the same
+    field of view. It is the screen you would live on during a risk review meeting."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Two questions, one screen: <b>which signals drive the score</b> vs <b>which positions drive the loss</b>.</li>
+      <li>Frame it as "<b>the screen you live on during a risk review meeting</b>".</li>
+      <li>First thing to cut if you are over time.</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 6 -->
+<div class="act" id="act6">
+  <div class="no">Act 6</div>
+  <h2>Governance, audit &amp; operations</h2>
+  <p class="lede">The analysis is done. This act answers the question every institutional panel asks
+  next: can we actually run this thing, and can we prove what it did? Move briskly — these are short
+  screens with high credibility value.</p>
+  <span class="clock">≈ 4 minutes</span>
+</div>
+
+<section id="s-activity">
+  <h3><span class="num">6.1</span>System Activity — the event backbone</h3>
+  <p class="where"><b>Action</b> Click <b>Activity</b> in the top bar. This is the payoff for the promise you made in Act 3.3.</p>
+  <figure>
+    <img src="screenshots/51-system-activity-drawer.png" alt="System Activity drawer showing ten timestamped platform events">
+    <figcaption><b>51</b> — The event stream: ten events from SIMULATION_STARTED through ALERT_TRIGGERED, all now lit.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Everything the panel just watched, re-presented as the event stream a distributed backend would
+    emit. This is where a technical audience sees the architecture rather than being told about it.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"I promised you this earlier. This is the <strong>system activity</strong> drawer, and it is
+    the same story we just walked through, told from the platform's side.</p>
+    <p>Ten events, in order, with timestamps. SIMULATION_STARTED — queued to four workers.
+    SIMULATION_COMPLETED. PORTFOLIO_CREATED. TRADING_COMPLETED — ten fills.
+    STRESS_TEST_COMPLETED. TDA_ANALYSIS_COMPLETED. ML_PREDICTION_CREATED. EXPLANATION_GENERATED.
+    RISK_SCORE_UPDATED — composite set to seventy-six. ALERT_TRIGGERED.</p>
+    <p>Every one of those is lit, because we generated all of them in the last half hour. When we
+    started, none of them were.</p>
+    <p>This matters architecturally. QuantSim is designed as an <strong>asynchronous, event-driven
+    system</strong> — services publish events, other services subscribe. Simulation completing is what
+    <em>causes</em> risk analysis to become available. The risk score updating is what
+    <em>causes</em> the alert. Nothing polls; nothing is orchestrated by the front end.</p>
+    <p>That design gives you three things an institutional buyer cares about. It <strong>scales</strong>
+    — you add simulation workers without touching the risk service. It is <strong>resilient</strong> —
+    a service can be down and events queue rather than being lost. And it is
+    <strong>auditable</strong> — this stream is a complete, ordered, timestamped record of everything
+    the platform did, which is exactly what a model risk function will ask you for."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Ten events, all now lit — <b>none were lit when you started</b>. Say that.</li>
+      <li>Causal chain: <b>simulation completes → risk becomes available → score updates → alert fires</b>. Nothing polls.</li>
+      <li>Three institutional benefits: <b>scales</b> (add workers independently) · <b>resilient</b> (events queue) · <b>auditable</b> (ordered record).</li>
+      <li>This is the <b>architecture made visible</b> — the strongest 90 seconds for a technical panel.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-audit">
+  <h3><span class="num">6.2</span>Audit Log</h3>
+  <p class="where"><b>Route</b> /audit-log &nbsp;·&nbsp; <b>Action</b> Click the <b>Critical</b> filter, then back to All</p>
+  <figure>
+    <img src="screenshots/44-audit-log.png" alt="Audit log with severity filters and rows showing time, user, service, action, severity">
+    <figcaption><b>44</b> — Audit log: time, user, originating service, action, severity. Filterable by severity.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>The audit log answers <em>who</em>. The activity stream answered <em>what</em>. A compliance
+    function needs both, and they are deliberately separate objects.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"The activity stream told you what the <em>system</em> did. The <strong>audit log</strong> tells
+    you what <em>people</em> did, and it is deliberately a different object.</p>
+    <p>Every row: timestamp, the user or system actor, the originating service, the action, and a
+    severity. Simulation created by Quant. Stress analysis completed by Analyst, marked Warning. Risk
+    alert triggered by System, marked Critical. And every row carries the detail underneath — GBM,
+    AAPL, ten thousand paths; correlated failure, maximum loss minus twenty-one point four percent.</p>
+    <span class="stage">Click the Critical filter, let them see it narrow, then click All.</span>
+    <p>"Filterable by severity, so a reviewer opening this after an incident can jump straight to
+    critical events rather than reading a chronology.</p>
+    <p>For a regulated institution, the two together are the point. If someone asks in six months why
+    this portfolio was flagged HIGH on this date, the answer is fully reconstructible: which user,
+    which service, which parameters, which model version, which calibration, in what order."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Activity stream = what the system did. Audit log = what people did.</b> Two objects, on purpose.</li>
+      <li>Columns: <b>time · user · service · action · severity</b>, with parameter detail per row.</li>
+      <li><b>Demonstrate the severity filter.</b> "Jump to critical rather than read a chronology."</li>
+      <li>The compliance line: "<b>fully reconstructible — which user, which service, which parameters, which model version, in what order.</b>"</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-reports">
+  <h3><span class="num">6.3</span>Reports</h3>
+  <p class="where"><b>Route</b> /reports &nbsp;·&nbsp; <b>Action</b> Open the <b>Composite Risk Report</b>, show the modal, then close it</p>
+  <figure>
+    <img src="screenshots/42-reports.png" alt="Reports grid with six report types">
+    <figcaption><b>42</b> — Six report types, one per analytical stage.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/43-reports-modal.png" alt="Report preview modal with provenance fields and print, share, export actions">
+    <figcaption><b>43</b> — Report preview with simulation, portfolio and generation timestamp; Print, Share, Export PDF.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"<strong>Reports</strong> — six of them, one per analytical stage: portfolio risk, simulation,
+    stress test, TDA, ML prediction, composite risk. Every stage of the pipeline you just watched
+    produces a document.</p>
+    <span class="stage">Open the Composite Risk Report.</span>
+    <p>"And when you open one, look at the header of the preview: which simulation, which portfolio,
+    and when it was generated. That is <strong>provenance</strong>. A risk report that circulates
+    without stating which run produced it is a liability, because six weeks later nobody can tell you
+    whether it is current.</p>
+    <p>Print, Share, and Export PDF are the actions — these are POC interactions that confirm rather
+    than generate a file, but the placement and the provenance model are the design statement."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Six reports — one per pipeline stage.</b> Nothing analytical is un-reportable.</li>
+      <li>The argument is <b>provenance</b>: simulation ID + portfolio + generation timestamp on every report.</li>
+      <li>"<b>A report that circulates without stating which run produced it is a liability.</b>"</li>
+      <li>Be upfront that export is a POC interaction, not a real file. Say it before they click it.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-arch">
+  <h3><span class="num">6.4</span>System Architecture</h3>
+  <p class="where"><b>Route</b> /architecture — <b>not in the sidebar</b>, navigate by URL. Click <b>Risk / TDA</b> to open the inspector.</p>
+  <figure>
+    <img src="screenshots/45-architecture.png" alt="Architecture diagram: browser, gateway, three services, Kafka backbone, three services, dashboard">
+    <figcaption><b>45</b> — Conceptual service architecture with the Kafka event backbone in the middle. Every node is clickable.</figcaption>
+  </figure>
+  <figure>
+    <img src="screenshots/46-architecture-modal.png" alt="Service inspector modal showing purpose, inputs, outputs, status and activity">
+    <figcaption><b>46</b> — Service inspector: purpose, inputs, outputs, operational status, recent activity.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>An interactive architecture diagram inside the product. Excellent for a technical panel, and it
+    is not in the sidebar — you must type the URL, so have it ready.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"For the technical members of the panel — there is an <strong>architecture view</strong> inside
+    the product itself.</p>
+    <p>Browser at the top, into an <strong>API Gateway</strong>. Below it the three domain services
+    that own data and execution: Market Data, Simulation, Trading. Then the horizontal band in the
+    middle — <strong>Kafka, the asynchronous event backbone</strong> — and below it the three
+    analytical services that consume those events: ML, Risk and TDA, and XAI. And finally the
+    Dashboard service, which aggregates composite risk and surfaces alerts.</p>
+    <p>The shape is the important part. Producers above the bus, consumers below it, nothing calling
+    across. Simulation does not know that the risk service exists — it publishes a completion event.
+    That is what lets you scale, replace or take down any single service without a cascade.</p>
+    <span class="stage">Click the Risk / TDA node.</span>
+    <p>"And every node is inspectable. Purpose, inputs, outputs, operational status, recent activity.
+    So this is not a slide pasted into the app — it is a live view of the service topology with each
+    service's contract stated explicitly."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Not in the sidebar</b> — navigate to <code>/architecture</code> directly. Have it typed or bookmarked.</li>
+      <li>Topology: <b>browser → gateway → Market/Simulation/Trading → Kafka → ML/Risk-TDA/XAI → Dashboard</b>.</li>
+      <li><b>Producers above the bus, consumers below, nothing calling across.</b> That is the whole architectural argument.</li>
+      <li>"<b>Simulation does not know the risk service exists — it publishes a completion event.</b>"</li>
+      <li>Click a node to show <b>purpose / inputs / outputs / status</b> — it is a contract, not a picture.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-admin">
+  <h3><span class="num">6.5</span>Administration — Users, Roles, System</h3>
+  <p class="where"><b>Routes</b> /admin/users → /admin/roles → /admin/system &nbsp;·&nbsp; <b>Action</b> Spend your time on Roles; the other two are 20 seconds each</p>
+  <figure>
+    <img src="screenshots/48-admin-roles.png" alt="Roles page: four role cards and a 17-row capability matrix">
+    <figcaption><b>48</b> — The capability matrix promised at login: 17 capabilities × 4 roles.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>This is where you deliver the promise you made on the login screen. The capability matrix is
+    the single most convincing governance artefact in the product.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Show Users briefly first — 20 seconds, no more.</span>
+    <p>"Administration. <strong>Users</strong> — accounts provisioned for this environment, with role,
+    status and last-active time. Note one account sits in <em>Invited</em> rather than Active, so the
+    provisioning lifecycle is modelled rather than assumed.</p>
+    <span class="stage">Go to Roles. Slow down here.</span>
+    <p>"And this is the screen I promised you at the login page. Four role summaries at the top, and
+    beneath them the <strong>capability matrix</strong> — seventeen named capabilities down the side,
+    four roles across the top, and a dot for every grant.</p>
+    <p>Read the shape of it. It is strictly cumulative: everything a Viewer can do, an Analyst can do.
+    Everything an Analyst can do, a Quant can do. Everything a Quant can do, an Admin can do. No
+    diagonal exceptions, no special cases.</p>
+    <p>Look at where the boundaries actually fall, because they encode a real institutional
+    separation. <code>run_stress_test</code> and <code>run_tda</code> start at Analyst — risk analysis
+    is an analyst function. <code>create_strategies</code>, <code>calibrate_models</code> and
+    <code>launch_simulations</code> start at Quant — model authorship is a quant function.
+    <code>manage_users</code>, <code>manage_roles</code> and <code>configure_system</code> are
+    Admin-only — platform governance is separated from analysis entirely.</p>
+    <p>That last separation is the one an auditor cares about: the person who runs the analysis is
+    structurally not the person who controls who may run it.</p>
+    <span class="stage">Go to System. 20 seconds.</span>
+    <p>"And <strong>System</strong> — service health across all eight components including the event
+    backbone, plus environment, version, region and mode. Note it reads Mode: Demo, and version
+    poc-one-point-zero. The platform is telling you what it is, in the product."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>17 capabilities × 4 roles</b>, strictly cumulative, no diagonal exceptions.</li>
+      <li>Boundary 1: <b>run_stress_test / run_tda start at Analyst.</b></li>
+      <li>Boundary 2: <b>create_strategies / calibrate_models / launch_simulations start at Quant.</b></li>
+      <li>Boundary 3: <b>manage_users / manage_roles / configure_system are Admin-only.</b></li>
+      <li>The auditor's line: "<b>the person who runs the analysis is structurally not the person who controls who may run it.</b>"</li>
+      <li>Users: note the <b>Invited</b> status — provisioning lifecycle is modelled.</li>
+      <li>System: <b>Mode reads Demo</b>. Point at it — more honesty currency.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-settings">
+  <h3><span class="num">6.6</span>Settings</h3>
+  <p class="where"><b>Route</b> /settings &nbsp;·&nbsp; <b>Action</b> Click straight to the <b>Risk Thresholds</b> tab. Ignore the others.</p>
+  <figure>
+    <img src="screenshots/50-settings.png" alt="Settings with seven tabs, General tab active">
+    <figcaption><b>50</b> — Seven configuration tabs. Risk Thresholds is the one worth opening.</figcaption>
+  </figure>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"Settings, briefly — seven tabs: General, Appearance, Notifications, Risk Thresholds, Simulation
+    Defaults, Data Sources, Security.</p>
+    <span class="stage">Open the Risk Thresholds tab.</span>
+    <p>"But this is the one worth opening. <strong>Risk Thresholds.</strong> Composite risk HIGH at
+    seventy. Composite risk SEVERE at eighty-five. TDA structural shift alert at seventy-five.</p>
+    <p>Those are the numbers that decided our portfolio was HIGH, and the number that fired the alert
+    we saw — the TDA signal crossed from seventy-five to eighty-two, and that threshold is right here,
+    configurable.</p>
+    <p>The risk appetite of the institution is a <em>parameter</em> of this platform, not a constant
+    baked into it. A hedge fund and a pension fund do not share a definition of HIGH, and they should
+    not have to share a codebase to disagree about it."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Go <b>straight to Risk Thresholds</b>. The other six tabs are filler for this audience.</li>
+      <li>Thresholds: <b>HIGH at 70 · SEVERE at 85 · TDA shift alert at 75</b>.</li>
+      <li><b>Tie it to the alert:</b> the TDA signal crossed 75 → 82, and 75 is configurable right here.</li>
+      <li>The line: "<b>a hedge fund and a pension fund do not share a definition of HIGH, and should not have to share a codebase to disagree about it.</b>"</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 7 -->
+<div class="act" id="act7">
+  <div class="no">Act 7</div>
+  <h2>Extended scope &amp; honest boundaries</h2>
+  <p class="lede">Take ninety seconds to be explicit about what is marked as future scope. Doing this
+  proactively is worth more than any feature you could show instead.</p>
+  <span class="clock">≈ 2 minutes</span>
+</div>
+
+<section id="s-extended">
+  <h3><span class="num">7.1</span>The Extended Scope convention</h3>
+  <figure>
+    <img src="screenshots/41-ml-news-extraction.png" alt="Financial News Extraction with extended scope banner, pipeline diagram and sample headlines">
+    <figcaption><b>41</b> — Financial News Extraction, fully marked as extended scope, with its intended NLP pipeline and sample output.</figcaption>
+  </figure>
+  <div class="gist">
+    <span class="lbl">The gist</span>
+    <p>Three things in the product carry the Extended Scope badge, and there is a reason they are shown
+    at all rather than hidden: they define the roadmap in the same language as the build.</p>
+  </div>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <p>"I want to close the walkthrough by being explicit about the boundary, rather than leaving it
+    for you to find.</p>
+    <p>Three things in this product carry the dashed <strong>Extended Scope</strong> badge.
+    <strong>Jump Diffusion</strong>, in the model shelf — selectable in the interface, implementation
+    outside this build. <strong>Explainability</strong>, which you saw — the structure is real, the
+    narrative generation from live model internals is planned. And this screen, <strong>Financial
+    News Extraction</strong>.</p>
+    <p>What it shows is the intended pipeline — raw news feed, entity recognition, event
+    classification, sentiment scoring, and out into the feature store — and sample structured output:
+    a headline, its source, the entities it resolves to, and a sentiment classification. The
+    architectural point is where it terminates: <em>the feature store</em>. This is not a news reader
+    bolted on the side. It is designed to feed the same ML model whose feature importance chart we
+    looked at, so that unstructured text becomes another input alongside rolling volatility and
+    correlation change.</p>
+    <p>Now — why show any of this at all, rather than hide what is not built?</p>
+    <p>Because a proof of concept has two jobs. It has to demonstrate what exists, and it has to
+    communicate where the product is going, so that this panel can evaluate the <em>direction</em> and
+    not only the current state. Hiding the roadmap would give you a cleaner demo and a worse
+    decision. The badge is how the interface distinguishes the two without me having to caveat every
+    screen verbally."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li>Three Extended Scope items: <b>Jump Diffusion · Explainability narrative · News Extraction</b>. Know all three.</li>
+      <li>News pipeline: <b>feed → entity recognition → event classification → sentiment → feature store</b>.</li>
+      <li>The architectural point: <b>it terminates in the feature store</b> — it feeds the same ML model, not a separate news widget.</li>
+      <li>Why show it: "<b>a POC must demonstrate what exists and communicate where the product is going.</b>"</li>
+      <li>"<b>Hiding the roadmap gives you a cleaner demo and a worse decision.</b>" Strong closing sentiment for this act.</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 8 -->
+<div class="act" id="act8">
+  <div class="no">Act 8</div>
+  <h2>Closing</h2>
+  <p class="lede">Two minutes. Recap the spine, restate the boundary once, and hand the floor over with
+  a specific question rather than "any questions?".</p>
+  <span class="clock">≈ 2 minutes</span>
+</div>
+
+<section id="s-close">
+  <h3><span class="num">8.1</span>The close</h3>
+  <div class="say">
+    <span class="lbl">Say this</span>
+    <span class="stage">Return to the dashboard. Leave it on screen behind you while you close.</span>
+    <p>"Let me pull it together.</p>
+    <p>You have seen one continuous workflow. We defined a <strong>market environment</strong>. We
+    configured a <strong>stochastic model</strong> against a validated calibration and generated a
+    ten-thousand-path <strong>Monte Carlo ensemble</strong>. We built a <strong>portfolio</strong>
+    with declared execution costs and <strong>executed a strategy</strong> inside that simulated
+    market. We then analysed the result through three methodologically independent lenses —
+    <strong>scenario stress testing</strong>, <strong>topological structure analysis</strong>, and a
+    <strong>machine learning</strong> forecast. We had the platform <strong>explain</strong> its
+    conclusion in plain language, <strong>compose</strong> the three into a single governed score, and
+    <strong>raise an alert</strong> with full provenance. And every step of that produced an audit
+    record and a report.</p>
+    <p>The one idea I would like to leave with you is the one on the risk overview screen: three
+    lenses that fail differently. Stress testing only finds what you imagined. Topology finds
+    structural change nobody scripted, but cannot tell you why. Machine learning finds patterns
+    neither of them encode, but only patterns resembling what it was trained on. Any one of them
+    alone is an opinion. Where all three agree — as they did today, on correlation structure
+    collapsing — you have something worth acting on.</p>
+    <p>And to close the way I opened: this is an interface proof of concept. The workflow, the state
+    model, the role model and the information architecture are real. The computation behind the
+    numbers is not, and everything outside the core build is marked in the product itself.</p>
+    <p>So the question I would like to put back to this panel is not whether you believe the numbers.
+    It is this: <strong>walk through your own Monday morning in your head, and tell me where this
+    interface would get in your way.</strong> That is the feedback that changes what we build next."</p>
+  </div>
+  <div class="rem">
+    <span class="lbl">Remember</span>
+    <ul>
+      <li><b>Recap as one sentence per stage</b>, in order. Do not re-explain — you are reminding, not teaching.</li>
+      <li>Leave them with <b>one idea</b>: three lenses that fail differently, and agreement is the signal.</li>
+      <li><b>Restate the boundary once</b> at the close. It bookends the honesty you opened with.</li>
+      <li><b>Never end on "any questions?"</b> Ask a specific one: "where would this get in your way on a Monday morning?"</li>
+      <li>Leave the dashboard on screen behind you — the populated one.</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 9 -->
+<div class="act" id="act9">
+  <div class="no">Act 9</div>
+  <h2>Question bank</h2>
+  <p class="lede">The questions a domain-expert panel is most likely to ask, and an honest answer for
+  each. Read this the night before. The single rule: never invent a capability that does not exist —
+  every strong answer below concedes something.</p>
+</div>
+
+<section>
+  <h3><span class="num">9.1</span>On the mock data and the numbers</h3>
+  <table>
+    <thead><tr><th style="width:38%">They ask</th><th>You answer</th></tr></thead>
+    <tbody>
+      <tr><td><b>"Are any of these numbers computed?"</b></td>
+      <td>The chart <i>geometries</i> are — equity curves, drawdowns, candlesticks, correlation matrices, persistence points and landscape curves are all produced by deterministic seeded generators, which is why they have realistic structure rather than being drawn by hand. The <i>financial results</i> — VaR, the risk scores, the composite — are fixed demo values. The distinction is real and I would rather draw it precisely.</td></tr>
+      <tr><td><b>"Why is the composite 76 when the three components average 74.7?"</b></td>
+      <td>Because the composite is fixed demo data in this build, not a live weighting. The weighting function is an open specification decision, and I would argue it should be configurable per institution. What the interface commits to is that the components are always shown beside the composite.</td></tr>
+      <tr><td><b>"The dashboard equity panel says $1.34m but the KPI says $1.083m."</b></td>
+      <td>Correct, and well spotted. The chart series and the portfolio record are generated from two different sources in this build and are not yet reconciled. It is a data-layer wiring issue in the POC, not a modelling disagreement — and it is exactly the class of thing this review is meant to catch.</td></tr>
+      <tr><td><b>"Will the numbers change if I refresh?"</b></td>
+      <td>No. Everything is deterministic by design, so the demo is identical for every viewer. Refreshing does reset the workflow state to the beginning, though, since state is held in memory.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3><span class="num">9.2</span>On the methodology</h3>
+  <table>
+    <thead><tr><th style="width:38%">They ask</th><th>You answer</th></tr></thead>
+    <tbody>
+      <tr><td><b>"Why TDA at all? What does it give me over correlation monitoring?"</b></td>
+      <td>Threshold-independence. Conventional correlation monitoring makes you pick a cutoff and a window, and your conclusion moves with those choices. Persistent homology asks what structure survives across <i>all</i> thresholds, so the features it reports are not artefacts of a parameter you chose. It also detects structural change without you specifying what kind of change to look for.</td></tr>
+      <tr><td><b>"Five assets is a very small point cloud for TDA."</b></td>
+      <td>Agreed, and that is a fair limitation of the demo universe rather than of the method. The universe selector on step one is where you scale it; the pipeline is universe-agnostic. With five assets you get ten pairwise distances, which is enough to demonstrate the stages but thin for genuine cluster structure.</td></tr>
+      <tr><td><b>"Which VaR methodology?"</b></td>
+      <td>Monte Carlo, off the terminal distribution of the ensemble you watched generate — the internally consistent choice given the simulation. Historical and parametric VaR would be reasonable additions and the interface has room for a methodology selector.</td></tr>
+      <tr><td><b>"Is the ML model doing inference, or is it a lookup?"</b></td>
+      <td>In this build, a lookup. What is real is the governance surface around it: version, task, measured accuracy, last-trained date, lifecycle status, per-prediction confidence, and feature attribution. The interface is specified to receive real inference; it is not performing it.</td></tr>
+      <tr><td><b>"Stress scenarios look qualitative. Are they parameterised?"</b></td>
+      <td>Not in this build — they are five named scenarios with descriptions. A production version needs shock magnitudes, correlation targets and horizons as editable parameters, and probably user-defined scenarios. That is a genuine gap and I would welcome your view on which parameters matter most.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3><span class="num">9.3</span>On architecture and delivery</h3>
+  <table>
+    <thead><tr><th style="width:38%">They ask</th><th>You answer</th></tr></thead>
+    <tbody>
+      <tr><td><b>"What is actually built here?"</b></td>
+      <td>A React and TypeScript single-page application. Client-side routing across 35 routes, a state machine driving the flow, a role and capability model, and a centralised mock data layer with deterministic generators. No backend, no database, no message bus.</td></tr>
+      <tr><td><b>"How far is this from something we could pilot?"</b></td>
+      <td>The interface layer is substantially complete for the core flow. What is missing is everything behind it: the services in that architecture diagram, the event bus, real compute for the simulation and topology pipelines, model serving, persistence and authentication. The honest framing is that this de-risks the product and UX decisions, not the engineering.</td></tr>
+      <tr><td><b>"Why Kafka specifically?"</b></td>
+      <td>Ordered, durable, replayable event streams — which matters when your audit position is that any past analysis can be reconstructed. Replayability is the property doing the work; the specific broker is a substitutable decision.</td></tr>
+      <tr><td><b>"Is it multi-tenant? Where does auth bind?"</b></td>
+      <td>Not modelled in this build beyond the role layer. The capability matrix is the natural binding surface for an enterprise IdP, and the login screen is where SSO would land. Tenancy is an architectural decision that has not been made yet.</td></tr>
+      <tr><td><b>"Accessibility, dark mode, mobile?"</b></td>
+      <td>The theme is token-based — semantic colour variables rather than hard-coded values — so an alternate theme is a token swap, not a rewrite. The layout is responsive with breakpoints, though it is designed desktop-first because this is a workstation product. Formal accessibility audit has not been done.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3><span class="num">9.4</span>The three answers to keep in your pocket</h3>
+  <div class="rem">
+    <span class="lbl">Use these verbatim when cornered</span>
+    <ul>
+      <li><b>When you do not know:</b> "I do not know, and I would rather find out than guess. Can I come back to you on that?" A panel with domain expertise respects this and punishes the alternative.</li>
+      <li><b>When they find a genuine bug or inconsistency:</b> "That is a real defect, thank you — that is exactly what this review is for." Never explain it away. Conceding a small thing protects your credibility on the large ones.</li>
+      <li><b>When they push on whether the maths is real:</b> "It is not, and the product says so on the screen where it matters. What I am asking you to evaluate is whether this is the right workflow — because if the workflow is wrong, correct mathematics behind it will not save the product."</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ============================================================ ACT 10 -->
+<div class="act" id="act10">
+  <div class="no">Act 10</div>
+  <h2>Appendix — things to know before they ask</h2>
+</div>
+
+<section>
+  <h3><span class="num">10.1</span>Known inconsistencies in this build</h3>
+  <div class="stopbox">
+    <span class="lbl">Know these before you present</span>
+    <ul>
+      <li><b>Dashboard equity value vs KPI cards.</b> The equity curve panel reports roughly $1,344,823 with a max drawdown of −7.36%, generated from a seeded series. The KPI cards and every other screen report $1,083,421, +8.34% and −11.7% from the portfolio record. These two sources are not reconciled. A quant will notice. Concede it immediately — see 9.1.</li>
+      <li><b>Composite arithmetic.</b> 76 is not the mean of 72, 84 and 68. Have the answer in 9.1 ready.</li>
+      <li><b>Settings → Appearance</b> reads "Dark (Institutional)" while the application renders a light theme. Cosmetic mock-data leftover; do not open that tab.</li>
+      <li><b>The Architecture page is not in the sidebar.</b> Navigate to <code>/architecture</code> by URL.</li>
+      <li><b>The persistence diagram renders small and off-centre</b> relative to its panel. Do not draw attention to the layout; talk about the diagonal instead.</li>
+      <li><b>A hard refresh signs you out</b> and resets the entire flow, because state is in memory. This is your emergency reset and your biggest live hazard.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h3><span class="num">10.2</span>Numbers to have memorised</h3>
+  <table>
+    <thead><tr><th style="width:30%">Where</th><th>Figures</th></tr></thead>
+    <tbody>
+      <tr><td><b>Simulation</b></td><td>GBM · AAPL · 10,000 paths · 252 steps · 95% confidence · calibration drift 0.084, vol 0.231, 252-day window, Valid</td></tr>
+      <tr><td><b>Terminal price</b></td><td>Mean $238.41 · Median $234.80 · P5 $181.22 · P95 $312.17 · VaR −8.7% · CVaR −12.9%</td></tr>
+      <tr><td><b>Portfolio</b></td><td>$1,000,000 start → $1,083,421 · +8.34% · vol 18.2% · variance 3.31% · max DD −11.7% · costs 5bp + 2bp slippage</td></tr>
+      <tr><td><b>Weights</b></td><td>NVDA 25 · AAPL 24 · MSFT 21 · AMZN 15 · GOOGL 15 (NVDA exactly on the 25% cap)</td></tr>
+      <tr><td><b>Stress</b></td><td>Correlated Failure · max loss −21.4% · VaR −18.7% · CVaR −25.1% · recovery 47 days · score 72 ELEVATED</td></tr>
+      <tr><td><b>Loss contribution</b></td><td>NVDA 34% · AAPL 24% · MSFT 20% · AMZN 13% · GOOGL 9%</td></tr>
+      <tr><td><b>TDA</b></td><td>60-day window, 5-day step · score 84 HIGH · shift detected 2026-06-24 · threshold crossed 75 → 82</td></tr>
+      <tr><td><b>ML</b></td><td>Portfolio Risk Model v1.4 · vol forecast 27.4% · drawdown probability 63% · regime Stress · health 61 · confidence 87% · score 68 ELEVATED</td></tr>
+      <tr><td><b>Composite</b></td><td>76 / 100 HIGH · drivers: TDA 38% · stress 31% · ML 22% · vol trend 9%</td></tr>
+      <tr><td><b>Thresholds</b></td><td>Composite HIGH at 70 · SEVERE at 85 · TDA shift alert at 75</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3><span class="num">10.3</span>Timing plan and what to cut</h3>
+  <table>
+    <thead><tr><th style="width:12%">Act</th><th style="width:12%">Budget</th><th>If you are running long</th></tr></thead>
+    <tbody>
+      <tr><td><b>0–1</b></td><td>5 min</td><td>Protected. The framing and the cold dashboard are load-bearing.</td></tr>
+      <tr><td><b>2</b></td><td>6 min</td><td>Cut Replay and Market Data. <b>Never cut Calibrations</b> — the Stale flag is your credibility.</td></tr>
+      <tr><td><b>3</b></td><td>10 min</td><td>Cut the strategy library interlude (3.5). Run Trade Replay at 20×.</td></tr>
+      <tr><td><b>4</b></td><td>12 min</td><td>Protected. This is the product. If forced, compress stress testing, never TDA.</td></tr>
+      <tr><td><b>5</b></td><td>5 min</td><td>Cut Attribution (5.5). <b>Never cut the dashboard callback</b> (5.4) — it is your best moment.</td></tr>
+      <tr><td><b>6</b></td><td>4 min</td><td>Cut Reports and Settings. Keep Activity, Audit Log and Roles.</td></tr>
+      <tr><td><b>7–8</b></td><td>4 min</td><td>Protected. Never skip the honest-boundary section or the close.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3><span class="num">10.4</span>Screenshot index</h3>
+  <p class="where">All captures at 1600&times;1000 logical / 3200&times;2000 physical, in <b>presentation/screenshots/</b>, numbered in the order they appear in this script's flow.</p>
+  <table>
+    <thead><tr><th style="width:14%">Files</th><th>Coverage</th></tr></thead>
+    <tbody>
+      <tr><td><b>01–03</b></td><td>Login, cold dashboard, expanded sidebar</td></tr>
+      <tr><td><b>04–15</b></td><td>Reference layer: environments, market data, instruments, replay, calibrations, models, simulation list, strategies, strategy editor, portfolios, ML registry, features</td></tr>
+      <tr><td><b>16–23</b></td><td>Golden path steps 1–6: environment → configuration → run → results → portfolio → trade replay</td></tr>
+      <tr><td><b>24–27</b></td><td>Risk overview and the stress testing lens, all three states</td></tr>
+      <tr><td><b>28–34</b></td><td>The seven TDA pipeline stages</td></tr>
+      <tr><td><b>35–38</b></td><td>ML prediction, explainability, composite risk, alert</td></tr>
+      <tr><td><b>39–41</b></td><td>Populated dashboard, attribution, news extraction</td></tr>
+      <tr><td><b>42–51</b></td><td>Reports and modal, audit log, architecture and modal, admin screens, settings, activity drawer</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="end">
+  QuantSim — Full Interface Walkthrough &middot; presenter script<br>
+  Generated from the develop-poc branch &middot; 51 captures &middot; 35 routes<br>
+  Open this file in a browser; print to PDF for a paper copy.
+</div>
+
+</div>
