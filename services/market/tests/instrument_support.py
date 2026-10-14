@@ -57,11 +57,12 @@ def bearer(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def make_settings(url: str) -> MarketSettings:
+def make_settings(url: str, **extra: Any) -> MarketSettings:
     return MarketSettings(
         database_url=SecretStr(url),
         redis_url=SecretStr("redis://unused"),
         auth_jwks_url="http://platform/jwks",
+        **extra,
     )
 
 

@@ -262,6 +262,8 @@ def validate_new_instrument(directory: SymbolDirectory, *, symbol: str, asset_cl
         message,
         type_="urn:quantsim:problem:validation",
         extra={
-            "errors": [{"location": ["body", field], "message": message, "type": "symbol_directory"}]
+            "errors": [
+                {"location": ["body", field], "message": message, "type": "symbol_directory"}
+            ]
         },
     )
