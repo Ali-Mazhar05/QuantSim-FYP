@@ -131,7 +131,7 @@ gateway ──▶ │ api        /api/market/*         (FastAPI, verifies JWT, r
 The scheduler is only useful while the process runs, and today the backend runs on
 whichever laptop is hosting Jenkins. So:
 
-- **Scheduled runs happen only while someone hosts.** The 06:00 UTC catch-up run exists
+- **Scheduled runs happen only while someone hosts.** The 09:30 UTC catch-up run exists
   to recover a missed 22:30 run, and a missed day is filled by the next run's five-session
   overlap, so a host that was off for a day loses nothing permanently.
 - **One scheduler across all environments.** It is enabled on TEST only (`QS_SCHEDULER_ENABLED`);
@@ -160,7 +160,7 @@ whichever laptop is hosting Jenkins. So:
 | `data_gap` | Expected sessions with no clean bar | Resolved automatically when the bar arrives |
 | `corporate_action` | Splits and dividends | Split factor > 0 |
 | `return_series` (hypertable) | Log returns, adjusted returns, 20- and 60-day volatility | Recomputed from the earliest changed session |
-| `replay_session` | Replay windows | Database check `end_time > start_time` (NFR-INT-003), speed bounds, status set |
+| `market_environment` | Market environments, which are also the replay windows (decided in the PRD, FR-30, as the POC models them) | Database check `end_date > start_date` (NFR-INT-003), type, frequency and status sets, 1 to 100 instruments. Play, pause, speed and playback state arrive with Iteration 2, with their own table then |
 | `outbox`, `processed_events` | Events | From the template |
 | `audit_log` | Change history | From the template; `instrument` audited |
 
@@ -190,7 +190,7 @@ whichever laptop is hosting Jenkins. So:
 | Trigger | Mode | Window |
 |---|---|---|
 | Scheduler, 22:30 UTC (after the US close) | `daily` | From 5 sessions before the last stored bar to today |
-| Scheduler, 06:00 UTC | `catchup` | Same; picks up bars the vendor published late |
+| Scheduler, 09:30 UTC | `catchup` | Same; picks up bars the vendor published late and is the first run allowed to judge a session missing (close plus 12 hours is 08:00 or 09:00 UTC, so 06:00 was too early; D16) |
 | Admin, `POST /ingestion-runs` | `manual` | Optional explicit window and instrument list |
 | Admin, `POST /ingestion-runs` with `mode=backfill` | `backfill` | Explicit start date (default first run: 2015-01-02) |
 
@@ -392,6 +392,9 @@ role checks on every route. They are the Mid demonstration.
 | D13 | Scheduled-run success metric | At least three scheduled runs plus a manual-run log, until an always-on host exists |
 | D14 | Correlation (FR-MKT-004) | Own work item, stretch; moves to Iteration 3 if cut |
 | D15 | Vendor key | One shared Tiingo key as `TIINGO_API_KEY` in the encrypted secrets; the limits are verified by the vendor check in branch 4 |
+| D16 | Catch-up run time | 09:30 UTC. The gate judges a session missing only after close plus 12 hours (08:00 or 09:00 UTC); a 06:00 run could never judge, so gaps would appear a day late |
+| D17 | Replay window table | The PRD's `market_environment` is the replay window (NFR-INT-003); no separate `replay_session` table in Iteration 1 |
+| D18 | Stored precision | Returns and volatility `NUMERIC(20,12)`; adjusted prices `NUMERIC(23,10)` (the vendor's precision); the bar content hash covers raw vendor values only, because adjusted values are restated at every dividend or split |
 
 ---
 
