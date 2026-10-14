@@ -34,7 +34,7 @@ database = support.database
 
 async def add_instrument(db: Database, symbol: str, *, status: str = "active") -> uuid.UUID:
     async with db.transaction() as session:
-        return (
+        new_id: uuid.UUID = (
             await session.execute(
                 insert(instrument)
                 .values(
@@ -51,6 +51,7 @@ async def add_instrument(db: Database, symbol: str, *, status: str = "active") -
                 .returning(instrument.c.id)
             )
         ).scalar_one()
+    return new_id
 
 
 async def ingest(
@@ -98,9 +99,10 @@ async def get_json(
 
 async def instrument_id(db: Database, symbol: str) -> uuid.UUID:
     async with db.transaction() as session:
-        return (
+        found: uuid.UUID = (
             await session.execute(select(instrument.c.id).where(instrument.c.symbol == symbol))
         ).scalar_one()
+    return found
 
 
 async def pages(
@@ -109,7 +111,7 @@ async def pages(
     """Follow next_cursor to the end, yielding one response per page."""
     cursor = None
     while True:
-        extra = {"cursor": cursor} if cursor else {}
+        extra: dict[str, Any] = {"cursor": cursor} if cursor else {}
         page = await get_json(http, path, role, **params, **extra)
         yield page
         cursor = page["next_cursor"]
