@@ -61,25 +61,49 @@ class RecordedSource:
         return [dict(r) for r in self._corpus[symbol] if low <= r["date"] <= high]
 
 
+# Ingesting six full histories takes about half a minute, so the read only checks share
+# one ingestion. A test that changes the data takes a clean database (``fresh``) and the
+# next reader ingests again.
+_STATE = {"ingested": False}
+_SHARED: list[RunOutcome] = []
+
+
+async def _reset(database: Database) -> None:
+    async with database.transaction() as session:
+        await session.execute(text(f"TRUNCATE {TABLES} CASCADE"))
+        await seed_instruments(session)
+    _STATE["ingested"] = False
+    _SHARED.clear()
+
+
 @pytest.fixture
 async def db(migrated_database_url: str) -> AsyncIterator[Database]:
     settings = MarketSettings(
         database_url=SecretStr(migrated_database_url), redis_url=SecretStr("redis://unused")
     )
     database = Database(settings)
-    async with database.transaction() as session:
-        await session.execute(text(f"TRUNCATE {TABLES} CASCADE"))
-        await seed_instruments(session)
+    if not _STATE["ingested"]:
+        await _reset(database)
     yield database
-    async with database.transaction() as session:
-        await session.execute(text(f"TRUNCATE {TABLES} CASCADE"))
     await database.close()
 
 
-async def _run(db: Database, source: RecordedSource, window: tuple[date, date]) -> RunOutcome:
+@pytest.fixture
+async def fresh(db: Database) -> AsyncIterator[Database]:
+    await _reset(db)
+    yield db
+    _STATE["ingested"] = False
+
+
+async def _run(
+    db: Database,
+    source: RecordedSource,
+    window: tuple[date, date],
+    symbols: tuple[str, ...] = SYMBOLS,
+) -> RunOutcome:
     async with db.transaction() as session:
         ids = (
-            (await session.execute(select(instrument.c.id).where(instrument.c.symbol.in_(SYMBOLS))))
+            (await session.execute(select(instrument.c.id).where(instrument.c.symbol.in_(symbols))))
             .scalars()
             .all()
         )
@@ -111,7 +135,12 @@ async def _count(db: Database, table: Any) -> int:
 async def first_run(
     db: Database, corpus: dict[str, Records], window: tuple[date, date]
 ) -> RunOutcome:
-    return await _run(db, RecordedSource(corpus), window)
+    if _SHARED:
+        return _SHARED[0]
+    outcome = await _run(db, RecordedSource(corpus), window)
+    _STATE["ingested"] = True
+    _SHARED[:] = [outcome]
+    return outcome
 
 
 async def test_the_run_succeeds_and_every_symbol_is_stored(
@@ -194,9 +223,7 @@ async def test_returns_are_stored_and_equal_an_independent_computation(
             await session.execute(
                 select(return_series.c.adj_log_return)
                 .select_from(
-                    instrument.join(
-                        return_series, return_series.c.instrument_id == instrument.c.id
-                    )
+                    instrument.join(return_series, return_series.c.instrument_id == instrument.c.id)
                 )
                 .where(instrument.c.symbol == symbol)
                 .order_by(return_series.c.session_date)
@@ -242,9 +269,55 @@ async def test_splits_and_dividends_are_recorded_once(
 async def test_running_the_same_window_again_changes_nothing(
     db: Database, first_run: RunOutcome, corpus: dict[str, Records], window: tuple[date, date]
 ) -> None:
+    # reads the shared ingestion and adds a second run of the identical window; the data
+    # does not change, so the next reader may still use it
     tables = (bar, rejected_bar, return_series, corporate_action, outbox)
     before = [await _count(db, t) for t in tables]
     second = await _run(db, RecordedSource(corpus), window)
     assert second.status == "succeeded", second.error
     assert [await _count(db, t) for t in tables] == before
     assert second.run_id != first_run.run_id
+
+
+async def test_planted_faults_are_rejected_once_even_when_the_window_is_run_again(
+    fresh: Database, corpus: dict[str, Records], window: tuple[date, date]
+) -> None:
+    """Real AAPL bars with a fault each, through the whole chain, twice."""
+    import copy
+
+    from .test_faults_in_real_data import AT, EXPECTED, SYMBOL, apply_fault
+
+    original = corpus[SYMBOL]
+    work = copy.deepcopy(original)
+    for fault in AT:
+        apply_fault(work, fault, original)
+    faulted = dict(corpus)
+    faulted[SYMBOL] = work
+
+    first = await _run(fresh, RecordedSource(faulted), window, (SYMBOL,))
+    assert first.status == "succeeded", first.error
+    async with fresh.transaction() as session:
+        rows = (await session.execute(select(rejected_bar.c.rules))).scalars().all()
+    rules = {rule for r in rows for rule in r}
+    assert {"non_positive_price", "ohlc_order", "non_trading_day", "duplicate_conflict"} <= rules
+    expected_rejected = sum(1 for kind, _, _ in EXPECTED.values() if kind == "rejected") + 1
+    assert len(rows) >= expected_rejected  # the conflicting pair gives two rejected records
+    assert await _count(fresh, data_gap) >= 4
+    async with fresh.transaction() as session:
+        flags = (
+            await session.execute(
+                select(func.count())
+                .select_from(bar)
+                .where(func.jsonb_array_length(bar.c.quality_flags) > 0)
+            )
+        ).scalar_one()
+    assert flags >= 2, "the outlier and the zero volume bar should be stored with flags"
+
+    before = (len(rows), await _count(fresh, bar), await _count(fresh, outbox))
+    second = await _run(fresh, RecordedSource(faulted), window, (SYMBOL,))
+    assert second.status == "succeeded", second.error
+    assert (
+        await _count(fresh, rejected_bar),
+        await _count(fresh, bar),
+        await _count(fresh, outbox),
+    ) == before, "a repeated run must not store the same rejection again"
