@@ -41,3 +41,52 @@ Run these from the repository root:
 ci/scripts/python-ci.sh services/market      # ruff, mypy, pytest with a throwaway database
 ci/scripts/migration-check.sh market         # upgrade, downgrade, upgrade on an empty database
 ```
+
+## Vendor adapter
+
+`qs_market.vendor` fetches end-of-day prices behind one `PriceSource` interface and hands the cleaning gate records in its own shape (snake_case keys, `Decimal` values, `YYYY-MM-DD` dates). The vendor is chosen by configuration:
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `QS_VENDOR` | `fixture` | `tiingo` or `fixture` (recorded responses, no network) |
+| `QS_FIXTURE_DIR` | none | Directory of `{SYMBOL}.json` for the fixture vendor |
+| `QS_TIINGO_API_KEY` | none | Required when the vendor is `tiingo`; the service refuses to start without it |
+| `QS_TIINGO_BASE_URL` | `https://api.tiingo.com` | |
+| `QS_TIINGO_REQUESTS_PER_HOUR` | `45` | Shared hourly budget for the key, counted in Redis |
+| `QS_TIINGO_SCHEDULED_RESERVE` | `40` | Requests per hour a backfill or manual run may not use |
+| `QS_TIINGO_TIMEOUT_SECONDS` | `30` | Per request |
+
+Behaviour to know when operating it:
+- Timeouts, 5xx and 429 are retried up to 4 attempts in total with exponential backoff and jitter; a `Retry-After` header is honoured. 404 (unknown symbol), 401 and 403 are never retried.
+- Tiingo sends no rate-limit headers, so every request, retries included, is counted against the hourly budget. An empty budget defers the work (`BudgetExhausted`) rather than waiting. If Redis is unreachable the call is refused, never made unmetered.
+- Tests never contact `api.tiingo.com`; a test-suite guard fails any test that tries.
+- To check the real vendor by hand, with one symbol and at most two requests:
+
+  ```sh
+  TIINGO_API_KEY=... python services/market/scripts/vendor_check.py AAPL
+  ```
+
+## Real-data validation
+
+Unit tests prove each rule on constructed bars. `tests/realdata/` proves the code on years
+of real vendor bars, and is skipped when no corpus is present, so CI and fresh clones are
+unaffected.
+
+| File | What it checks |
+|---|---|
+| `test_gate_on_real_data.py` | Vendor rows match the exchange calendar exactly; real history passes with no rejects or gaps; real splits (NVDA, TSLA, AAPL) are read correctly and never flagged; dividends survive; the result is deterministic and independent of input order |
+| `test_returns_on_real_data.py` | Log returns and 20 and 60 session volatility equal independent numpy and pandas computations; a split does not look like a crash in adjusted returns |
+| `test_faults_in_real_data.py` | Each of eight planted faults in real AAPL bars is caught by its own rule and no untouched bar changes |
+| `test_performance_on_real_data.py` | Time and memory budgets for the planned 40 instrument, 11 year backfill |
+
+Record the corpus once (six symbols, 2015 to today, six requests) and run the suite:
+
+```sh
+TIINGO_API_KEY=... uv run python scripts/fetch_realdata.py
+uv run python -m pytest tests/realdata -q
+```
+
+The corpus goes to `tests/realdata/corpus/`, which git ignores: the free tier is for
+personal use, so the data is fetched on demand and never committed. Point
+`QS_REALDATA_DIR` at another folder to keep it elsewhere. Budgets can be loosened with
+`QS_REALDATA_GATE_SECONDS`, `QS_REALDATA_RETURNS_SECONDS` and `QS_REALDATA_MEMORY_MB`.

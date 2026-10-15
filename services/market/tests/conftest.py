@@ -1,5 +1,6 @@
 import asyncio
 import os
+import socket
 import uuid
 from collections.abc import Coroutine, Iterator
 from pathlib import Path
@@ -64,3 +65,31 @@ def migrated_database_url() -> Iterator[str]:
         else:
             os.environ["DATABASE_URL"] = previous
         run(_execute_autocommit(base_url, f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+
+
+REAL_VENDOR_HOST = "api.tiingo.com"
+
+
+class RealVendorCalled(AssertionError):
+    """A test tried to reach the real vendor, whose key is shared and metered."""
+
+
+@pytest.fixture(autouse=True)
+def _never_reach_the_real_vendor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail any test that resolves or connects to the real Tiingo host. Vendor tests use
+    recorded fixtures or a mock transport."""
+    real_getaddrinfo = socket.getaddrinfo
+    real_create_connection = socket.create_connection
+
+    def guarded_getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if REAL_VENDOR_HOST in str(host):
+            raise RealVendorCalled(f"a test resolved {REAL_VENDOR_HOST}")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    def guarded_create_connection(address: Any, *args: Any, **kwargs: Any) -> Any:
+        if REAL_VENDOR_HOST in str(address[0]):
+            raise RealVendorCalled(f"a test connected to {REAL_VENDOR_HOST}")
+        return real_create_connection(address, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    monkeypatch.setattr(socket, "create_connection", guarded_create_connection)

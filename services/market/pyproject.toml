@@ -35,7 +35,10 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
-markers = ["db: needs a PostgreSQL database (TEST_DATABASE_URL)"]
+markers = [
+  "db: needs a PostgreSQL database (TEST_DATABASE_URL)",
+  "realdata: needs the recorded vendor corpus (scripts/fetch_realdata.py); skipped without it",
+]
 filterwarnings = [
   "error",
   # exchange_calendars and pandas emit these on import; not our code
