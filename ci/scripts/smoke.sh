@@ -68,6 +68,11 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
   done < <(component_names)
 fi
 
+# The market service: readiness and, where the recorded vendor is configured, one manual run
+if [[ "$COMPOSE_TARGET" != "none" ]] && component_names | grep -qx market; then
+  "$(dirname "$0")/smoke-market.sh" "$env" || die "market smoke test failed"
+fi
+
 # The relay sends account email; it must be able to open a connection to the mail server
 if [[ "$COMPOSE_TARGET" == "local" && -n "${SMTP_HOST:-}" ]]; then
   log "checking that $QS_PROJECT can reach the mail server $SMTP_HOST:${SMTP_PORT:-587}"
