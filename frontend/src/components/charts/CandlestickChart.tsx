@@ -2,27 +2,44 @@ import { useMemo } from 'react'
 import { generateCandles } from '../../services/mock/generators'
 import { useElementWidth } from '../../hooks/useElementWidth'
 
+export interface ChartCandle {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+}
+
+/** Draws `candles` when given (real data); otherwise a generated series from seed, start,
+ * vol and count, which the other POC pages still use. A given series must not be empty. */
 export default function CandlestickChart({
   seed = 1,
   start = 200,
   vol = 0.02,
   count = 90,
   height = 260,
+  candles: given,
 }: {
   seed?: number
   start?: number
   vol?: number
   count?: number
   height?: number
+  candles?: ChartCandle[]
 }) {
-  const candles = useMemo(() => generateCandles({ seed, count, start, vol }), [seed, count, start, vol])
+  const generated = useMemo(
+    () => (given ? [] : generateCandles({ seed, count, start, vol })),
+    [given, seed, count, start, vol],
+  )
+  const candles = given ?? generated
+  const n = candles.length
   const [wrapRef, available] = useElementWidth<HTMLDivElement>()
   // Draw at the panel's real width so the candles widen to fill it. Below
   // MIN_WIDTH the chart keeps its own size and the wrapper scrolls instead,
   // which is the only case where the candles would otherwise be unreadable.
-  const MIN_WIDTH = Math.max(360, count * 4)
+  const MIN_WIDTH = Math.max(360, n * 4)
   const width = Math.max(MIN_WIDTH, available || MIN_WIDTH)
-  const cw = width / count
+  const cw = width / n
   const highs = candles.map((c) => c.high)
   const lows = candles.map((c) => c.low)
   const minV = Math.min(...lows) * 0.98
