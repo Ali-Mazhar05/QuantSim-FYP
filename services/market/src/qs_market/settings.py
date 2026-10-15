@@ -1,5 +1,6 @@
 """Settings of the Market Data service, on top of the template's (all ``QS_*``)."""
 
+from datetime import date
 from pathlib import Path
 from typing import Literal, Self
 
@@ -24,6 +25,15 @@ class MarketSettings(ServiceSettings):
     # Requests per window that backfill and manual runs may not use (D12)
     tiingo_scheduled_reserve: int = Field(default=40, ge=0)
     tiingo_timeout_seconds: float = Field(default=30.0, gt=0)
+
+    # Ingestion pipeline (worker and run-once)
+    ingest_poll_seconds: float = Field(default=5.0, gt=0)
+    # Where a new instrument's history starts when a run gives no explicit start
+    ingest_backfill_start: date = date(2015, 1, 2)
+    ingest_outlier_log_return: float = Field(default=0.405, gt=0)
+    ingest_outlier_policy: Literal["flag", "reject"] = "flag"
+    # Consecutive vendor failures that open the circuit and defer the rest of the run
+    ingest_circuit_failures: int = Field(default=5, ge=1)
 
     @model_validator(mode="after")
     def _vendor_is_usable(self) -> Self:
