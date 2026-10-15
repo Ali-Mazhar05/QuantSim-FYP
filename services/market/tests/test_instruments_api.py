@@ -37,6 +37,8 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("PATCH", "/instruments/{instrument_id}"): ADMIN_ONLY,
     ("POST", "/instruments/{instrument_id}/retire"): ADMIN_ONLY,
     ("GET", "/instruments/{instrument_id}/bars"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/candles"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/metrics"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/returns"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/corporate-actions"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/gaps"): ALL_ROLES,

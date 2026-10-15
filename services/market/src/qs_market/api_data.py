@@ -1,6 +1,7 @@
 """Read API for stored market data, under ``/api/market``.
 
-Signed-in users (``view_market_data``):  GET /instruments/{id}/bars, /returns,
+Signed-in users (``view_market_data``):  GET /instruments/{id}/bars, /candles, /metrics,
+                                         /returns,
                                          /corporate-actions, /gaps, /quote
 Admin, quant, analyst (``view_ingestion_runs``):  GET /data-quality
 
@@ -30,6 +31,7 @@ from qs_market.models import (
     rejected_bar,
     return_series,
 )
+from qs_market.series import DailyBar, Interval, aggregate, compute_metrics
 from qs_template import Database, ServiceError
 from qs_template.auth import Authenticator, Capability, Principal
 
@@ -107,6 +109,43 @@ class QuoteOut(BaseModel):
     as_of: date | None = Field(description="Session date of the latest close")
 
 
+class CandleOut(BaseModel):
+    session_date: date = Field(
+        description="Last session of the period, the day its close is struck"
+    )
+    period_start: date = Field(description="First session of the period")
+    open: str
+    high: str
+    low: str
+    close: str
+    volume: str
+    adj_close: str | None
+    sessions: int = Field(description="Daily sessions the candle summarises")
+
+
+class CandleSeries(BaseModel):
+    interval: Interval
+    start: date | None
+    end: date | None
+    items: list[CandleOut] = Field(description="Empty when the range holds no observations")
+
+
+class MetricsOut(BaseModel):
+    interval: Interval
+    start: date | None
+    end: date | None
+    observations: int
+    price_basis: Literal["adjusted_close", "close"]
+    period_return: str | None = Field(description="Last price / first price - 1")
+    annualised_volatility: str | None = Field(
+        description="Sample deviation of log returns times sqrt(periods per year)"
+    )
+    max_drawdown: str | None = Field(description="Lowest (price - peak) / peak, zero or negative")
+    drawdown_peak: date | None
+    drawdown_trough: date | None
+    unavailable: dict[str, str] = Field(description="Why a metric has no value")
+
+
 def _check_window(start: date | None, end: date | None) -> None:
     if start is not None and end is not None and start > end:
         raise ServiceError(
@@ -147,6 +186,9 @@ def build_data_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     Session = Annotated[AsyncSession, Depends(database.session)]
     From = Annotated[date | None, Query(alias="from", description="First session, inclusive")]
     To = Annotated[date | None, Query(description="Last session, inclusive")]
+    IntervalParam = Annotated[
+        Interval, Query(description="daily, weekly, monthly or yearly (invalid values give 422)")
+    ]
     Cursor = Annotated[date | None, Query(description="next_cursor of the previous page")]
     Limit = Annotated[int, Query(ge=1, le=MAX_LIMIT)]
 
@@ -204,6 +246,94 @@ def build_data_routers(*, auth: Authenticator, database: Database) -> list[APIRo
                 for r in page
             ],
             next_cursor=page[-1].session_date if len(rows) > limit else None,
+        )
+
+    async def daily_bars(
+        session: AsyncSession, instrument_id: uuid.UUID, start: date | None, end: date | None
+    ) -> list[DailyBar]:
+        query = select(
+            bar.c.session_date,
+            bar.c.open,
+            bar.c.high,
+            bar.c.low,
+            bar.c.close,
+            bar.c.volume,
+            bar.c.adj_close,
+        ).where(bar.c.instrument_id == instrument_id)
+        if start is not None:
+            query = query.where(bar.c.session_date >= start)
+        if end is not None:
+            query = query.where(bar.c.session_date <= end)
+        rows = (await session.execute(query.order_by(bar.c.session_date))).all()
+        return [DailyBar(*row) for row in rows]
+
+    @router.get(
+        "/instruments/{instrument_id}/candles",
+        responses={401: {}, 403: {}, 404: {}, 422: {}},
+    )
+    async def list_candles(
+        instrument_id: uuid.UUID,
+        _: Viewer,
+        session: Session,
+        interval: IntervalParam = "daily",
+        start: From = None,
+        to: To = None,
+    ) -> CandleSeries:
+        """Chart series at a display interval, derived from the stored daily bars. A valid
+        range with no observations answers 200 with an empty list."""
+        _check_window(start, to)
+        await known(session, instrument_id)
+        candles = aggregate(await daily_bars(session, instrument_id, start, to), interval)
+        return CandleSeries(
+            interval=interval,
+            start=start,
+            end=to,
+            items=[
+                CandleOut(
+                    session_date=c.session_date,
+                    period_start=c.period_start,
+                    open=format(c.open, "f"),
+                    high=format(c.high, "f"),
+                    low=format(c.low, "f"),
+                    close=format(c.close, "f"),
+                    volume=format(c.volume, "f"),
+                    adj_close=_text(c.adj_close),
+                    sessions=c.sessions,
+                )
+                for c in candles
+            ],
+        )
+
+    @router.get(
+        "/instruments/{instrument_id}/metrics",
+        responses={401: {}, 403: {}, 404: {}, 422: {}},
+    )
+    async def get_metrics(
+        instrument_id: uuid.UUID,
+        _: Viewer,
+        session: Session,
+        interval: IntervalParam = "daily",
+        start: From = None,
+        to: To = None,
+    ) -> MetricsOut:
+        """Period return, annualised volatility and maximum drawdown of the series the
+        candles endpoint returns for the same query."""
+        _check_window(start, to)
+        await known(session, instrument_id)
+        candles = aggregate(await daily_bars(session, instrument_id, start, to), interval)
+        m = compute_metrics(candles, interval)
+        return MetricsOut(
+            interval=interval,
+            start=start,
+            end=to,
+            observations=m.observations,
+            price_basis=m.price_basis,
+            period_return=_text(m.period_return),
+            annualised_volatility=_text(m.annualised_volatility),
+            max_drawdown=_text(m.max_drawdown),
+            drawdown_peak=m.drawdown_peak,
+            drawdown_trough=m.drawdown_trough,
+            unavailable=m.unavailable,
         )
 
     @router.get(
