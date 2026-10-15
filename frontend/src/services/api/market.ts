@@ -1,19 +1,11 @@
-// Market data service calls: the instrument list, display-interval candles and chart
-// metrics. Every price is a decimal string on the wire; the chart converts to numbers only
-// to draw.
+// Market data service calls for the POC pages: the instrument list and the recent daily
+// series. Every price is a decimal string on the wire; the chart converts to numbers only
+// to draw. Interval filtering and metrics are served by the same API (candles and metrics
+// routes) but the prototype has no control for them, so no page asks for them.
 
 import { apiRequest } from './client'
 
 const BASE = '/api/market'
-
-export type Interval = 'daily' | 'weekly' | 'monthly' | 'yearly'
-
-export const INTERVALS: { value: Interval; label: string }[] = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'yearly', label: 'Yearly' },
-]
 
 export interface MarketInstrument {
   id: string
@@ -30,36 +22,13 @@ export interface MarketInstrument {
 }
 
 export interface Candle {
-  /** Last session of the period: the day its close is struck. */
+  /** The session the candle covers. */
   date: string
-  periodStart: string
   open: number
   high: number
   low: number
   close: number
   volume: number
-  sessions: number
-}
-
-export interface SeriesMetrics {
-  interval: Interval
-  observations: number
-  priceBasis: 'adjusted_close' | 'close'
-  periodReturn: string | null
-  annualisedVolatility: string | null
-  maxDrawdown: string | null
-  drawdownPeak: string | null
-  drawdownTrough: string | null
-  /** Metric name -> why it has no value. */
-  unavailable: Record<string, string>
-}
-
-export interface SeriesQuery {
-  interval: Interval
-  /** First session, inclusive. */
-  from?: string
-  /** Last session, inclusive. */
-  to?: string
 }
 
 interface ApiInstrument {
@@ -76,32 +45,11 @@ interface ApiInstrument {
 
 interface ApiCandle {
   session_date: string
-  period_start: string
   open: string
   high: string
   low: string
   close: string
   volume: string
-  sessions: number
-}
-
-interface ApiMetrics {
-  interval: Interval
-  observations: number
-  price_basis: 'adjusted_close' | 'close'
-  period_return: string | null
-  annualised_volatility: string | null
-  max_drawdown: string | null
-  drawdown_peak: string | null
-  drawdown_trough: string | null
-  unavailable: Record<string, string>
-}
-
-function query(params: SeriesQuery): string {
-  const search = new URLSearchParams({ interval: params.interval })
-  if (params.from) search.set('from', params.from)
-  if (params.to) search.set('to', params.to)
-  return search.toString()
 }
 
 export async function listInstruments(status: 'active' | 'retired' | null = 'active'): Promise<MarketInstrument[]> {
@@ -120,31 +68,23 @@ export async function listInstruments(status: 'active' | 'retired' | null = 'act
   }))
 }
 
-export async function getCandles(instrumentId: string, params: SeriesQuery): Promise<Candle[]> {
-  const body = await apiRequest<{ items: ApiCandle[] }>(`${BASE}/instruments/${instrumentId}/candles?${query(params)}`)
-  return body.items.map((c) => ({
+/** The last `sessions` daily candles of an instrument, oldest first: the latest available
+ * ingested data, however old. The API takes a date range, so the request first reaches back
+ * far enough to hold that many sessions (weekends and holidays) and, only when that holds
+ * nothing because the data is older, asks for the whole history. */
+export async function getRecentCandles(instrumentId: string, sessions: number): Promise<Candle[]> {
+  const path = `${BASE}/instruments/${instrumentId}/candles`
+  const from = new Date()
+  from.setUTCDate(from.getUTCDate() - Math.ceil(sessions * 1.6) - 10)
+  const recent = new URLSearchParams({ interval: 'daily', from: from.toISOString().slice(0, 10) })
+  let body = await apiRequest<{ items: ApiCandle[] }>(`${path}?${recent}`)
+  if (body.items.length === 0) body = await apiRequest<{ items: ApiCandle[] }>(`${path}?interval=daily`)
+  return body.items.slice(-sessions).map((c) => ({
     date: c.session_date,
-    periodStart: c.period_start,
     open: Number(c.open),
     high: Number(c.high),
     low: Number(c.low),
     close: Number(c.close),
     volume: Number(c.volume),
-    sessions: c.sessions,
   }))
-}
-
-export async function getMetrics(instrumentId: string, params: SeriesQuery): Promise<SeriesMetrics> {
-  const m = await apiRequest<ApiMetrics>(`${BASE}/instruments/${instrumentId}/metrics?${query(params)}`)
-  return {
-    interval: m.interval,
-    observations: m.observations,
-    priceBasis: m.price_basis,
-    periodReturn: m.period_return,
-    annualisedVolatility: m.annualised_volatility,
-    maxDrawdown: m.max_drawdown,
-    drawdownPeak: m.drawdown_peak,
-    drawdownTrough: m.drawdown_trough,
-    unavailable: m.unavailable,
-  }
 }

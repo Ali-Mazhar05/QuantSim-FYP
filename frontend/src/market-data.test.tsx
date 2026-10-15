@@ -30,10 +30,10 @@ const AAPL = {
 const NVDA = { ...AAPL, id: 'id-nvda', symbol: 'NVDA', name: 'NVIDIA Corp.', price: '120.00000000', change_pct: '3.5' }
 const NEW = { ...AAPL, id: 'id-new', symbol: 'NEW', name: 'Newly Added', price: null, change_pct: null }
 
-function candle(day: string, start: string, close: string) {
+function candle(day: string, close: string) {
   return {
     session_date: day,
-    period_start: start,
+    period_start: day,
     open: close,
     high: close,
     low: close,
@@ -44,21 +44,15 @@ function candle(day: string, start: string, close: string) {
   }
 }
 
-const CANDLES = {
-  interval: 'daily',
-  items: [candle('2024-01-02', '2024-01-02', '100'), candle('2024-01-03', '2024-01-03', '120')],
-}
-
-const METRICS = {
-  interval: 'daily',
-  observations: 2,
-  price_basis: 'adjusted_close',
-  period_return: '0.20000000',
-  annualised_volatility: null,
-  max_drawdown: '-0.05000000',
-  drawdown_peak: '2024-01-02',
-  drawdown_trough: '2024-01-03',
-  unavailable: { annualised_volatility: 'needs at least 3 observations' },
+/** `count` consecutive daily candles ending 2024-06-28, close rising by one */
+function series(count: number) {
+  const end = Date.UTC(2024, 5, 28)
+  return {
+    interval: 'daily',
+    items: Array.from({ length: count }, (_, i) =>
+      candle(new Date(end - (count - 1 - i) * 86_400_000).toISOString().slice(0, 10), String(100 + i)),
+    ),
+  }
 }
 
 type Responder = (url: URL) => Response | undefined
@@ -72,12 +66,11 @@ function marketBackend(respond: Responder = () => undefined) {
     const custom = respond(url)
     if (custom) return custom
     if (url.pathname === '/api/market/instruments') return json(200, [AAPL, NVDA])
-    if (url.pathname.endsWith('/candles')) return json(200, CANDLES)
-    if (url.pathname.endsWith('/metrics')) return json(200, METRICS)
+    if (url.pathname.endsWith('/candles')) return json(200, series(120))
     return json(404, { detail: 'Not found' })
   })
   vi.stubGlobal('fetch', fetch)
-  return { urls, series: () => urls.filter((u) => /\/(candles|metrics)$/.test(u.pathname)) }
+  return { urls, series: () => urls.filter((u) => u.pathname.endsWith('/candles')) }
 }
 
 function renderMarketData() {
@@ -142,66 +135,57 @@ describe('the Market Data page', () => {
   beforeEach(() => clearSession())
   afterEach(() => vi.unstubAllGlobals())
 
-  it('draws the series and shows the metrics from the API', async () => {
+  it('keeps the prototype layout and draws the last 90 sessions from the API', async () => {
     const backend = marketBackend()
     const { container } = renderMarketData()
 
     expect(await screen.findByText('Apple Inc. (AAPL)')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('20.00%')).toBeInTheDocument()) // period return
-    expect(screen.getByText('-5.00%')).toBeInTheDocument() // maximum drawdown
-    expect(screen.getByText('adjusted close')).toBeInTheDocument()
-    expect(container.querySelectorAll('svg rect')).toHaveLength(2) // one body per candle
+    expect(screen.getByText('Daily · last 90 sessions')).toBeInTheDocument()
+    expect(screen.getByText('Daily OHLC series for instruments within the active market environment.')).toBeInTheDocument()
+    await waitFor(() => expect(container.querySelectorAll('svg rect')).toHaveLength(90)) // 120 received, last 90 drawn
 
-    const [candles, metrics] = backend.series()
-    expect(candles.pathname).toBe('/api/market/instruments/id-aapl/candles')
-    expect(metrics.pathname).toBe('/api/market/instruments/id-aapl/metrics')
-    expect(candles.searchParams.get('interval')).toBe('daily')
-    expect(candles.searchParams.get('from')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const [request] = backend.series()
+    expect(request.pathname).toBe('/api/market/instruments/id-aapl/candles')
+    expect(request.searchParams.get('interval')).toBe('daily')
   })
 
-  it('explains a metric that has no value instead of inventing one', async () => {
+  it('adds no control the prototype does not have', async () => {
     marketBackend()
     renderMarketData()
-    expect(await screen.findByText('needs at least 3 observations')).toBeInTheDocument()
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+    await screen.findByText('Apple Inc. (AAPL)')
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(document.querySelector('input')).toBeNull()
+    expect(screen.queryByText(/volatility|drawdown|period return/i)).toBeNull()
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['AAPL', 'NVDA'])
   })
 
-  it('asks for the chosen interval, dates and symbol', async () => {
+  it('switches to another instrument from the symbol buttons', async () => {
     const backend = marketBackend()
     renderMarketData()
     await screen.findByText('Apple Inc. (AAPL)')
 
-    fireEvent.change(screen.getByLabelText('Interval'), { target: { value: 'weekly' } })
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-01-01' } })
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2024-03-31' } })
     fireEvent.click(screen.getByRole('button', { name: 'NVDA' }))
 
-    await waitFor(() => {
-      const last = backend.series().at(-1)
-      expect(last?.pathname).toBe('/api/market/instruments/id-nvda/metrics')
-      expect(last?.searchParams.get('interval')).toBe('weekly')
-      expect(last?.searchParams.get('from')).toBe('2024-01-01')
-      expect(last?.searchParams.get('to')).toBe('2024-03-31')
-    })
-    expect(screen.getByRole('button', { name: 'NVDA' })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('NVIDIA Corp. (NVDA)')).toBeInTheDocument()
+    await waitFor(() => expect(backend.series().at(-1)?.pathname).toBe('/api/market/instruments/id-nvda/candles'))
   })
 
-  it('shows an empty state for a range with no observations (TC-UI-01)', async () => {
-    marketBackend((url) =>
-      url.pathname.endsWith('/candles')
-        ? json(200, { interval: 'daily', items: [] })
-        : url.pathname.endsWith('/metrics')
-          ? json(200, {
-              ...METRICS,
-              observations: 0,
-              period_return: null,
-              max_drawdown: null,
-              unavailable: { period_return: 'needs at least 2 observations' },
-            })
-          : undefined,
-    )
+  it('falls back to the whole history when the data is older than the recent window', async () => {
+    const calls: URL[] = []
+    marketBackend((url) => {
+      if (!url.pathname.endsWith('/candles')) return undefined
+      calls.push(url)
+      return json(200, url.searchParams.has('from') ? { interval: 'daily', items: [] } : series(5))
+    })
     const { container } = renderMarketData()
-    expect(await screen.findByText('No observations in this range')).toBeInTheDocument()
+    await waitFor(() => expect(container.querySelectorAll('svg rect')).toHaveLength(5))
+    expect(calls.map((u) => u.searchParams.has('from'))).toEqual([true, false])
+  })
+
+  it('shows an empty state when the instrument has no ingested sessions (TC-UI-01)', async () => {
+    marketBackend((url) => (url.pathname.endsWith('/candles') ? json(200, { interval: 'daily', items: [] }) : undefined))
+    const { container } = renderMarketData()
+    expect(await screen.findByText('No observations yet')).toBeInTheDocument()
     expect(container.querySelector('svg rect')).toBeNull()
   })
 
@@ -212,20 +196,6 @@ describe('the Market Data page', () => {
     const { container } = renderMarketData()
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not read the series.')
     expect(container.querySelector('svg rect')).toBeNull()
-  })
-
-  it('does not send a reversed date range', async () => {
-    const backend = marketBackend()
-    renderMarketData()
-    await screen.findByText('Apple Inc. (AAPL)')
-    const before = backend.series().length
-
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-05-01' } })
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2024-04-01' } })
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('The start date must not be after the end date.')
-    const sent = backend.series().slice(before)
-    expect(sent.every((u) => u.searchParams.get('from') !== '2024-05-01' || u.searchParams.get('to') !== '2024-04-01')).toBe(true)
   })
 
   it('says so when no instrument has been added yet', async () => {
