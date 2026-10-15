@@ -48,6 +48,11 @@ _ROW_COLUMNS = (
 _NO_QUOTE: dict[str, str | None] = {"price": None, "change_pct": None}
 
 
+def price_text(value: Decimal) -> str:
+    """A stored price as the API shows it: exact, 8 decimals, never a float."""
+    return f"{value:.8f}"
+
+
 def change_percent(latest: Decimal, previous: Decimal) -> str:
     """Percent change as an exact decimal string with two places (7.16 for 200 -> 214.32)."""
     change = (latest - previous) / previous * 100
@@ -199,7 +204,7 @@ class InstrumentService:
             closes.setdefault(row.instrument_id, []).append(row.close)
         return {
             key: {
-                "price": f"{values[0]:.8f}",
+                "price": price_text(values[0]),
                 "change_pct": change_percent(values[0], values[1]) if len(values) > 1 else None,
             }
             for key, values in closes.items()

@@ -65,11 +65,19 @@ def make_settings(url: str) -> MarketSettings:
     )
 
 
+ALL_TABLES = (
+    "outbox, return_series, corporate_action, data_gap, rejected_bar, staging_bar, bar_revision, "
+    "bar, ingestion_run_item, ingestion_run, instrument"
+)
+
+
 @pytest.fixture
 async def database(migrated_database_url: str) -> AsyncIterator[Database]:
     db = Database(make_settings(migrated_database_url))
     async with db.transaction() as session:
-        await session.execute(text("TRUNCATE instrument, outbox CASCADE"))
+        # bar is a hypertable and keeps its rows when instrument is truncated, so every
+        # table is listed: a test must never see another test's data
+        await session.execute(text(f"TRUNCATE {ALL_TABLES} CASCADE"))
     try:
         yield db
     finally:

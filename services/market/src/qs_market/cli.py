@@ -1,6 +1,8 @@
 """Command line of the Market Data service image (pipeline commands).
 
 python -m qs_market worker     claim pending ingestion runs and execute them, one at a time
+python -m qs_market scheduler enqueue the daily (22:30 UTC) and catch-up (09:30 UTC) runs;
+                               does nothing unless QS_INGEST_SCHEDULER_ENABLED is true
 python -m qs_market relay      publish outbox events to Redpanda
 python -m qs_market run-once   create and execute one run in this process (demos, fixture
                                vendor); prints the run report as JSON
@@ -20,6 +22,7 @@ from sqlalchemy import select
 from qs_market.models import instrument
 from qs_market.pipeline.runner import PipelineConfig, run_next
 from qs_market.pipeline.runs import ClaimedRun, RunConflict, create_run
+from qs_market.pipeline.scheduler import run_scheduler
 from qs_market.settings import MarketSettings
 from qs_market.vendor.base import PriceSource
 from qs_market.vendor.factory import create_source
@@ -33,6 +36,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="qs-market")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("worker", help="execute pending ingestion runs")
+    commands.add_parser("scheduler", help="enqueue the daily and catch-up runs")
     commands.add_parser("relay", help="publish outbox events to Redpanda")
     once = commands.add_parser("run-once", help="create and execute one run in-process")
     once.add_argument(
@@ -45,6 +49,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "worker":
         asyncio.run(_worker())
+    elif args.command == "scheduler":
+        asyncio.run(_scheduler())
     elif args.command == "relay":
         asyncio.run(_relay())
     elif args.command == "run-once":
@@ -114,6 +120,28 @@ async def _worker() -> None:
                 pass
     finally:
         await redis.aclose()
+        await database.close()
+
+
+async def _scheduler() -> None:
+    settings = MarketSettings()
+    configure_logging(
+        service=f"{settings.service_name}-scheduler",
+        environment=settings.environment,
+        level=settings.log_level,
+    )
+    log = get_logger(__name__)
+    stopping = asyncio.Event()
+    _on_signals(asyncio.get_running_loop(), stopping.set)
+    if not settings.ingest_scheduler_enabled:
+        # Stay up and idle so a restart policy does not loop on a disabled scheduler
+        log.info("scheduler is disabled in this environment (QS_INGEST_SCHEDULER_ENABLED)")
+        await stopping.wait()
+        return
+    database = Database(settings)
+    try:
+        await run_scheduler(database, settings, stopping)
+    finally:
         await database.close()
 
 
