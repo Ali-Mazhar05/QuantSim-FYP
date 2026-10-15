@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 
 from qs_template import ServiceSettings
 

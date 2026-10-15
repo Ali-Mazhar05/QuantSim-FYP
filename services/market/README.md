@@ -91,24 +91,53 @@ personal use, so the data is fetched on demand and never committed. Point
 `QS_REALDATA_DIR` at another folder to keep it elsewhere. Budgets can be loosened with
 `QS_REALDATA_GATE_SECONDS`, `QS_REALDATA_RETURNS_SECONDS` and `QS_REALDATA_MEMORY_MB`.
 
-## Ingestion pipeline
+## Instrument master
 
-`qs_market.pipeline` executes ingestion runs (design: `docs/ingestion-plan.md` section 5).
+Routes, all under `/api/market`:
 
-- **Queue** (`runs.py`): a run is an `ingestion_run` row. A scheduled mode uses one idempotency key per day, so two schedulers create one run; a second run for the same instruments and window while one is active is refused with the active run id (`RunConflict`). One worker executes at a time, enforced by a PostgreSQL advisory lock held on its own connection. A run left `running` by a dead worker is reset to `pending` by the next worker and repeated; instruments that already committed are skipped.
-- **Per instrument, one transaction** (`runner.py`): fetch, stage in `staging_bar`, clean through the gate, publish (new session inserted, same raw hash left alone, changed raw hash becomes a revision with the old values in `bar_revision` and a `bar.corrected` event), record rejected bars, gaps and corporate actions, recompute returns from the earliest changed session, and queue `bar.ingested`. A failure rolls back the bars and the events together. Restated adjusted prices refresh the stored values without a revision.
-- **Run statuses**: `succeeded` (every instrument succeeded or had no data), `partially_succeeded` (some failed or were deferred; five consecutive transient vendor failures open the circuit and defer the rest; an exhausted request budget defers the rest), `failed` (the vendor refused the key, recorded as `vendor_auth`, or nothing succeeded). Item statuses are `succeeded`, `no_data`, `deferred` and `failed`.
-- **Commands**: `python -m qs_market worker | relay | run-once`.
+| Route | Roles |
+|---|---|
+| `GET /instruments?status=active\|retired`, `GET /instruments/{id}` | any signed-in role (`view_market_data`) |
+| `POST /instruments`, `PATCH /instruments/{id}`, `POST /instruments/{id}/retire` | admin (`manage_instruments`) |
 
-Try it with the recorded fixtures (no network):
+- The list returns what the POC Instruments page shows (`symbol`, `name`, `sector`, `price`, `change_pct`) plus `id`, `status`, `exchange` and `asset_class`. `price` is the latest stored close as an 8-decimal string and `change_pct` the percent change from the previous close with two decimals; each is `null` when the bars are missing (`change_pct` needs two bars).
+- Adding an existing symbol and exchange, even a retired one, is a 409 naming the existing id and status. `PATCH` changes only name, sector and notes. Retiring keeps the row and its bars and is idempotent.
+- Every write is audited with the acting user and request id and queues `instrument.created`, `instrument.annotated` or `instrument.retired` in the same transaction. A repeated retire queues nothing.
+- Symbols are not checked against the Nasdaq directory yet; only the formats the database enforces.
+
+Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe to repeat):
 
 ```sh
-export QS_DATABASE_URL=postgresql+asyncpg://... QS_REDIS_URL=redis://localhost QS_VENDOR=fixture \
-  QS_FIXTURE_DIR=services/market/tests/fixtures
-python -m qs_market run-once --mode manual --start 2024-01-02 --end 2024-02-13 --symbol AAPL
+python -m qs_market.seed
 ```
 
 Settings: `QS_INGEST_POLL_SECONDS` (5), `QS_INGEST_BACKFILL_START` (2015-01-02), `QS_INGEST_OUTLIER_LOG_RETURN` (0.405), `QS_INGEST_OUTLIER_POLICY` (`flag` or `reject`), `QS_INGEST_CIRCUIT_FAILURES` (5). Migration `0002` adds `ingestion_run_item.report`.
+## Ingestion run routes and scheduler
+
+Routes under `/api/market`:
+
+| Route | Roles |
+|---|---|
+| `POST /ingestion-runs` | admin (needs `trigger_ingestion` and `backfill_market_data`, which only the admin role holds) |
+| `GET /ingestion-runs?status=&limit=`, `GET /ingestion-runs/{id}`, `GET /ingestion-runs/{id}/rejected?limit=&offset=` | admin, quant, analyst (`view_ingestion_runs`) |
+
+- `POST` body: `mode` (`manual` or `backfill`), optional `start` and `end`, optional `instrument_ids` (all active instruments when absent), optional `idempotency_key`. It only queues the run and answers 202 with `{id, status, created}`; the worker executes it. The vendor is `QS_VENDOR` and `requested_by` is the admin's user id.
+- 409 problem details carry `active_run_id` when an active run overlaps the same instruments and window. 422 for `start` after `end`, a backfill without `start`, an empty instrument list or unknown instrument ids (`unknown_instrument_ids`). A repeated `idempotency_key` answers 202 with the first run and `created: false`.
+- The list is newest first (default 50, at most 200). The detail has the run, one item per instrument (counts, status, error, the gate's report) and the run report. `/rejected` lists the rejected bars with symbol, session date, every rule broken and the raw payload.
+
+Scheduler, `python -m qs_market scheduler` (TEST only; design in `docs/ingestion-plan.md` sections 3.1 and 5.1):
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `QS_INGEST_SCHEDULER_ENABLED` | `false` | When false the command logs and idles, so a restart policy does not loop |
+| `QS_INGEST_DAILY_TIME` | `22:30` | UTC, `HH:MM`, enqueues a `daily` run |
+| `QS_INGEST_CATCHUP_TIME` | `09:30` | UTC, `HH:MM`, enqueues a `catchup` run (D16) |
+
+- It only enqueues. The idempotency key is the mode and UTC date (`daily:2026-10-14`), so two schedulers, or a restart, create one run per mode and day.
+- After downtime only the latest slot of each mode is enqueued, never a backlog; a run's window already reaches back five sessions.
+- A slot blocked by a still active run for the same window is not marked handled and is retried on the next tick (every 30 seconds).
+- `due_runs(now, last_enqueued, schedule)` is a pure function and is tested without sleeping.
+
 ## Instrument master
 
 Routes, all under `/api/market`:
@@ -151,13 +180,42 @@ Tests use `tests/fixtures/symdir/`, the real lines of the 40 seed symbols and a 
 
 ## Read API
 
-`qs_market/api_data.py`, under `/api/market`. Every number is a decimal string, never a float. Lists are ascending by session date and paged by keyset: pass the `next_cursor` of one page as `cursor` of the next (default `limit` 500, maximum 2000).
+One image (`ci/components.conf` component `market`) runs as five compose services in `deploy/compose/docker-compose.yml`:
 
-| Route | Roles | Returns |
+| Service | Command | Where |
 |---|---|---|
-| `GET /instruments/{id}/bars?from&to&limit&cursor` | all signed-in | Clean bars with adjusted close, flags, revision and content hash |
-| `GET /instruments/{id}/returns?from&to&limit&cursor` | all signed-in | Log return, adjusted log return, 20 and 60 session volatility |
-| `GET /instruments/{id}/corporate-actions` | all signed-in | Splits and dividends |
-| `GET /instruments/{id}/gaps?status=open\|resolved` | all signed-in | Sessions with no clean bar |
-| `GET /instruments/{id}/quote` | all signed-in | Latest and previous close, change in percent, session date |
-| `GET /data-quality` | admin, quant, analyst | One row per active instrument: last session, bar count, open gaps, flagged bars, rejected total, last run |
+| `market` | `uvicorn qs_market.main:create --factory` (image default), routed by the gateway at `/api/market` | every environment |
+| `market-worker` | `python -m qs_market worker` | every environment |
+| `market-relay` | `python -m qs_market relay` | every environment |
+| `market-scheduler` | `python -m qs_market scheduler` | only where `QS_INGEST_SCHEDULER_ENABLED=true` (TEST); `deploy.sh` enables the `scheduler` profile from that setting |
+| `market-migrate` | `alembic upgrade head`, one shot before the new version starts | every deploy |
+
+`db-init` creates the `market` database, the `market` role and the TimescaleDB extension (idempotent).
+
+Settings come from `deploy/env/<env>.env` (not secret: `MARKET_VENDOR`, `TIINGO_REQUESTS_PER_HOUR`, `TIINGO_SCHEDULED_RESERVE`, `INGEST_BACKFILL_START`, `INGEST_OUTLIER_LOG_RETURN`, `INGEST_OUTLIER_POLICY`, `QS_INGEST_SCHEDULER_ENABLED`) and from the encrypted `deploy/secrets/<env>.enc.env` (secret: `TIINGO_API_KEY`, `MARKET_DB_PASSWORD`). DEV uses the `fixture` vendor; TEST, ACC and PROD use `tiingo` and share one key's budget, so only TEST runs the scheduler.
+
+`ci/scripts/smoke-market.sh` (called by `smoke.sh`) checks `/api/market/ready`; where the vendor is `fixture` it also seeds the instruments and does one manual run of AAPL over the recorded window and checks the run report. Set `SMOKE_ADMIN_USER` and `SMOKE_ADMIN_PASSWORD` to make that run go through the API instead of the container.
+
+## Runbook
+
+Run these against the environment's API (`<api>` is the address in the website's `config.json`; `$TOKEN` is an admin access token from `POST /api/platform/auth/login`). Only one run per instruments and window can be active; a second request answers 409 with the active run id.
+
+**Re-run a window** (the vendor restated prices, or a run failed):
+
+```sh
+curl -X POST "<api>/api/market/ingestion-runs" -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"mode":"manual","start":"2024-03-01","end":"2024-03-15"}'
+```
+
+Add `"symbols":["AAPL"]` to limit it. The call answers 202 with the run id at once; the worker executes it. Re-running is safe: unchanged bars are left alone and changed bars become revisions.
+
+**Backfill an instrument** (a newly added symbol): the same call with `"mode":"backfill"`, `"symbols":["XYZ"]` and an optional `"start"` (default `QS_INGEST_BACKFILL_START`). A backfill may not use the budget reserved for scheduled runs, so a long history can take several hours on the free tier; the run ends `partially_succeeded` with deferred instruments when the budget runs out, and repeating the call resumes it.
+
+**Retire a delisted symbol**: `POST <api>/api/market/instruments/{id}/retire`. Bars are kept; the scheduler stops fetching it. Retiring twice is harmless.
+
+**Read a run report**: `GET <api>/api/market/ingestion-runs/{id}` gives the status, the per-instrument items and the report (counts of received, passed, corrected, rejected, new and revised bars, and rejections by rule). `GET .../ingestion-runs/{id}/rejected` lists the rejected bars with the rules they broke. `failed` with `vendor_auth` means the key was refused (see below). Without a token, from the host: `docker exec <project>-market-1 python -m qs_market run-once --mode manual --symbol AAPL --start 2024-01-02 --end 2024-02-13` runs and prints a report.
+
+**Rotate the Tiingo key**:
+1. Create the new key at tiingo.com and check it with `TIINGO_API_KEY=<new> python services/market/scripts/vendor_check.py AAPL` (two requests at most).
+2. `ci/scripts/set-secret.sh TIINGO_API_KEY all`, then merge the changed `deploy/secrets/*.enc.env` files through a pull request.
+3. The next deploy of each environment restarts the worker with the new key. The hourly budget is counted in Redis per key (a hash of it), so the new key starts with a fresh count; avoid heavy runs in the first hour after rotating.
+4. Revoke the old key at Tiingo and trigger a manual run on TEST to confirm.

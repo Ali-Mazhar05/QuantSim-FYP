@@ -26,6 +26,7 @@ pytestmark = pytest.mark.db
 EVERYONE = "everyone"  # no token needed
 ALL_ROLES = frozenset(Role)
 ADMIN_ONLY = frozenset({Role.ADMIN})
+RUN_READERS = frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST})
 
 # (method, path) -> who may call it
 MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
@@ -37,6 +38,8 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("PATCH", "/instruments/{instrument_id}"): ADMIN_ONLY,
     ("POST", "/instruments/{instrument_id}/retire"): ADMIN_ONLY,
     ("GET", "/instruments/{instrument_id}/bars"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/candles"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/metrics"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/returns"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/corporate-actions"): ALL_ROLES,
     ("GET", "/instruments/{instrument_id}/gaps"): ALL_ROLES,
@@ -62,6 +65,8 @@ def body_for(method: str, path: str, n: int) -> dict[str, Any] | None:
         return {**NEW_INSTRUMENT, "symbol": f"T{n}"}
     if method == "PATCH":
         return {"notes": "hello"}
+    if method == "POST" and path == "/ingestion-runs":
+        return {"mode": "manual", "start": "2024-02-01", "end": "2024-02-02"}
     return None
 
 
@@ -70,13 +75,20 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
     created = await client.post(f"{API}/instruments", json=NEW_INSTRUMENT, headers=admin)
     assert created.status_code == 201, created.text
     target = created.json()["id"]
+    queued = await client.post(
+        f"{API}/ingestion-runs",
+        json={"mode": "manual", "start": "2024-01-02", "end": "2024-01-03"},
+        headers=admin,
+    )
+    assert queued.status_code == 202, queued.text
+    run_id = queued.json()["id"]
     callers: list[tuple[str, dict[str, str]]] = [
         ("anonymous", {}),
         ("forged", bearer(make_token(Role.ADMIN, forged=True))),
     ] + [(role.value, bearer(make_token(role))) for role in Role]
     n = 0
     for (method, path), rule in MATRIX.items():
-        url = API + path.replace("{instrument_id}", target)
+        url = API + path.replace("{instrument_id}", target).replace("{run_id}", run_id)
         for who, headers in callers:
             n += 1
             response = await client.request(
@@ -88,7 +100,7 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
                 continue
             assert isinstance(rule, frozenset)
             if who in {role.value for role in rule}:
-                assert response.status_code in (200, 201), where
+                assert response.status_code in (200, 201, 202), where
             elif who in ("anonymous", "forged"):
                 assert response.status_code == 401, where
             else:
