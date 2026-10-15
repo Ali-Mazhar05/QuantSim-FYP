@@ -21,6 +21,7 @@ def make_settings() -> MarketSettings:
         database_url=SecretStr(UNREACHABLE_DB),
         redis_url=SecretStr("redis://unused"),
         content_hash="0123456789ab",
+        auth_jwks_url="http://platform/api/platform/.well-known/jwks.json",
     )
 
 
