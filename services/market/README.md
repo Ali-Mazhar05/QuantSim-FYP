@@ -157,3 +157,36 @@ Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe
 ```sh
 python -m qs_market.seed
 ```
+
+## Read API
+
+`qs_market/api_data.py`, under `/api/market`. Every number is a decimal string, never a float. Lists are ascending by session date and paged by keyset: pass the `next_cursor` of one page as `cursor` of the next (default `limit` 500, maximum 2000).
+
+| Route | Roles | Returns |
+|---|---|---|
+| `GET /instruments/{id}/bars?from&to&limit&cursor` | all signed-in | Clean bars with adjusted close, flags, revision and content hash |
+| `GET /instruments/{id}/candles?interval&from&to` | all signed-in | Chart series at a display interval (see below) |
+| `GET /instruments/{id}/metrics?interval&from&to` | all signed-in | Period return, annualised volatility, maximum drawdown for that series |
+| `GET /instruments/{id}/returns?from&to&limit&cursor` | all signed-in | Log return, adjusted log return, 20 and 60 session volatility |
+| `GET /instruments/{id}/corporate-actions` | all signed-in | Splits and dividends |
+| `GET /instruments/{id}/gaps?status=open\|resolved` | all signed-in | Sessions with no clean bar |
+| `GET /instruments/{id}/quote` | all signed-in | Latest and previous close, change in percent, session date |
+| `GET /data-quality` | admin, quant, analyst | One row per active instrument: last session, bar count, open gaps, flagged bars, rejected total, last run |
+
+### Date range, intervals and metrics
+
+**Date convention.** `from` and `to` are both inclusive session dates (`YYYY-MM-DD`). A reversed range, a malformed date or an interval other than `daily`, `weekly`, `monthly`, `yearly` answers 422; an unknown instrument 404. A valid range with no observations answers 200 with an empty list, never an invented series.
+
+**Intervals.** Only daily bars are stored. `candles` derives the others on request from the bars inside the window: open is the first open, high the maximum high, low the minimum low, close the last close, volume the sum. A bucket is an ISO week (Monday to Sunday), a calendar month or a calendar year of the exchange's session date; only sessions that exist are aggregated, and the first and last bucket hold only the sessions inside the window. A candle is labelled by its last session (`session_date`) and also reports `period_start` and the number of `sessions` it summarises. The maths is in `series.py`.
+
+**Metrics.** Computed from the candles of the requested interval, on the adjusted close when every candle has one (so a split is not a crash) and otherwise on the close; `price_basis` says which.
+
+| Metric | Definition |
+|---|---|
+| `period_return` | last price / first price - 1 |
+| `annualised_volatility` | sample standard deviation (n - 1) of the log returns, times the square root of the periods per year (252 daily, 52 weekly, 12 monthly, 1 yearly) |
+| `max_drawdown` | the lowest of (price - running peak) / running peak; zero or negative; `drawdown_peak` and `drawdown_trough` give the dates |
+
+A metric that cannot be computed is `null` and `unavailable` names it and the reason: fewer than two observations for all three, fewer than three for volatility, a zero first price for the return.
+
+**Performance (NFR-PERF-01).** `tests/test_intervals_api.py` loads about 1,250 daily rows (five years) for one symbol and requires `bars`, daily and weekly `candles`, and `metrics` each to answer in under one second at the backend-query layer, excluding any vendor time. This is a measured target on the test database, not a production claim.

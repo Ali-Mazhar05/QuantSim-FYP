@@ -37,10 +37,14 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("POST", "/instruments"): ADMIN_ONLY,
     ("PATCH", "/instruments/{instrument_id}"): ADMIN_ONLY,
     ("POST", "/instruments/{instrument_id}/retire"): ADMIN_ONLY,
-    ("POST", "/ingestion-runs"): ADMIN_ONLY,
-    ("GET", "/ingestion-runs"): RUN_READERS,
-    ("GET", "/ingestion-runs/{run_id}"): RUN_READERS,
-    ("GET", "/ingestion-runs/{run_id}/rejected"): RUN_READERS,
+    ("GET", "/instruments/{instrument_id}/bars"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/candles"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/metrics"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/returns"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/corporate-actions"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/gaps"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/quote"): ALL_ROLES,
+    ("GET", "/data-quality"): frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST}),
 }
 
 
