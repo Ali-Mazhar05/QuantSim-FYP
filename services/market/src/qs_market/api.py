@@ -4,6 +4,9 @@ Signed-in users (any role, ``view_market_data``):  GET /instruments, GET /instru
 Admins (``manage_instruments``):  POST /instruments, PATCH /instruments/{id},
                                   POST /instruments/{id}/retire
 
+When QS_SYMBOL_DIRECTORY_DIR is set, POST /instruments also checks the symbol against the
+Nasdaq symbol directory.
+
 Request bodies are validated to the same rules as the database CHECKs, so a bad body is
 a 422 problem-details response and never a database error.
 """
@@ -18,7 +21,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_market.instruments import InstrumentService
-from qs_template import Database
+from qs_market.symbol_directory import DirectoryError, DirectorySource, validate_new_instrument
+from qs_template import Database, ServiceError
 from qs_template.audit import set_audit_context
 from qs_template.auth import Authenticator, Capability, Principal
 
@@ -79,7 +83,9 @@ class InstrumentOut(InstrumentSummary):
     retired_at: datetime | None
 
 
-def build_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]:
+def build_routers(
+    *, auth: Authenticator, database: Database, directory: DirectorySource | None = None
+) -> list[APIRouter]:
     router = APIRouter(prefix="/instruments", tags=["instruments"])
 
     Viewer = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_MARKET_DATA))]
@@ -119,6 +125,17 @@ def build_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]
         responses={401: {}, 403: {}, 409: {}, 422: {}},
     )
     async def add_instrument(body: InstrumentCreate, service: Writer) -> InstrumentOut:
+        if directory is not None:
+            try:
+                snapshot = directory.get()
+            except DirectoryError as exc:
+                raise ServiceError(
+                    503,
+                    "Symbol directory unavailable",
+                    str(exc),
+                    type_="urn:quantsim:problem:symbol-directory-unavailable",
+                ) from exc
+            validate_new_instrument(snapshot, symbol=body.symbol, asset_class=body.asset_class)
         return InstrumentOut.model_validate(await service.add(**body.model_dump()))
 
     @router.patch("/{instrument_id}", responses={401: {}, 403: {}, 404: {}, 422: {}})

@@ -35,27 +35,11 @@ class MarketSettings(ServiceSettings):
     # Consecutive vendor failures that open the circuit and defer the rest of the run
     ingest_circuit_failures: int = Field(default=5, ge=1)
 
-    # The scheduler only enqueues runs; it is enabled on TEST only (plan section 3.1).
-    # Times are UTC, written HH:MM (D16: the catch-up run is 09:30).
-    ingest_scheduler_enabled: bool = False
-    ingest_daily_time: str = "22:30"
-    ingest_catchup_time: str = "09:30"
-
-    @field_validator("ingest_daily_time", "ingest_catchup_time")
-    @classmethod
-    def _time_of_day(cls, value: str) -> str:
-        hours, separator, minutes = value.partition(":")
-        valid = (
-            separator
-            and len(hours) == len(minutes) == 2
-            and hours.isdigit()
-            and minutes.isdigit()
-            and int(hours) < 24
-            and int(minutes) < 60
-        )
-        if not valid:
-            raise ValueError("must be a UTC time of day written HH:MM")
-        return value
+    # Folder holding nasdaqlisted.txt and otherlisted.txt (see scripts/fetch_symbol_directory.py).
+    # Unset means a new instrument's symbol is not checked against the directory.
+    symbol_directory_dir: Path | None = None
+    # A directory older than this logs a warning; it never blocks an add
+    symbol_directory_max_age_days: int = Field(default=14, ge=1)
 
     @model_validator(mode="after")
     def _vendor_is_usable(self) -> Self:

@@ -150,7 +150,7 @@ Routes, all under `/api/market`:
 - The list returns what the POC Instruments page shows (`symbol`, `name`, `sector`, `price`, `change_pct`) plus `id`, `status`, `exchange` and `asset_class`. `price` is the latest stored close as an 8-decimal string and `change_pct` the percent change from the previous close with two decimals; each is `null` when the bars are missing (`change_pct` needs two bars).
 - Adding an existing symbol and exchange, even a retired one, is a 409 naming the existing id and status. `PATCH` changes only name, sector and notes. Retiring keeps the row and its bars and is idempotent.
 - Every write is audited with the acting user and request id and queues `instrument.created`, `instrument.annotated` or `instrument.retired` in the same transaction. A repeated retire queues nothing.
-- Symbols are not checked against the Nasdaq directory yet; only the formats the database enforces.
+- With a symbol directory configured (next section), `POST /instruments` also checks the symbol against it. Without one, only the formats the database enforces are checked.
 
 Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe to repeat):
 
@@ -158,7 +158,27 @@ Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe
 python -m qs_market.seed
 ```
 
-## Deployment
+## Symbol directory
+
+`qs_market/symbol_directory.py` reads the two public Nasdaq Trader files, `nasdaqlisted.txt` and `otherlisted.txt`, and `POST /instruments` uses them to refuse symbols that should not be added (FR-21).
+
+- `QS_SYMBOL_DIRECTORY_DIR`: a folder holding both files. Unset (the default) disables the check, so DEV and tests that do not care add any symbol as before. Set to a folder that lacks a file, the service stops at start.
+- `QS_SYMBOL_DIRECTORY_MAX_AGE_DAYS` (14): a directory whose file creation time is older logs a warning on use and still validates. Files are re-read when they change on disk, so a refresh needs no restart.
+- Refused with 422 (`urn:quantsim:problem:validation`, field in `errors[].location`): a symbol not in the directory, a test issue, or a financial status other than normal (`symbol`); an ETF sent as `equity` or the reverse (`asset_class`). If the files disappear after start the add is a 503. The seed and `PATCH` are not checked.
+- Class shares: `BRK.B` and `BRK-B` are one symbol; comparison upper-cases and turns `-` into `.`.
+- Listing exchange is read from the directory (`N` XNYS, `A` XASE, `P` ARCX, `Z` BATS, `V` IEXG, `M` XCHI, everything in `nasdaqlisted.txt` XNAS) but not enforced: the seed universe lists its ETFs and WMT differently (see the test), and the listing exchange does not change the daily bars.
+- Malformed rows are skipped and counted; a file with no header or no rows is an error.
+
+Fetch a fresh copy by hand or from a scheduled job on the host (never in CI), then point the setting at the folder:
+
+```sh
+python scripts/fetch_symbol_directory.py --out /var/lib/quantsim/symdir
+export QS_SYMBOL_DIRECTORY_DIR=/var/lib/quantsim/symdir
+```
+
+Tests use `tests/fixtures/symdir/`, the real lines of the 40 seed symbols and a few others (a test issue, a deficient status, a warrant, class shares) recorded from nasdaqtrader.com on 2026-10-14 with the real footer. No test reaches the network.
+
+## Read API
 
 One image (`ci/components.conf` component `market`) runs as five compose services in `deploy/compose/docker-compose.yml`:
 

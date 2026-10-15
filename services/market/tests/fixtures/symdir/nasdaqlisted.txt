@@ -1,0 +1,25 @@
+Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares
+AAAP|Pacer Barings CLO Market Flex ETF|G|N|N|100|Y|N
+AACG|ATA Creativity Global - American Depositary Shares, each representing two common shares|S|N|D|100|N|N
+AAL|American Airlines Group, Inc. - Common Stock|Q|N|N|100|N|N
+AAPL|Apple Inc. - Common Stock|Q|N|N|40|N|N
+ADBE|Adobe Inc. - Common Stock|Q|N|N|40|N|N
+AMD|Advanced Micro Devices, Inc. - Common Stock|Q|N|N|100|N|N
+AMZN|Amazon.com, Inc. - Common Stock|Q|N|N|100|N|N
+AVGO|Broadcom Inc. - Common Stock|Q|N|N|40|N|N
+BRKR|Bruker Corporation - Common Stock|Q|N|N|100|N|N
+COST|Costco Wholesale Corporation - Common Stock|Q|N|N|40|N|N
+CSCO|Cisco Systems, Inc. - Common Stock|Q|N|N|100|N|N
+GOOG|Alphabet Inc. - Class C Capital Stock|Q|N|N|40|N|N
+GOOGL|Alphabet Inc. - Class A Common Stock|Q|N|N|40|N|N
+INTC|Intel Corporation - Common Stock|Q|N|N|100|N|N
+META|Meta Platforms, Inc. - Class A Common Stock|Q|N|N|40|N|N
+MSFT|Microsoft Corporation - Common Stock|Q|N|N|40|N|N
+NFLX|Netflix, Inc. - Common Stock|Q|N|N|100|N|N
+NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N
+PEP|PepsiCo, Inc. - Common Stock|Q|N|N|100|N|N
+QQQ|Invesco QQQ Trust, Series 1|G|N|N|40|Y|N
+TSLA|Tesla, Inc.  - Common Stock|Q|N|N|40|N|N
+WMT|Walmart Inc. - Common Stock|Q|N|N|100|N|N
+ZXYZ.A|Nasdaq Symbology Test Common Stock|Q|Y|N|100|N|N
+File Creation Time: 1014202612:11|||||||
