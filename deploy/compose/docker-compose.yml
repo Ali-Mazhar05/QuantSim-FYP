@@ -135,6 +135,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?}
       PGDATABASE: postgres
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD comes from the environment's secrets}
+      MARKET_DB_PASSWORD: ${MARKET_DB_PASSWORD:?MARKET_DB_PASSWORD comes from the environment's secrets}
     networks:
       - backend
     entrypoint: ["sh", "-ec"]
@@ -153,6 +154,10 @@ services:
           echo "database and role ready: $$1"
         }
         create platform "$$PLATFORM_DB_PASSWORD"
+        create market "$$MARKET_DB_PASSWORD"
+        # TimescaleDB needs a superuser, so it is created here and not by a migration
+        PGDATABASE=market psql -v ON_ERROR_STOP=1 -q -c 'CREATE EXTENSION IF NOT EXISTS timescaledb'
+        echo "extension ready: timescaledb in market"
 
   # Redis: the shared token revocation list now, the job queue later. Append-only file
   # so revocations survive a restart.
@@ -301,6 +306,149 @@ services:
       - >-
         alembic upgrade head && qs-platform bootstrap-admin &&
         if [ -n "$$QS_TEST_USERS_PASSWORD" ]; then qs-platform seed-test-users; fi
+
+  # ---------------------------------------------------------------------------------
+  # M1 Market Data. One image, started as the API, a worker (executes ingestion runs), a
+  # relay (outbox to Redpanda), a scheduler (TEST only) and a one-shot migration.
+
+  market:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?MARKET_IMAGE comes from the release file}
+    environment: &market-env
+      QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
+      QS_DATABASE_URL: postgresql+asyncpg://market:${MARKET_DB_PASSWORD:?MARKET_DB_PASSWORD comes from the environment's secrets}@postgres:5432/market
+      QS_REDIS_URL: redis://redis:6379/0
+      QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      # Tokens are verified against the platform's published signing keys
+      QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
+      QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Price vendor: tiingo (real, shared hourly budget) or fixture (recorded, no network)
+      QS_VENDOR: ${MARKET_VENDOR:-fixture}
+      QS_TIINGO_API_KEY: ${TIINGO_API_KEY:-}
+      QS_TIINGO_REQUESTS_PER_HOUR: ${TIINGO_REQUESTS_PER_HOUR:-45}
+      QS_TIINGO_SCHEDULED_RESERVE: ${TIINGO_SCHEDULED_RESERVE:-40}
+      QS_INGEST_BACKFILL_START: ${INGEST_BACKFILL_START:-2015-01-02}
+      QS_INGEST_OUTLIER_LOG_RETURN: ${INGEST_OUTLIER_LOG_RETURN:-0.405}
+      QS_INGEST_OUTLIER_POLICY: ${INGEST_OUTLIER_POLICY:-flag}
+      QS_INGEST_SCHEDULER_ENABLED: ${QS_INGEST_SCHEDULER_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      platform:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.market.rule: PathPrefix(`/api/market`)
+      traefik.http.routers.market.entrypoints: web
+      traefik.http.services.market.loadbalancer.server.port: "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # Claims pending ingestion runs and executes them, one at a time. Needs the internet
+  # (default network) to reach the vendor.
+  market-worker:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?}
+    command: ["python", "-m", "qs_market", "worker"]
+    environment: *market-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  market-relay:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?}
+    command: ["python", "-m", "qs_market", "relay"]
+    environment: *market-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  # Enqueues the daily and catch-up runs. One scheduler serves all environments (the
+  # vendor budget is shared), so it runs only where QS_INGEST_SCHEDULER_ENABLED=true
+  # (TEST): deploy.sh enables the "scheduler" profile from that setting.
+  market-scheduler:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?}
+    profiles: ["scheduler"]
+    command: ["python", "-m", "qs_market", "scheduler"]
+    environment: *market-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  market-migrate:
+    image: ${MARKET_IMAGE:?}
+    profiles: ["migrate"]
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *market-env
+    networks:
+      - backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
 
   # Public HTTPS address of this environment's API (a free Cloudflare quick tunnel to the
   # gateway), so browsers anywhere can reach it. The address changes when the tunnel

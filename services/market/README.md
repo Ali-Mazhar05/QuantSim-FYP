@@ -158,35 +158,44 @@ Seed the 40-instrument starting universe (30 equities, 10 ETFs; no network, safe
 python -m qs_market.seed
 ```
 
-## Read API
+## Deployment
 
-`qs_market/api_data.py`, under `/api/market`. Every number is a decimal string, never a float. Lists are ascending by session date and paged by keyset: pass the `next_cursor` of one page as `cursor` of the next (default `limit` 500, maximum 2000).
+One image (`ci/components.conf` component `market`) runs as five compose services in `deploy/compose/docker-compose.yml`:
 
-| Route | Roles | Returns |
+| Service | Command | Where |
 |---|---|---|
-| `GET /instruments/{id}/bars?from&to&limit&cursor` | all signed-in | Clean bars with adjusted close, flags, revision and content hash |
-| `GET /instruments/{id}/candles?interval&from&to` | all signed-in | Chart series at a display interval (see below) |
-| `GET /instruments/{id}/metrics?interval&from&to` | all signed-in | Period return, annualised volatility, maximum drawdown for that series |
-| `GET /instruments/{id}/returns?from&to&limit&cursor` | all signed-in | Log return, adjusted log return, 20 and 60 session volatility |
-| `GET /instruments/{id}/corporate-actions` | all signed-in | Splits and dividends |
-| `GET /instruments/{id}/gaps?status=open\|resolved` | all signed-in | Sessions with no clean bar |
-| `GET /instruments/{id}/quote` | all signed-in | Latest and previous close, change in percent, session date |
-| `GET /data-quality` | admin, quant, analyst | One row per active instrument: last session, bar count, open gaps, flagged bars, rejected total, last run |
+| `market` | `uvicorn qs_market.main:create --factory` (image default), routed by the gateway at `/api/market` | every environment |
+| `market-worker` | `python -m qs_market worker` | every environment |
+| `market-relay` | `python -m qs_market relay` | every environment |
+| `market-scheduler` | `python -m qs_market scheduler` | only where `QS_INGEST_SCHEDULER_ENABLED=true` (TEST); `deploy.sh` enables the `scheduler` profile from that setting |
+| `market-migrate` | `alembic upgrade head`, one shot before the new version starts | every deploy |
 
-### Date range, intervals and metrics
+`db-init` creates the `market` database, the `market` role and the TimescaleDB extension (idempotent).
 
-**Date convention.** `from` and `to` are both inclusive session dates (`YYYY-MM-DD`). A reversed range, a malformed date or an interval other than `daily`, `weekly`, `monthly`, `yearly` answers 422; an unknown instrument 404. A valid range with no observations answers 200 with an empty list, never an invented series.
+Settings come from `deploy/env/<env>.env` (not secret: `MARKET_VENDOR`, `TIINGO_REQUESTS_PER_HOUR`, `TIINGO_SCHEDULED_RESERVE`, `INGEST_BACKFILL_START`, `INGEST_OUTLIER_LOG_RETURN`, `INGEST_OUTLIER_POLICY`, `QS_INGEST_SCHEDULER_ENABLED`) and from the encrypted `deploy/secrets/<env>.enc.env` (secret: `TIINGO_API_KEY`, `MARKET_DB_PASSWORD`). DEV uses the `fixture` vendor; TEST, ACC and PROD use `tiingo` and share one key's budget, so only TEST runs the scheduler.
 
-**Intervals.** Only daily bars are stored. `candles` derives the others on request from the bars inside the window: open is the first open, high the maximum high, low the minimum low, close the last close, volume the sum. A bucket is an ISO week (Monday to Sunday), a calendar month or a calendar year of the exchange's session date; only sessions that exist are aggregated, and the first and last bucket hold only the sessions inside the window. A candle is labelled by its last session (`session_date`) and also reports `period_start` and the number of `sessions` it summarises. The maths is in `series.py`.
+`ci/scripts/smoke-market.sh` (called by `smoke.sh`) checks `/api/market/ready`; where the vendor is `fixture` it also seeds the instruments and does one manual run of AAPL over the recorded window and checks the run report. Set `SMOKE_ADMIN_USER` and `SMOKE_ADMIN_PASSWORD` to make that run go through the API instead of the container.
 
-**Metrics.** Computed from the candles of the requested interval, on the adjusted close when every candle has one (so a split is not a crash) and otherwise on the close; `price_basis` says which.
+## Runbook
 
-| Metric | Definition |
-|---|---|
-| `period_return` | last price / first price - 1 |
-| `annualised_volatility` | sample standard deviation (n - 1) of the log returns, times the square root of the periods per year (252 daily, 52 weekly, 12 monthly, 1 yearly) |
-| `max_drawdown` | the lowest of (price - running peak) / running peak; zero or negative; `drawdown_peak` and `drawdown_trough` give the dates |
+Run these against the environment's API (`<api>` is the address in the website's `config.json`; `$TOKEN` is an admin access token from `POST /api/platform/auth/login`). Only one run per instruments and window can be active; a second request answers 409 with the active run id.
 
-A metric that cannot be computed is `null` and `unavailable` names it and the reason: fewer than two observations for all three, fewer than three for volatility, a zero first price for the return.
+**Re-run a window** (the vendor restated prices, or a run failed):
 
-**Performance (NFR-PERF-01).** `tests/test_intervals_api.py` loads about 1,250 daily rows (five years) for one symbol and requires `bars`, daily and weekly `candles`, and `metrics` each to answer in under one second at the backend-query layer, excluding any vendor time. This is a measured target on the test database, not a production claim.
+```sh
+curl -X POST "<api>/api/market/ingestion-runs" -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"mode":"manual","start":"2024-03-01","end":"2024-03-15"}'
+```
+
+Add `"symbols":["AAPL"]` to limit it. The call answers 202 with the run id at once; the worker executes it. Re-running is safe: unchanged bars are left alone and changed bars become revisions.
+
+**Backfill an instrument** (a newly added symbol): the same call with `"mode":"backfill"`, `"symbols":["XYZ"]` and an optional `"start"` (default `QS_INGEST_BACKFILL_START`). A backfill may not use the budget reserved for scheduled runs, so a long history can take several hours on the free tier; the run ends `partially_succeeded` with deferred instruments when the budget runs out, and repeating the call resumes it.
+
+**Retire a delisted symbol**: `POST <api>/api/market/instruments/{id}/retire`. Bars are kept; the scheduler stops fetching it. Retiring twice is harmless.
+
+**Read a run report**: `GET <api>/api/market/ingestion-runs/{id}` gives the status, the per-instrument items and the report (counts of received, passed, corrected, rejected, new and revised bars, and rejections by rule). `GET .../ingestion-runs/{id}/rejected` lists the rejected bars with the rules they broke. `failed` with `vendor_auth` means the key was refused (see below). Without a token, from the host: `docker exec <project>-market-1 python -m qs_market run-once --mode manual --symbol AAPL --start 2024-01-02 --end 2024-02-13` runs and prints a report.
+
+**Rotate the Tiingo key**:
+1. Create the new key at tiingo.com and check it with `TIINGO_API_KEY=<new> python services/market/scripts/vendor_check.py AAPL` (two requests at most).
+2. `ci/scripts/set-secret.sh TIINGO_API_KEY all`, then merge the changed `deploy/secrets/*.enc.env` files through a pull request.
+3. The next deploy of each environment restarts the worker with the new key. The hourly budget is counted in Redis per key (a hash of it), so the new key starts with a fresh count; avoid heavy runs in the first hour after rotating.
+4. Revoke the old key at Tiingo and trigger a manual run on TEST to confirm.

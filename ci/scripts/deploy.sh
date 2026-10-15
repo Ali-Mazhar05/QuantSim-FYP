@@ -41,6 +41,8 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
   profiles=()
   [[ "$FRONTEND_TARGET" == "compose" ]] && profiles+=(--profile frontend)
   [[ "${MAILPIT:-false}" == "true" ]] && profiles+=(--profile mailpit)
+  # One market scheduler for all environments: only where deploy/env/<env>.env enables it
+  [[ "${QS_INGEST_SCHEDULER_ENABLED:-false}" == "true" ]] && profiles+=(--profile scheduler)
 
   compose=(docker compose -p "$QS_PROJECT" -f "$COMPOSE_FILE"
            --env-file "$(env_file "$env")" --env-file "$release" "${secrets_args[@]}")
