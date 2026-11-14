@@ -68,7 +68,7 @@ def make_settings(url: str, **extra: Any) -> MarketSettings:
 
 ALL_TABLES = (
     "outbox, return_series, corporate_action, data_gap, rejected_bar, staging_bar, bar_revision, "
-    "bar, ingestion_run_item, ingestion_run, instrument"
+    "bar, ingestion_run_item, ingestion_run, market_environment, instrument"
 )
 
 
