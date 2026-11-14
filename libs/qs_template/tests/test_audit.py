@@ -8,6 +8,7 @@ from qs_template import Database
 from qs_template.audit import (
     AUDIT_SETUP_STATEMENTS,
     audit_table_statements,
+    recent_changes,
     record_history,
     set_audit_context,
 )
@@ -137,3 +138,31 @@ async def test_excluded_columns_never_reach_the_log(database: Database) -> None:
     assert [h.operation for h in history] == ["INSERT", "UPDATE"]
     assert history[0].new_data == {"id": 1, "name": "ali"}
     assert "argon2-hash" not in str(raw)
+
+
+@pytest.mark.db
+async def test_recent_changes_are_newest_first_limited_and_filtered_by_table(
+    db: Database,
+) -> None:
+    async with db.engine.begin() as connection:
+        await connection.execute(text("CREATE TABLE note (id int PRIMARY KEY, body text)"))
+        for statement in audit_table_statements("note"):
+            await connection.exec_driver_sql(statement)
+    async with db.transaction() as session:
+        await set_audit_context(session, user_id=ADMIN, request_id="req-9")
+        await session.execute(text("INSERT INTO instrument VALUES (8, 'MSFT', 'active')"))
+        await session.execute(text("INSERT INTO note VALUES (1, 'hello')"))
+        await session.execute(text("UPDATE instrument SET status = 'retired' WHERE id = 8"))
+
+    async with db.transaction() as session:
+        latest = await recent_changes(session, ["instrument"], limit=1)
+        both = await recent_changes(session, ["instrument", "note"], limit=10)
+        none = await recent_changes(session, [], limit=10)
+
+    assert [(r.table_name, r.operation, r.row_id) for r in latest] == [
+        ("instrument", "UPDATE", "8")
+    ]
+    assert latest[0].old_data == {"id": 8, "symbol": "MSFT", "status": "active"}
+    assert latest[0].changed_by == str(ADMIN)
+    assert [r.table_name for r in both] == ["instrument", "note", "instrument"]
+    assert none == []
