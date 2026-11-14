@@ -64,6 +64,10 @@ interface DemoState {
   /** The signed-in account; its role is what the backend enforces. */
   account: SignedInUser | null
   flowStep: FlowStep
+  /** The market environment the research session works in: the one created last in this
+   * session, otherwise the newest one the API lists. */
+  activeEnvironmentId: string | null
+  setActiveEnvironment: (id: string | null) => void
   runningFullDemo: boolean
   systemActivityOpen: boolean
   riskModules: RiskModuleState
@@ -92,6 +96,8 @@ export const useDemoStore = create<DemoState>((set, get) => ({
   role: 'Viewer',
   account: null,
   flowStep: 'IDLE',
+  activeEnvironmentId: null,
+  setActiveEnvironment: (id) => set({ activeEnvironmentId: id }),
   runningFullDemo: false,
   systemActivityOpen: false,
   riskModules: IDLE_RISK_MODULES,
@@ -99,7 +105,7 @@ export const useDemoStore = create<DemoState>((set, get) => ({
   alertModules: [],
   dismissedAlertIds: [],
   startSession: (account) => set({ authenticated: true, account, role: account.role }),
-  logout: () => set({ authenticated: false, account: null, role: 'Viewer' }),
+  logout: () => set({ authenticated: false, account: null, role: 'Viewer', activeEnvironmentId: null }),
   // The top bar may preview the account's own role or a lower one, never a higher one
   setRole: (role) =>
     set((s) => (!s.account || ROLE_RANK[role] > ROLE_RANK[s.account.role] ? s : { ...s, role })),

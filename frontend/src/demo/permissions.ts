@@ -1,5 +1,7 @@
-// Capability model referenced by the QuantSim role documentation, mocked
-// here purely to drive which POC actions are enabled/visible per role.
+// Capability model of the QuantSim roles. It mirrors the backend's role matrix
+// (libs/qs_template auth.py ROLE_CAPABILITIES); the backend is the authority and the
+// signed-in account's own capabilities come from /auth/me (see useCan). This table only
+// decides what a lower role that the account previews would see.
 
 import type { Role } from '../types'
 
@@ -21,9 +23,16 @@ export type Capability =
   | 'manage_roles'
   | 'manage_instruments'
   | 'configure_system'
+  // No prototype control of their own: they gate data the prototype pages show
+  | 'view_market_data'
+  | 'view_ingestion_runs'
+  | 'create_market_environments'
+  | 'trigger_ingestion'
+  | 'backfill_market_data'
+  | 'view_audit_log'
 
 const CAPABILITIES: Record<Role, Capability[]> = {
-  Viewer: ['view_dashboards', 'view_reports', 'view_alerts'],
+  Viewer: ['view_dashboards', 'view_reports', 'view_alerts', 'view_market_data'],
   Analyst: [
     'view_dashboards',
     'view_reports',
@@ -33,6 +42,8 @@ const CAPABILITIES: Record<Role, Capability[]> = {
     'compute_metrics',
     'configure_dashboards',
     'create_alerts',
+    'view_market_data',
+    'view_ingestion_runs',
   ],
   Quant: [
     'view_dashboards',
@@ -48,6 +59,10 @@ const CAPABILITIES: Record<Role, Capability[]> = {
     'launch_simulations',
     'create_portfolios',
     'manage_models',
+    'view_market_data',
+    'view_ingestion_runs',
+    'create_market_environments',
+    'trigger_ingestion',
   ],
   Admin: [
     'view_dashboards',
@@ -67,7 +82,18 @@ const CAPABILITIES: Record<Role, Capability[]> = {
     'manage_roles',
     'manage_instruments',
     'configure_system',
+    'view_market_data',
+    'view_ingestion_runs',
+    'create_market_environments',
+    'trigger_ingestion',
+    'backfill_market_data',
+    'view_audit_log',
   ],
+}
+
+/** Every capability of a role, as the backend's role matrix grants them. */
+export function capabilitiesOf(role: Role): Capability[] {
+  return [...CAPABILITIES[role]]
 }
 
 export function can(role: Role, capability: Capability): boolean {

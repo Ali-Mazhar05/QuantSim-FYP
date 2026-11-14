@@ -5,8 +5,9 @@ import Button from '../../components/forms/Button'
 import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import EmptyState from '../../components/status/EmptyState'
 import StatusPill from '../../components/status/StatusPill'
-import { MARKET_ENVIRONMENTS } from '../../services/mock/data'
+import { useEnvironments } from '../../hooks/useEnvironments'
 import type { MarketEnvironment } from '../../types'
 
 const columns: Column<MarketEnvironment>[] = [
@@ -28,7 +29,8 @@ const columns: Column<MarketEnvironment>[] = [
 
 export default function MarketEnvironmentsList() {
   const navigate = useNavigate()
-  const canCreate = useCan('launch_simulations')
+  const canCreate = useCan('create_market_environments')
+  const { environments, error } = useEnvironments()
   return (
     <div className="qs-fade-in flex flex-col gap-6">
       <PageHeader
@@ -40,14 +42,24 @@ export default function MarketEnvironmentsList() {
           </Button>
         }
       />
-      <Panel bodyClassName="p-0">
-        <DataTable
-          columns={columns}
-          rows={MARKET_ENVIRONMENTS}
-          rowKey={(r) => r.id}
-          onRowClick={canCreate ? () => navigate('/market/environments/new') : undefined}
-        />
-      </Panel>
+      {error ? (
+        <p role="alert" className="text-sm text-[var(--color-risk-severe)]">
+          {error}
+        </p>
+      ) : environments === null ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Loading environments…</p>
+      ) : environments.length === 0 ? (
+        <EmptyState title="No environments yet" description="A quant or an administrator creates the first one with New Environment." />
+      ) : (
+        <Panel bodyClassName="p-0">
+          <DataTable
+            columns={columns}
+            rows={environments}
+            rowKey={(r) => r.id}
+            onRowClick={canCreate ? () => navigate('/market/environments/new') : undefined}
+          />
+        </Panel>
+      )}
     </div>
   )
 }

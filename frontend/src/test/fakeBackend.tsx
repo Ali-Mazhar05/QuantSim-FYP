@@ -5,6 +5,7 @@ import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import App from '../App'
+import { capabilitiesOf } from '../demo/permissions'
 import type { SignedInUser } from '../services/api/platform'
 import type { Role } from '../types'
 import LocationProbe from './LocationProbe'
@@ -61,6 +62,7 @@ export function renderApp(path: string) {
   )
 }
 
+/** A signed-in account as /auth/me describes it, with the capabilities the backend grants its role. */
 export function account(role: Role, username = `${role.toLowerCase()}.user`): SignedInUser {
-  return { username, name: `${role} User`, email: `${username}@quantsim.dev`, role, capabilities: [] }
+  return { username, name: `${role} User`, email: `${username}@quantsim.dev`, role, capabilities: capabilitiesOf(role) }
 }
