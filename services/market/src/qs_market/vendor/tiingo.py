@@ -105,6 +105,13 @@ def _retry_after(response: httpx.Response) -> float | None:
     return min(max(seconds, 0.0), RETRY_AFTER_CAP_SECONDS)
 
 
+def tiingo_ticker(symbol: str) -> str:
+    """The symbol as Tiingo spells it: class shares take a hyphen, not a dot (the exchange
+    and our instrument master write ``BRK.B``; Tiingo answers 404 to it and serves
+    ``BRK-B``). Verified live on 2026-11-13."""
+    return symbol.strip().replace(".", "-")
+
+
 class TiingoSource:
     name = "tiingo"
 
@@ -142,7 +149,7 @@ class TiingoSource:
         return delay * (1 - JITTER_FRACTION * self._random())
 
     async def fetch_daily(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
-        url = f"{self._base_url}/tiingo/daily/{quote(symbol, safe='')}/prices"
+        url = f"{self._base_url}/tiingo/daily/{quote(tiingo_ticker(symbol), safe='')}/prices"
         params = {"startDate": start.isoformat(), "endDate": end.isoformat(), "format": "json"}
         headers = {"Authorization": f"Token {self._api_key.get_secret_value()}"}
         reason = "no attempt was made"
