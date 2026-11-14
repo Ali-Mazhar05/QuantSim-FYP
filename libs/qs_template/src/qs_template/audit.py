@@ -18,6 +18,7 @@ At request time, :func:`set_audit_context` tells the trigger who is acting.
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -154,6 +155,38 @@ class AuditEntry:
     changed_by: str | None
     request_id: str | None
     changed_at: datetime
+
+
+@dataclass(frozen=True)
+class AuditRecord:
+    """One audit_log row with the table and row it belongs to, for feeds across tables."""
+
+    id: int
+    table_name: str
+    operation: str
+    row_id: str
+    old_data: dict[str, Any] | None
+    new_data: dict[str, Any] | None
+    changed_by: str | None
+    request_id: str | None
+    changed_at: datetime
+
+
+async def recent_changes(
+    session: AsyncSession, tables: Sequence[str], *, limit: int
+) -> list[AuditRecord]:
+    """The latest ``limit`` recorded changes to any of ``tables``, newest first."""
+    if not tables or limit < 1:
+        return []
+    rows = await session.execute(
+        text(
+            "SELECT id, table_name, operation, row_id, old_data, new_data, changed_by,"
+            " request_id, changed_at FROM audit_log WHERE table_name = ANY(:tables)"
+            " ORDER BY id DESC LIMIT :limit"
+        ),
+        {"tables": list(tables), "limit": limit},
+    )
+    return [AuditRecord(*row) for row in rows.all()]
 
 
 async def record_history(session: AsyncSession, table: str, row_id: str) -> list[AuditEntry]:

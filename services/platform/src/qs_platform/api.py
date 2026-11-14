@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_platform.accounts import CHECK_EMAIL, LINK_SENT, AccountService
+from qs_platform.audit_feed import platform_audit_feed
 from qs_platform.keys import SigningKeys
 from qs_platform.schemas import (
     AuditEntryOut,
@@ -41,6 +42,7 @@ from qs_platform.schemas import (
 from qs_platform.service import INVALID_CREDENTIALS, INVALID_REFRESH, UserService
 from qs_template import Database, ServiceError
 from qs_template.audit import set_audit_context
+from qs_template.audit_feed import FEED_DEFAULT_LIMIT, FEED_MAX_LIMIT, AuditEventOut
 from qs_template.auth import Authenticator, Capability, Principal
 
 
@@ -311,4 +313,16 @@ def build_routers(
     async def history(user_id: uuid.UUID, session: Session, _: ViewAudit) -> list[AuditEntryOut]:
         return await service.history(session, user_id)
 
-    return [public, users]
+    audit = APIRouter(tags=["audit"])
+
+    @audit.get("/audit", responses={401: {}, 403: {}})
+    async def audit_feed(
+        session: Session,
+        _: ViewAudit,
+        limit: Annotated[int, Query(ge=1, le=FEED_MAX_LIMIT)] = FEED_DEFAULT_LIMIT,
+    ) -> list[AuditEventOut]:
+        """Latest account events first: sign-ups, invitations, approvals, role changes,
+        deactivation, sign-ins and failed sign-ins."""
+        return await platform_audit_feed(session, limit)
+
+    return [public, users, audit]

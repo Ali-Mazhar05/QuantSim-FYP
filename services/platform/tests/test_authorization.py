@@ -57,6 +57,7 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("POST", "/users/{user_id}/resend-invite"): frozenset({Role.ADMIN}),
     ("PUT", "/users/{user_id}/role"): frozenset({Role.ADMIN}),
     ("GET", "/users/{user_id}/history"): frozenset({Role.ADMIN}),
+    ("GET", "/audit"): frozenset({Role.ADMIN}),
 }
 
 

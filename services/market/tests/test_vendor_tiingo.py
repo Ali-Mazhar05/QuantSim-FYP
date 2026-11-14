@@ -119,6 +119,14 @@ async def test_request_shape_and_key_only_in_the_authorization_header() -> None:
     assert KEY not in str(request.url)
 
 
+async def test_class_shares_are_requested_with_tiingos_hyphen() -> None:
+    harness = Harness(respond(httpx.Response(200, json=[])))
+    await harness.source.fetch_daily("BRK.B", date(2024, 1, 2), date(2024, 1, 5))
+    await harness.source.fetch_daily("AAPL", date(2024, 1, 2), date(2024, 1, 5))
+    paths = [r.url.path for r in harness.requests]
+    assert paths == ["/tiingo/daily/BRK-B/prices", "/tiingo/daily/AAPL/prices"]
+
+
 async def test_empty_list_is_an_empty_result() -> None:
     harness = Harness(respond(httpx.Response(200, json=[])))
     assert await harness.source.fetch_daily("AAPL", START, END) == []

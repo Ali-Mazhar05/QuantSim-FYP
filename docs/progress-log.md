@@ -4,6 +4,77 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-11-14
+
+**Found and fixed (same branch)**
+- The sign-up route records the new account itself as the acting user, so the audit feed
+  showed self sign-ups as invitations. Invitations are now credited to the admin who sent
+  them, sign-ups to the new account, and accounts created already verified by
+  `bootstrap-admin` and `seed-test-users` to System. Covered by platform tests.
+- The chart's screen-reader line was positioned against the whole page and caused a
+  page-wide horizontal scrollbar on pages with a chart; it is now anchored in the chart.
+
+**Verified**
+- Rebuilt the local stack from empty, with one clean Tiingo backfill: all 40 instruments
+  succeeded (BRK.B included), 119,400 bars from 2015-01-02 to 2026-11-13, 0 rejected.
+  Jenkins' own scripts: template 99, platform 107, market 323, frontend 88 tests, lint,
+  type check, build and migration check, all green. Role walkthrough PDF regenerated
+  (20 pages, including the chart axes and hover).
+
+## 2026-11-13
+
+**Delivered (branch `feature/iteration1-prototype-integration`, not yet merged)**
+- **Iteration 1 prototype integration**, keeping the prototype as the source of truth (no
+  layout changes). Market Environments, Create Market Environment, the top bar, the Replay
+  header and chart, the Audit Log and the System page now show real data. Buttons follow
+  the capabilities the platform returns from `/auth/me`, so the UI never offers what the
+  backend would refuse (I1-42, I1-43, I1-44).
+- **Market environments API** (`GET/POST /api/market/environments`, `GET /{id}`):
+  quant and admin create, everyone reads. An inverted window is refused by the API (422)
+  and by the database CHECK (FR-MKT-008). Status is `ready` when every instrument has data
+  in the window, otherwise `draft`. Migration `0003` audits the table.
+- **Audit feeds** (`GET /api/platform/audit`, `GET /api/market/audit`, admin only), in one
+  row shape the Audit Log page merges. They cover sign-ins, invitations, approvals, role
+  changes and deactivation; instrument and environment changes; and ingestion runs. A run
+  that rejected bars or partly succeeded is a warning; a failed run is critical
+  (FR-PLT-006..008).
+- **Candlestick chart:** a fixed price scale, a date axis, a hover tooltip (open, high, low,
+  close, change, volume) and keyboard reading. Used on Market Data, Create Market
+  Environment and Replay.
+
+**Found and fixed**
+- Rebased commits on `develop` had dropped earlier work. `c2d858a` unmounted the
+  ingestion-run routes (404 when deployed). `898f451` removed the scheduler settings, so
+  `market-scheduler` would crash on TEST. `be4bf02` and `7c8770f` removed market README
+  sections. All restored, with the route-role matrix test covering the run routes again.
+- Tiingo refuses `BRK.B` (404) and serves `BRK-B`; the adapter now converts class shares.
+  Found by a real backfill and verified live.
+- The Audit Log credited command-line changes to the affected user. A change with no
+  recorded actor is now shown as System, except actions only the account holder can take.
+
+**Verified**
+- Jenkins' own scripts, run locally: template 99, platform 106, market 323 tests (118
+  real-data tests skipped by design), market migration up/down/up, frontend lint, type
+  check, 88 tests and build.
+- The real stack, run locally with 119,360 real Tiingo bars for all 40 instruments
+  (2015-01-02 to 2026-11-12, 0 gaps, 0 rejected, 2 flagged as outliers). Clicked through
+  as viewer, analyst, quant and admin. The backend refused each role exactly as the role
+  matrix says (403/401), and accepted calls failed only on deliberately invalid bodies (422).
+  Evidence: the role walkthrough PDF with screenshots.
+
+**Decided**
+- Replay playback (Play/Pause) moves to Iteration 2 with FR-MKT-007.
+- Next for the integration: OpenAPI-generated frontend types with contract checks in
+  Jenkins (I1-41), the remaining unit-test gaps, then Playwright tests against DEV gating
+  promotion to TEST.
+
+**Known limits**
+- DEV uses recorded vendor data (AAPL Jan–Feb 2024, NVDA May–Jun 2024), so most
+  instruments show no price there, and environments made from the UI (window 2025-01-01 to
+  2026-06-30) are draft. TEST, on Tiingo, shows real data.
+- A full 40-instrument backfill on TEST takes about 8 hours with the normal request reserve
+  (5 manual or backfill requests an hour).
+
 ## 2026-10-14
 
 **Decided**

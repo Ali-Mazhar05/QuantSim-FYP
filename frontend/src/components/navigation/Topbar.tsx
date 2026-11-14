@@ -5,7 +5,7 @@ import { useDemoStore } from '../../demo/demoState'
 import { rolesUpTo } from '../../demo/permissions'
 import { useRiskAlerts } from '../../demo/useRiskAlerts'
 import { signOut } from '../../services/api/platform'
-import { MARKET_ENVIRONMENTS } from '../../services/mock/data'
+import { useEnvironments } from '../../hooks/useEnvironments'
 import StatusPill from '../status/StatusPill'
 
 export default function Topbar() {
@@ -39,14 +39,15 @@ export default function Topbar() {
   }
 
   const simStatus = flowStep === 'IDLE' ? 'Idle' : flowStep === 'SIMULATION_RUNNING' ? 'Running' : 'Ready'
-  const activeEnv = MARKET_ENVIRONMENTS[0]
+  const { environments, active: activeEnv } = useEnvironments()
+  const envName = activeEnv?.name ?? (environments === null ? '' : 'No environment')
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg-1)] px-4">
       <div className="flex items-center gap-3">
         <div>
           <div className="text-sm font-semibold text-[var(--color-text-primary)]">Research Environment</div>
-          <div className="text-[11px] text-[var(--color-text-muted)]">{activeEnv.name}</div>
+          <div className="text-[11px] text-[var(--color-text-muted)]">{envName}</div>
         </div>
       </div>
 

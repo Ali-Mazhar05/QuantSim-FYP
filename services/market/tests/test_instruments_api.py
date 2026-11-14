@@ -27,6 +27,7 @@ EVERYONE = "everyone"  # no token needed
 ALL_ROLES = frozenset(Role)
 ADMIN_ONLY = frozenset({Role.ADMIN})
 RUN_READERS = frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST})
+CREATORS = frozenset({Role.ADMIN, Role.QUANT})
 
 # (method, path) -> who may call it
 MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
@@ -46,6 +47,14 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("GET", "/instruments/{instrument_id}/quote"): ALL_ROLES,
     ("POST", "/correlations"): ALL_ROLES,
     ("GET", "/data-quality"): frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST}),
+    ("POST", "/ingestion-runs"): ADMIN_ONLY,
+    ("GET", "/ingestion-runs"): RUN_READERS,
+    ("GET", "/ingestion-runs/{run_id}"): RUN_READERS,
+    ("GET", "/ingestion-runs/{run_id}/rejected"): RUN_READERS,
+    ("GET", "/environments"): ALL_ROLES,
+    ("GET", "/environments/{environment_id}"): ALL_ROLES,
+    ("POST", "/environments"): CREATORS,
+    ("GET", "/audit"): ADMIN_ONLY,
 }
 
 
@@ -61,7 +70,18 @@ def test_every_route_has_a_declared_rule() -> None:
     assert found == set(MATRIX)
 
 
-def body_for(method: str, path: str, n: int) -> dict[str, Any] | None:
+def body_for(method: str, path: str, n: int, target: str = "") -> dict[str, Any] | None:
+    if method == "POST" and path == "/environments":
+        return {
+            "name": f"Env {n}",
+            "type": "historical_replay",
+            "universe": "Test basket",
+            "instrument_ids": [target],
+            "start_date": "2024-01-02",
+            "end_date": "2024-03-28",
+        }
+    if method == "POST" and path == "/ingestion-runs":
+        return {"mode": "manual", "start": "2024-01-02", "end": "2024-01-03"}
     if method == "POST" and path == "/instruments":
         return {**NEW_INSTRUMENT, "symbol": f"T{n}"}
     if method == "PATCH":
@@ -84,17 +104,33 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
     )
     assert queued.status_code == 202, queued.text
     run_id = queued.json()["id"]
+    # The matrix retires `target` before it reaches the environment routes, so environments
+    # use an instrument of their own that stays active
+    kept = await client.post(
+        f"{API}/instruments", json={**NEW_INSTRUMENT, "symbol": "ZZKEEP"}, headers=admin
+    )
+    assert kept.status_code == 201, kept.text
+    env_instrument = kept.json()["id"]
+    environment = await client.post(
+        f"{API}/environments",
+        json=body_for("POST", "/environments", 0, env_instrument),
+        headers=admin,
+    )
+    assert environment.status_code == 201, environment.text
+    environment_id = environment.json()["id"]
     callers: list[tuple[str, dict[str, str]]] = [
         ("anonymous", {}),
         ("forged", bearer(make_token(Role.ADMIN, forged=True))),
     ] + [(role.value, bearer(make_token(role))) for role in Role]
     n = 0
     for (method, path), rule in MATRIX.items():
-        url = API + path.replace("{instrument_id}", target).replace("{run_id}", run_id)
+        url = API + path.replace("{instrument_id}", target).replace("{run_id}", run_id).replace(
+            "{environment_id}", environment_id
+        )
         for who, headers in callers:
             n += 1
             response = await client.request(
-                method, url, headers=headers, json=body_for(method, path, n)
+                method, url, headers=headers, json=body_for(method, path, n, env_instrument)
             )
             where = (method, path, who, response.text)
             if rule == EVERYONE:
@@ -102,7 +138,12 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
                 continue
             assert isinstance(rule, frozenset)
             if who in {role.value for role in rule}:
-                accepted = (422,) if path == "/correlations" else (200, 201)
+                # A second run while the first is still pending is a 409 conflict: the
+                # caller got past authorisation
+                accepted = {
+                    "/correlations": (422,),
+                    "/ingestion-runs": (200, 202, 409),
+                }.get(path, (200, 201))
                 assert response.status_code in accepted, where
             elif who in ("anonymous", "forged"):
                 assert response.status_code == 401, where

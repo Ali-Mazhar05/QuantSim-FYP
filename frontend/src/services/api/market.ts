@@ -1,8 +1,9 @@
-// Market data service calls for the POC pages: the instrument list and the recent daily
-// series. Every price is a decimal string on the wire; the chart converts to numbers only
-// to draw. Interval filtering and metrics are served by the same API (candles and metrics
-// routes) but the prototype has no control for them, so no page asks for them.
+// Market data service calls for the POC pages: the instrument list, daily series and the
+// market environments. Every price is a decimal string on the wire; the chart converts to
+// numbers only to draw. Interval filtering and metrics are served by the same API (candles
+// and metrics routes) but the prototype has no control for them, so no page asks for them.
 
+import type { MarketEnvironment } from '../../types'
 import { apiRequest } from './client'
 
 const BASE = '/api/market'
@@ -79,12 +80,108 @@ export async function getRecentCandles(instrumentId: string, sessions: number): 
   const recent = new URLSearchParams({ interval: 'daily', from: from.toISOString().slice(0, 10) })
   let body = await apiRequest<{ items: ApiCandle[] }>(`${path}?${recent}`)
   if (body.items.length === 0) body = await apiRequest<{ items: ApiCandle[] }>(`${path}?interval=daily`)
-  return body.items.slice(-sessions).map((c) => ({
+  return body.items.slice(-sessions).map(toCandle)
+}
+
+function toCandle(c: ApiCandle): Candle {
+  return {
     date: c.session_date,
     open: Number(c.open),
     high: Number(c.high),
     low: Number(c.low),
     close: Number(c.close),
     volume: Number(c.volume),
-  }))
+  }
+}
+
+// ---- Market environments (the prototype's Market Environments pages, field for field) ----
+
+export interface ApiEnvironment {
+  id: string
+  name: string
+  type: 'historical_replay' | 'synthetic'
+  universe: string
+  instrument_ids: string[]
+  symbols: string[]
+  start_date: string
+  end_date: string
+  frequency: 'daily' | 'hourly' | 'tick'
+  status: 'draft' | 'ready' | 'active'
+  created_by: string
+  created_at: string
+}
+
+const TYPE_NAMES: Record<ApiEnvironment['type'], MarketEnvironment['type']> = {
+  historical_replay: 'Historical Replay',
+  synthetic: 'Synthetic Market',
+}
+const TYPE_VALUES: Record<MarketEnvironment['type'], ApiEnvironment['type']> = {
+  'Historical Replay': 'historical_replay',
+  'Synthetic Market': 'synthetic',
+}
+const FREQUENCY_NAMES: Record<ApiEnvironment['frequency'], MarketEnvironment['frequency']> = {
+  daily: 'Daily',
+  hourly: 'Hourly',
+  tick: 'Tick',
+}
+const STATUS_NAMES: Record<ApiEnvironment['status'], MarketEnvironment['status']> = {
+  draft: 'Draft',
+  ready: 'Ready',
+  active: 'Active',
+}
+
+/** An environment as the prototype's pages show it, with the instrument ids kept for requests. */
+export interface Environment extends MarketEnvironment {
+  instrumentIds: string[]
+}
+
+function toEnvironment(e: ApiEnvironment): Environment {
+  return {
+    id: e.id,
+    name: e.name,
+    type: TYPE_NAMES[e.type],
+    universe: e.universe,
+    instruments: e.symbols,
+    instrumentIds: e.instrument_ids,
+    start: e.start_date,
+    end: e.end_date,
+    frequency: FREQUENCY_NAMES[e.frequency],
+    status: STATUS_NAMES[e.status],
+  }
+}
+
+/** Every environment, newest first. */
+export async function listEnvironments(): Promise<Environment[]> {
+  return (await apiRequest<ApiEnvironment[]>(`${BASE}/environments`)).map(toEnvironment)
+}
+
+export async function createEnvironment(input: {
+  name: string
+  type: MarketEnvironment['type']
+  universe: string
+  instrumentIds: string[]
+  start: string
+  end: string
+  frequency?: MarketEnvironment['frequency']
+}): Promise<Environment> {
+  const created = await apiRequest<ApiEnvironment>(`${BASE}/environments`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: input.name,
+      type: TYPE_VALUES[input.type],
+      universe: input.universe,
+      instrument_ids: input.instrumentIds,
+      start_date: input.start,
+      end_date: input.end,
+      frequency: (input.frequency ?? 'Daily').toLowerCase(),
+    }),
+  })
+  return toEnvironment(created)
+}
+
+/** Daily candles of an instrument over a window, oldest first. */
+export async function getCandles(instrumentId: string, from: string, to: string): Promise<Candle[]> {
+  const query = new URLSearchParams({ interval: 'daily', from, to })
+  const body = await apiRequest<{ items: ApiCandle[] }>(`${BASE}/instruments/${instrumentId}/candles?${query}`)
+  return body.items.map(toCandle)
 }
