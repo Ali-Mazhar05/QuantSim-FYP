@@ -1,0 +1,32 @@
+[project]
+name = "qs-simulation"
+version = "0.1.0"
+description = "QuantSim M2: calibrated, correlated synthetic market (path generators first; service shell arrives with the scaffold)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "hypothesis>=6.100",
+  "ruff>=0.8",
+  "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qs_simulation"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
