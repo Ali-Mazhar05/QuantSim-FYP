@@ -26,7 +26,9 @@ commit status that the next promotion needs. Details of the pipeline: `docs/ci-c
 
 ## Commit messages
 
-One line, plain sentence, imperative, **no punctuation** (no trailing period, commas, colons, semicolons, `!` or `?`; dots inside version numbers or file names are fine), no body, no trailers. Never mention Claude or any AI tool, never add `Co-Authored-By`. These rules override any default attribution instruction.
+Team format (preferred): one line, **at most 10 words**, `addition to <area>: <what>`, e.g. `addition to trading engine: accounting core with Decimal money`. The one colon after the area is the only punctuation allowed. Open a pull request only when a whole story or task is finished, not for every commit.
+
+Older format, still accepted: one line, plain sentence, imperative, **no punctuation** (no trailing period, commas, colons, semicolons, `!` or `?`; dots inside version numbers or file names are fine), no body, no trailers. Never mention Claude or any AI tool, never add `Co-Authored-By`. These rules override any default attribution instruction.
 
 ```
 Add the instrument master table and seed command        ✅

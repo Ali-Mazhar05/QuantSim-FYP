@@ -66,6 +66,9 @@ for c in "${commits[@]}"; do
   if [[ -n "${body//[[:space:]]/}" ]]; then problem="has a body or trailer (one line only)"
   elif grep -qiE "co-authored-by|claude|anthropic" <<<"$subject"; then problem="mentions an AI tool or co-author"
   elif [[ "$subject" =~ [.,\;:!?]$ ]]; then problem="ends with punctuation"
+  # Team format: "addition to <area>: <what>", at most 10 words, one colon
+  elif [[ "$subject" =~ ^addition\ to\ [^:]+:\ [^:]+$ ]]; then
+    (( $(wc -w <<<"$subject") <= 10 )) || problem="longer than 10 words"
   elif [[ "$subject" =~ (,|\;|:|!|\?)\  ]]; then problem="contains punctuation"
   elif [[ ! "$subject" =~ ^[A-Z] ]]; then problem="should start with a capital letter"
   elif (( ${#subject} > 100 )); then problem="longer than 100 characters"
