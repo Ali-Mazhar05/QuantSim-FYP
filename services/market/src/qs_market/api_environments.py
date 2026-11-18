@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,9 +78,19 @@ def build_environment_routers(*, auth: Authenticator, database: Database) -> lis
 
     Writer = Annotated[EnvironmentService, Depends(writer)]
 
-    @router.get("", responses={401: {}, 403: {}})
-    async def list_environments(_: Viewer, session: Session) -> list[EnvironmentOut]:
-        rows = await EnvironmentService(session).list_all()
+    @router.get("", responses={401: {}, 403: {}, 422: {}})
+    async def list_environments(
+        _: Viewer,
+        session: Session,
+        env_type: Annotated[
+            EnvironmentType | None,
+            Query(alias="type", description="Only environments of this type"),
+        ] = None,
+        owner: Annotated[
+            uuid.UUID | None, Query(description="Only environments created by this user")
+        ] = None,
+    ) -> list[EnvironmentOut]:
+        rows = await EnvironmentService(session).list_all(env_type=env_type, owner=owner)
         return [EnvironmentOut.model_validate(row) for row in rows]
 
     @router.get("/{environment_id}", responses={401: {}, 403: {}, 404: {}})
