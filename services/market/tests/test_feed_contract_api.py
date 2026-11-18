@@ -9,6 +9,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from qs_market.api_data import DEFAULT_LIMIT, MAX_LIMIT
 from qs_market.api_feeds import TICK_EXAMPLE, ActivationOut, Tick, TickPage
 from qs_template import Database
 from qs_template.auth import Role
@@ -125,7 +126,13 @@ async def test_the_feed_says_why_an_environment_has_none(
 
 @pytest.mark.parametrize(
     "params",
-    [{"limit": 0}, {"limit": 5001}, {"after_seq": -1}, {"limit": "many"}, {"after_seq": "first"}],
+    [
+        {"limit": 0},
+        {"limit": MAX_LIMIT + 1},
+        {"after_seq": -1},
+        {"limit": "many"},
+        {"after_seq": "first"},
+    ],
 )
 async def test_bad_paging_parameters_are_422(
     client: httpx.AsyncClient, params: dict[str, str | int]
@@ -142,7 +149,7 @@ async def test_the_page_limits_are_accepted_at_their_edges(
     client: httpx.AsyncClient, instrument: uuid.UUID
 ) -> None:
     environment = await make_environment(client, instrument)
-    for params in ({"limit": 1}, {"limit": 5000, "after_seq": 0}, {"after_seq": 123456}):
+    for params in ({"limit": 1}, {"limit": MAX_LIMIT, "after_seq": 0}, {"after_seq": 123456}):
         response = await client.get(
             f"{API}/environments/{environment['id']}/ticks",
             params=params,
@@ -207,7 +214,7 @@ async def test_the_openapi_document_fixes_the_feed_contract(client: httpx.AsyncC
         "limit",
     }
     by_name = {p["name"]: p["schema"] for p in ticks["parameters"]}
-    assert by_name["limit"]["maximum"] == 5000 and by_name["limit"]["default"] == 1000
+    assert by_name["limit"]["maximum"] == MAX_LIMIT and by_name["limit"]["default"] == DEFAULT_LIMIT
     assert by_name["after_seq"]["minimum"] == 0
     assert {"401", "403", "404", "422", "501"} <= set(ticks["responses"])
     assert f"{API}/environments/{{environment_id}}/activate" in spec["paths"]

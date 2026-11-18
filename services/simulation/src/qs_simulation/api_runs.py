@@ -18,8 +18,9 @@ from qs_template.errors import ServiceError
 
 NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
 
-DEFAULT_PAGE = 1000
-MAX_PAGE = 5000
+# the same paging convention as the market service (api_data.py)
+DEFAULT_PAGE = 500
+MAX_PAGE = 2000
 
 TICK_EXAMPLE: dict[str, Any] = {
     "env_id": "a4d3c2b1-7e6f-4a5b-8c9d-0e1f2a3b4c5d",

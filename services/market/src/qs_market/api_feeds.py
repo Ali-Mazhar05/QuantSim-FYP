@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from qs_market.api_data import DEFAULT_LIMIT, MAX_LIMIT
 from qs_market.environments import EnvironmentService
 from qs_template import Database
 from qs_template.auth import Authenticator, Capability, Principal
@@ -27,8 +28,9 @@ NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
 UNSUPPORTED_FREQUENCY = "urn:quantsim:problem:unsupported-frequency"
 NOT_A_REPLAY = "urn:quantsim:problem:not-a-replay-environment"
 
-DEFAULT_PAGE = 1000
-MAX_PAGE = 5000
+# the market service pages every list the same way (api_data.py), so the feed does too
+DEFAULT_PAGE = DEFAULT_LIMIT
+MAX_PAGE = MAX_LIMIT
 
 TICK_EXAMPLE: dict[str, Any] = {
     "env_id": "6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01",

@@ -47,7 +47,7 @@ async def test_anonymous_and_forged_callers_are_refused(
         (f"{API}/runs", {"instrument": "not-a-uuid"}),
         (f"{API}/runs/not-a-uuid", {}),
         (f"{API}/runs/{RUN}/ticks", {"limit": 0}),
-        (f"{API}/runs/{RUN}/ticks", {"limit": 5001}),
+        (f"{API}/runs/{RUN}/ticks", {"limit": 2001}),
         (f"{API}/runs/{RUN}/ticks", {"after_seq": -1}),
         (f"{API}/runs/{RUN}/ticks", {"path": -1}),
         (f"{API}/runs/{RUN}/ticks", {"path": "first"}),

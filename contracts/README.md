@@ -14,7 +14,8 @@ consumer of C1, C2 and C3, Lane C of C3 and C4.
 **Change rule.** After the contract freeze a contract changes only by an additive pull request approved
 by its provider and every consumer. Consumers ignore fields they do not know. A breaking change ships
 as `v2` beside `v1` and never replaces it. The decisions behind these rules are in `docs/adr/` (ADR 01,
-03 and 08).
+03 and 08) and, for the smaller choices with their reasons and what to update if one changes, in
+`docs/decision-log.md`.
 
 ## 1. C1: `market.tick.v1`
 
@@ -79,11 +80,11 @@ errors below are final and tested. The environment list filters are live.
 | Method and path | Who | Answers |
 |---|---|---|
 | `GET /api/market/environments?type=&owner=` | any signed-in role | Environments, newest first. `type`: `historical_replay` or `synthetic`. `owner`: the creator's user id. 422 for a bad value |
-| `GET /api/market/environments/{id}/ticks?after_seq=0&limit=1000` | any signed-in role | A page of ticks; header `X-Source-Fingerprint`. `limit` 1 to 5000 |
+| `GET /api/market/environments/{id}/ticks?after_seq=0&limit=500` | any signed-in role | A page of ticks; header `X-Source-Fingerprint`. `limit` 1 to 2000, default 500 |
 | `POST /api/market/environments/{id}/activate` | quant, admin | Freezes the fingerprint: `{environment_id, status: "active", source_fingerprint, missing_session_count, activated_by, activated_at}` |
 | `GET /api/simulation/runs?status=&instrument=` | any signed-in role | Completed or other runs for a picker: id, status, model, sizes, symbols, `median_path_index`, `parent_run_id`, `scenario` |
 | `GET /api/simulation/runs/{id}` | any signed-in role | The run with progress, seed, storage mode and per-instrument statistics |
-| `GET /api/simulation/runs/{id}/ticks?path=0&after_seq=0&limit=1000` | any signed-in role | A page of one path's ticks, from the stored values or regenerated from the seed |
+| `GET /api/simulation/runs/{id}/ticks?path=0&after_seq=0&limit=500` | any signed-in role | A page of one path's ticks, from the stored values or regenerated from the seed |
 
 **A page** is `{"items": [tick, ...], "next_after_seq": 4 }`. `next_after_seq` is the `seq` of the last
 tick when more follow and `null` on the last page. A cursor past the end gives an empty page.
