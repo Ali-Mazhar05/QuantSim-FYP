@@ -1,16 +1,26 @@
 [project]
 name = "qs-simulation"
 version = "0.1.0"
-description = "QuantSim M2: calibrated, correlated synthetic market (path generators first; service shell arrives with the scaffold)"
+description = "QuantSim Simulation service"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "qs-template",
+  "alembic>=1.14",
   "numpy>=2.0",
 ]
+
+[project.scripts]
+qs-simulation = "qs_simulation.cli:main"
+
+[tool.uv.sources]
+qs-template = { workspace = true }
 
 [dependency-groups]
 dev = [
   "pytest>=8.3",
+  "pytest-asyncio>=0.24",
   "hypothesis>=6.100",
+  "httpx>=0.27",
   "ruff>=0.8",
   "mypy>=1.13",
 ]
@@ -24,9 +34,24 @@ packages = ["src/qs_simulation"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
-filterwarnings = ["error"]
+markers = [
+  "db: needs a PostgreSQL database (TEST_DATABASE_URL)",
+]
+filterwarnings = [
+  "error",
+  # FastAPI's TestClient still wraps httpx; harmless until FastAPI moves on
+  "ignore:Using `httpx` with `starlette.testclient`",
+]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["aiokafka", "aiokafka.*"]
+ignore_missing_imports = true

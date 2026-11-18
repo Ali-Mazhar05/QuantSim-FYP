@@ -1,1 +1,1 @@
-"""QuantSim simulation: the calibrated, correlated synthetic market."""
+"""QuantSim Simulation service."""

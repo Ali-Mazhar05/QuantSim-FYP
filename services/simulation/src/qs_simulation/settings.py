@@ -1,0 +1,21 @@
+"""Settings of the Simulation service, on top of the template's (all ``QS_*``)."""
+
+from pydantic import Field, SecretStr
+
+from qs_template import ServiceSettings
+
+
+class SimulationSettings(ServiceSettings):
+    service_name: str = "simulation"
+
+    # Redis for the shared token revocation list
+    redis_url: SecretStr
+
+    # Job worker (qs_template.jobs)
+    job_lease_seconds: float = Field(default=60.0, gt=0)
+    job_max_attempts: int = Field(default=3, ge=1)
+    job_poll_seconds: float = Field(default=2.0, gt=0)
+
+    # DEV runs the job worker and outbox relay inside the API process (one container per
+    # service); other environments run them in their own containers
+    embedded_workers: bool = False

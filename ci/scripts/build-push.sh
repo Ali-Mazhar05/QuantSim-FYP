@@ -26,6 +26,8 @@ log "building $repo:$hash for $platforms"
 
 if [[ "$QS_LOCAL" == "1" ]]; then
   docker build "${build_args[@]}" -f "$dockerfile" -t "$repo:$hash" "$context"
+  # Laptop hosts: the build cache would otherwise grow Docker's disk file on every build
+  docker builder prune -f >/dev/null 2>&1 || true
   exit 0
 fi
 
