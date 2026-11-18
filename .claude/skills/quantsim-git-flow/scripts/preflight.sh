@@ -113,6 +113,10 @@ if command -v gh >/dev/null && ! gh api repos/Ali-Mazhar05/QuantSim-FYP --silent
 fi
 
 # 6. Run ----------------------------------------------------------------------------------
+# Each project gets a full virtualenv under .ci/ (about 200 MB each); remove them when
+# preflight ends so repeated runs do not fill the disk. The shared uv cache stays.
+trap 'rm -rf .ci/venv-*' EXIT
+
 # python-ci.sh accepts a project path on newer branches, a service name on older ones
 if grep -q 'project=' ci/scripts/python-ci.sh; then path_mode=1; else path_mode=0; fi
 

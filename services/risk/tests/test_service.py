@@ -6,9 +6,10 @@ from fastapi.testclient import TestClient
 
 from qs_risk.cli import main
 from qs_risk.jobs import HANDLERS, job_queue
-from qs_risk.main import build_app
+from qs_risk.main import build_app, embedded_loops
 from qs_risk.models import job
 from qs_risk.settings import RiskSettings
+from qs_template import Database
 
 
 def test_health_reports_the_build(settings: RiskSettings) -> None:
@@ -23,6 +24,17 @@ def test_job_queue_uses_the_service_table(settings: RiskSettings) -> None:
     assert queue.table is job
     assert queue.lease_seconds == settings.job_lease_seconds
     assert all(callable(handler) for handler in HANDLERS.values())
+
+
+async def test_embedded_mode_runs_the_worker_and_relay_in_process(
+    settings: RiskSettings,
+) -> None:
+    database = Database(settings)
+    assert len(embedded_loops(settings, database)) == 0
+    embedded = settings.model_copy(
+        update={"embedded_workers": True, "kafka_bootstrap_servers": "127.0.0.1:1"}
+    )
+    assert len(embedded_loops(embedded, database)) == 2
 
 
 def test_unknown_command_is_refused() -> None:

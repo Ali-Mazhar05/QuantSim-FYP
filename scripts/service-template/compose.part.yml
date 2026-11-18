@@ -13,6 +13,8 @@
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:
@@ -42,6 +44,7 @@
 
   __name__-worker:
     <<: *defaults
+    profiles: ["workers"]
     image: ${__NAME___IMAGE:?}
     command: ["python", "-m", "__pkg__", "worker"]
     environment: *__name__-env
@@ -65,6 +68,7 @@
 
   __name__-relay:
     <<: *defaults
+    profiles: ["workers"]
     image: ${__NAME___IMAGE:?}
     command: ["python", "-m", "__pkg__", "relay"]
     environment: *__name__-env
