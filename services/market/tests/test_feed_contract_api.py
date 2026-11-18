@@ -1,6 +1,6 @@
-"""C2 for market: the environment list filters, the replay feed and activation. The filters are
-real. Ticks and activation answer 501 until B12 builds them, but who may call, the parameters, the
-models and the 404 and 422 answers are final and tested here on a real database (B-FR-03/05)."""
+"""C2 for market: who may call the replay feed and activation, the parameters, the models, the
+list filters and the OpenAPI document, on a real database (B-FR-03, B-FR-05). What the feed returns
+and how activation behaves is tested in test_replay_feed.py."""
 
 import uuid
 from typing import Any
@@ -17,13 +17,11 @@ from tests import instrument_support as support
 from tests.contract_support import TICK_SCHEMA, tick_problems
 from tests.instrument_support import API, bearer, make_token
 from tests.read_support import add_instrument
+from tests.test_correlation_api import OVERLAP, both_loaded
 
 client = support.client
 database = support.database
 pytestmark = pytest.mark.db
-
-PROBLEM = "application/problem+json"
-NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
 
 
 async def make_environment(
@@ -34,6 +32,9 @@ async def make_environment(
     frequency: str = "daily",
     role: Role = Role.QUANT,
     user: uuid.UUID | None = None,
+    instruments: list[uuid.UUID] | None = None,
+    start: str = "2020-01-02",
+    end: str = "2020-12-31",
 ) -> dict[str, Any]:
     response = await http.post(
         f"{API}/environments",
@@ -41,9 +42,9 @@ async def make_environment(
             "name": f"{kind} {frequency}",
             "type": kind,
             "universe": "Big tech",
-            "instrument_ids": [str(instrument)],
-            "start_date": "2020-01-02",
-            "end_date": "2020-12-31",
+            "instrument_ids": [str(i) for i in instruments or [instrument]],
+            "start_date": start,
+            "end_date": end,
             "frequency": frequency,
         },
         headers=bearer(make_token(role, user_id=user)),
@@ -56,6 +57,21 @@ async def make_environment(
 @pytest.fixture
 async def instrument(database: Database) -> uuid.UUID:
     return await add_instrument(database, "AAPL")
+
+
+@pytest.fixture
+async def ready(client: httpx.AsyncClient, database: Database) -> dict[str, Any]:
+    """A daily replay environment over two instruments with ingested data: status ready."""
+    ids = await both_loaded(database)
+    environment = await make_environment(
+        client,
+        ids["AAPL"],
+        instruments=[ids["AAPL"], ids["PEER"]],
+        start=OVERLAP["start"],
+        end=OVERLAP["end"],
+    )
+    assert environment["status"] == "ready"
+    return environment
 
 
 async def listed(http: httpx.AsyncClient, **params: str) -> list[dict[str, Any]]:
@@ -95,16 +111,15 @@ async def test_a_bad_filter_is_422(client: httpx.AsyncClient, params: dict[str, 
 
 
 @pytest.mark.parametrize("role", list(Role))
-async def test_every_signed_in_role_may_read_the_feed_and_gets_501_until_it_is_built(
-    client: httpx.AsyncClient, instrument: uuid.UUID, role: Role
+async def test_every_signed_in_role_may_read_the_feed(
+    client: httpx.AsyncClient, ready: dict[str, Any], role: Role
 ) -> None:
-    environment = await make_environment(client, instrument)
     response = await client.get(
-        f"{API}/environments/{environment['id']}/ticks", headers=bearer(make_token(role))
+        f"{API}/environments/{ready['id']}/ticks", headers=bearer(make_token(role))
     )
-    assert response.status_code == 501
-    assert response.headers["content-type"].startswith(PROBLEM)
-    assert response.json()["type"] == NOT_IMPLEMENTED
+    assert response.status_code == 200, response.text
+    assert response.headers["X-Source-Fingerprint"].startswith("xxh3:")
+    assert response.json()["items"], "the page has ticks"
 
 
 async def test_the_feed_says_why_an_environment_has_none(
@@ -146,29 +161,27 @@ async def test_bad_paging_parameters_are_422(
 
 
 async def test_the_page_limits_are_accepted_at_their_edges(
-    client: httpx.AsyncClient, instrument: uuid.UUID
+    client: httpx.AsyncClient, ready: dict[str, Any]
 ) -> None:
-    environment = await make_environment(client, instrument)
     for params in ({"limit": 1}, {"limit": MAX_LIMIT, "after_seq": 0}, {"after_seq": 123456}):
         response = await client.get(
-            f"{API}/environments/{environment['id']}/ticks",
+            f"{API}/environments/{ready['id']}/ticks",
             params=params,
             headers=bearer(make_token(Role.VIEWER)),
         )
-        assert response.status_code == 501, params  # past validation, to the not-built answer
+        assert response.status_code == 200, params
 
 
 async def test_only_quants_and_admins_may_activate(
-    client: httpx.AsyncClient, instrument: uuid.UUID
+    client: httpx.AsyncClient, ready: dict[str, Any]
 ) -> None:
-    environment = await make_environment(client, instrument)
-    url = f"{API}/environments/{environment['id']}/activate"
+    url = f"{API}/environments/{ready['id']}/activate"
     for role in (Role.VIEWER, Role.ANALYST):
         assert (await client.post(url, headers=bearer(make_token(role)))).status_code == 403, role
     for role in (Role.QUANT, Role.ADMIN):
         response = await client.post(url, headers=bearer(make_token(role)))
-        assert response.status_code == 501, role
-        assert response.json()["type"] == NOT_IMPLEMENTED
+        assert response.status_code == 200, (role, response.text)
+        assert response.json()["status"] == "active"
     assert (await client.post(url)).status_code == 401
 
 
@@ -216,7 +229,7 @@ async def test_the_openapi_document_fixes_the_feed_contract(client: httpx.AsyncC
     by_name = {p["name"]: p["schema"] for p in ticks["parameters"]}
     assert by_name["limit"]["maximum"] == MAX_LIMIT and by_name["limit"]["default"] == DEFAULT_LIMIT
     assert by_name["after_seq"]["minimum"] == 0
-    assert {"401", "403", "404", "422", "501"} <= set(ticks["responses"])
+    assert {"401", "403", "404", "422"} <= set(ticks["responses"])
     assert f"{API}/environments/{{environment_id}}/activate" in spec["paths"]
     listing = spec["paths"][f"{API}/environments"]["get"]
     assert {p["name"] for p in listing["parameters"] if p["in"] != "header"} == {"type", "owner"}
