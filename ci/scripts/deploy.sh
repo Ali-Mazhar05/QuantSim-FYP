@@ -43,6 +43,9 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
   [[ "${MAILPIT:-false}" == "true" ]] && profiles+=(--profile mailpit)
   # One market scheduler for all environments: only where deploy/env/<env>.env enables it
   [[ "${QS_INGEST_SCHEDULER_ENABLED:-false}" == "true" ]] && profiles+=(--profile scheduler)
+  # Generated services run their worker and relay in their own containers unless the
+  # environment embeds them in the API (EMBEDDED_WORKERS=true, DEV on a laptop)
+  [[ "${EMBEDDED_WORKERS:-false}" == "true" ]] || profiles+=(--profile workers)
 
   compose=(docker compose -p "$QS_PROJECT" -f "$COMPOSE_FILE"
            --env-file "$(env_file "$env")" --env-file "$release" "${secrets_args[@]}")

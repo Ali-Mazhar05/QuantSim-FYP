@@ -6,9 +6,10 @@ from fastapi.testclient import TestClient
 
 from __pkg__.cli import main
 from __pkg__.jobs import HANDLERS, job_queue
-from __pkg__.main import build_app
+from __pkg__.main import build_app, embedded_loops
 from __pkg__.models import job
 from __pkg__.settings import __Class__Settings
+from qs_template import Database
 
 
 def test_health_reports_the_build(settings: __Class__Settings) -> None:
@@ -23,6 +24,17 @@ def test_job_queue_uses_the_service_table(settings: __Class__Settings) -> None:
     assert queue.table is job
     assert queue.lease_seconds == settings.job_lease_seconds
     assert all(callable(handler) for handler in HANDLERS.values())
+
+
+async def test_embedded_mode_runs_the_worker_and_relay_in_process(
+    settings: __Class__Settings,
+) -> None:
+    database = Database(settings)
+    assert len(embedded_loops(settings, database)) == 0
+    embedded = settings.model_copy(
+        update={"embedded_workers": True, "kafka_bootstrap_servers": "127.0.0.1:1"}
+    )
+    assert len(embedded_loops(embedded, database)) == 2
 
 
 def test_unknown_command_is_refused() -> None:
