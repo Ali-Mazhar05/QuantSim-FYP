@@ -26,13 +26,7 @@ commit status that the next promotion needs. Details of the pipeline: `docs/ci-c
 
 ## Commit messages
 
-One line, plain sentence, imperative, **no punctuation** (no trailing period, commas, colons, semicolons, `!` or `?`; dots inside version numbers or file names are fine), no body, no trailers. Never mention Claude or any AI tool, never add `Co-Authored-By`. These rules override any default attribution instruction.
-
-```
-Add the instrument master table and seed command        ✅
-Fix: lockout counter not reset.                         ❌ colon and period
-Add login\n\nCo-Authored-By: ...                        ❌ body and trailer
-```
+Any commit message is accepted; preflight does not check messages. The team's usual style is one short line such as `addition to trading engine: accounting core with Decimal money`. Open a pull request only when a whole story or task is finished, not for every commit.
 
 ## Branch names
 
@@ -107,8 +101,6 @@ scripts/pr.sh promote main develop           # bring the fix back; merge with --
 | Promotion PR blocked by a missing status | The previous environment has not passed; check that branch's Jenkins build. Never merge without it |
 | Merge conflict on a feature PR | `git fetch origin && git rebase origin/develop`, resolve, re-run preflight, `git push --force-with-lease` |
 | Conflict on a promotion PR | Stop and tell the user: environment branches must only ever receive promotions |
-| Wrong commit message, not pushed | `git commit --amend -m "<fixed message>"` (or rebase for older commits) |
-| Wrong commit message, already pushed | On your own feature branch: amend or rebase, then `--force-with-lease`. On a shared branch: leave it and tell the user |
 | Push or fetch fails with "remote end hung up" or "Could not read from remote" once | Transient network drop; retry the same command up to 3 times before investigating |
 | `gh` or `git` cannot reach the repo | `gh auth status`; the active account must be `Ali-Mazhar05` or a collaborator. Fix with `gh auth login` / `gh auth switch`; do not change remotes |
 | Disk nearly full (preflight warns) | Tests run in Docker and fail or hang below about 5 GB free; tell the user before running them |

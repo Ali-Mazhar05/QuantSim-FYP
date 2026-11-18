@@ -54,29 +54,11 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 ok "working tree clean"
 
-# 3. Commit messages ----------------------------------------------------------------------
+# 3. Commits (any message is accepted) ------------------------------------------------------
 fork="$(git merge-base "$base" HEAD)"
 mapfile -t commits < <(git rev-list --reverse "$fork..HEAD")
 (( ${#commits[@]} )) || fail "no commits on $branch beyond $base"
-bad=0
-for c in "${commits[@]}"; do
-  subject="$(git log -1 --format=%s "$c")"
-  body="$(git log -1 --format=%b "$c")"
-  problem=""
-  if [[ -n "${body//[[:space:]]/}" ]]; then problem="has a body or trailer (one line only)"
-  elif grep -qiE "co-authored-by|claude|anthropic" <<<"$subject"; then problem="mentions an AI tool or co-author"
-  elif [[ "$subject" =~ [.,\;:!?]$ ]]; then problem="ends with punctuation"
-  elif [[ "$subject" =~ (,|\;|:|!|\?)\  ]]; then problem="contains punctuation"
-  elif [[ ! "$subject" =~ ^[A-Z] ]]; then problem="should start with a capital letter"
-  elif (( ${#subject} > 100 )); then problem="longer than 100 characters"
-  fi
-  if [[ -n "$problem" ]]; then
-    echo "  ${c:0:9} \"$subject\": $problem" >&2
-    bad=1
-  fi
-done
-(( bad == 0 )) || fail "commit messages break the rules above; reword them (git commit --amend or git rebase) before pushing"
-ok "${#commits[@]} commit message(s) follow the rules"
+ok "${#commits[@]} commit(s) to push"
 
 git merge-base --is-ancestor "$base" HEAD \
   || warn "$branch is behind $base; rebase onto it before merging (git rebase $base)"
