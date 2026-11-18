@@ -11,7 +11,7 @@ The trading engine reads market ticks from two sources that look the same to it:
 Consumers pull. Ticks follow one schema, `market.tick.v1` (`contracts/events/`), and are read with `after_seq`:
 
 - Replay: `GET /api/market/environments/{id}/ticks?after_seq=&limit=`. Synthetic: `GET /api/simulation/runs/{id}/ticks?path=&after_seq=&limit=`.
-- Page size: `limit` defaults to 1000, at most 5000. Body `{items, next_after_seq}` where `next_after_seq` is null on the last page. Header `X-Source-Fingerprint` carries the current fingerprint of the data served (see ADR 08).
+- Page size: `limit` defaults to 500, at most 2000, the convention the market service already uses for every list (decision log DL-008). Body `{items, next_after_seq}` where `next_after_seq` is null on the last page. Header `X-Source-Fingerprint` carries the current fingerprint of the data served (see ADR 08).
 - Order is `(session, symbol)`. `seq` starts at 1 and has no gaps per environment and path. `session` is the zero-based index of the session within the environment's ordered session list. A symbol with no bar on a session has no tick that session (see ADR 08).
 - Prices and volume are decimal strings. Consumers ignore unknown fields.
 - A live push stream is not part of Iteration 2. The only stream is the optional replay clock stream used by the Replay page, which can be replaced by polling (cut order).
