@@ -108,6 +108,10 @@ def test_bad_parameters_name_the_field(field: str, value: np.ndarray, words: str
 
 def test_bad_jump_draws_are_refused() -> None:
     shocks, counts, normals = draws(34, paths=5, steps=3)
+    not_finite = normals.copy()
+    not_finite[0, 0, 0] = np.nan
+    with pytest.raises(ValueError, match="jump_normals must be finite"):
+        simulate_merton(S0, MU, SIGMA, LAM, MU_J, SIGMA_J, DT, shocks, counts, not_finite)
     with pytest.raises(ValueError, match="same shape"):
         simulate_merton(S0, MU, SIGMA, LAM, MU_J, SIGMA_J, DT, shocks, counts[:, :2], normals)
     with pytest.raises(ValueError, match="counts must not be negative"):

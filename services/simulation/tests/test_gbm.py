@@ -64,6 +64,8 @@ def test_bad_parameters_name_the_field(field: str, value: np.ndarray, words: str
 
 
 def test_bad_shocks_and_step_are_refused() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        simulate_gbm(S0, MU, SIGMA, DT, np.zeros((0, 3, 3)))
     with pytest.raises(ValueError, match="shape"):
         simulate_gbm(S0, MU, SIGMA, DT, np.zeros((5, 3)))
     with pytest.raises(ValueError, match="dt must be positive"):
