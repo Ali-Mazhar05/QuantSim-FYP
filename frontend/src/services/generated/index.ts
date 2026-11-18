@@ -1,0 +1,6 @@
+// Types generated from each service's OpenAPI document (npm run gen:api). Add a service here
+// when its schema.d.ts exists; ApiPaths is the union the typed helpers accept.
+import type { components as MarketComponents, paths as MarketPaths } from './market/schema'
+
+export type { MarketComponents, MarketPaths }
+export type ApiPaths = MarketPaths
