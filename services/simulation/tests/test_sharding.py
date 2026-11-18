@@ -31,13 +31,19 @@ OU = {
     "theta": np.log(np.array([110.0, 45.0, 250.0, 22.0])),
     "sigma": np.array([0.25, 0.40, 0.30, 0.35]),
 }
+MERTON = GBM | {
+    "lam": np.array([3.0, 1.0, 5.0, 2.0]),
+    "mu_j": np.array([-0.05, 0.02, -0.08, 0.0]),
+    "sigma_j": np.array([0.08, 0.05, 0.10, 0.06]),
+}
+PARAMS = {"gbm": GBM, "ou": OU, "merton": MERTON}
 
 
 def request(model: str = "gbm", paths: int = 1_000, steps: int = 20, seed: int = 42) -> PathRequest:
     return PathRequest(
         model=model,  # type: ignore[arg-type]
         s0=S0,
-        params=GBM if model == "gbm" else OU,
+        params=PARAMS[model],
         correlation=RHO,
         n_paths=paths,
         n_steps=steps,
@@ -53,7 +59,15 @@ def test_shards_are_fixed_size_with_a_remainder() -> None:
         shard_sizes(0)
 
 
-@pytest.mark.parametrize("model", ["gbm", "ou"])
+def test_the_jump_streams_never_change_gbm_or_ou_output() -> None:
+    gbm, _ = generate(request("gbm", seed=3))
+    merton_without_jumps = request("merton", seed=3)
+    zero = {**merton_without_jumps.params, "lam": np.zeros(4)}
+    no_jumps, _ = generate(replace(merton_without_jumps, params=zero))
+    np.testing.assert_allclose(no_jumps, gbm, rtol=1e-12)  # same normals, so the same paths
+
+
+@pytest.mark.parametrize("model", ["gbm", "ou", "merton"])
 def test_one_two_and_four_workers_give_identical_paths(model: str) -> None:
     req = request(model)
     one, _ = generate(req, workers=1)

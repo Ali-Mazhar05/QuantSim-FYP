@@ -17,11 +17,15 @@ from qs_simulation.domain.correlation import (
     correlate,
     correlation_factor,
 )
-from qs_simulation.domain.generators import simulate_gbm, simulate_ou
+from qs_simulation.domain.generators import simulate_gbm, simulate_merton, simulate_ou
 
 SHARD_SIZE = 250
-Model = Literal["gbm", "ou"]
-REQUIRED: dict[str, tuple[str, ...]] = {"gbm": ("mu", "sigma"), "ou": ("kappa", "theta", "sigma")}
+Model = Literal["gbm", "ou", "merton"]
+REQUIRED: dict[str, tuple[str, ...]] = {
+    "gbm": ("mu", "sigma"),
+    "ou": ("kappa", "theta", "sigma"),
+    "merton": ("mu", "sigma", "lam", "mu_j", "sigma_j"),
+}
 
 
 @dataclass(frozen=True, eq=False)
@@ -76,13 +80,29 @@ def generate_shard(request: PathRequest, shard: int) -> Array:
     request.validate()
     size = shard_sizes(request.n_paths)[shard]
     n = request.s0.shape[0]
-    normals, _, _ = shard_streams(request.seed, shard)
+    normals, counts_stream, jumps_stream = shard_streams(request.seed, shard)
     factor, _ = correlation_factor(request.correlation)
-    shocks = correlate(normals.standard_normal((size, request.n_steps, n)), factor)
+    shape = (size, request.n_steps, n)
+    shocks = correlate(normals.standard_normal(shape), factor)
     p = request.params
     if request.model == "gbm":
         return simulate_gbm(request.s0, p["mu"], p["sigma"], request.dt, shocks)
-    return simulate_ou(request.s0, p["kappa"], p["theta"], p["sigma"], request.dt, shocks)
+    if request.model == "ou":
+        return simulate_ou(request.s0, p["kappa"], p["theta"], p["sigma"], request.dt, shocks)
+    # the jump streams are drawn only here, so GBM and OU output never depends on them
+    counts = counts_stream.poisson(p["lam"] * request.dt, size=shape).astype(np.int64)
+    return simulate_merton(
+        request.s0,
+        p["mu"],
+        p["sigma"],
+        p["lam"],
+        p["mu_j"],
+        p["sigma_j"],
+        request.dt,
+        shocks,
+        counts,
+        jumps_stream.standard_normal(shape),
+    )
 
 
 def _run_shard(job: tuple[PathRequest, int]) -> Array:

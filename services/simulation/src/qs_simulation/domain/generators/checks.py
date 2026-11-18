@@ -19,11 +19,20 @@ def check_shocks(shocks: Array, dt: float) -> int:
     return int(shocks.shape[2])
 
 
-def check_param(name: str, values: Array, n_instruments: int, *, positive: bool = False) -> None:
-    """One value per instrument, finite, and strictly positive where the model needs it."""
+def check_param(
+    name: str,
+    values: Array,
+    n_instruments: int,
+    *,
+    positive: bool = False,
+    non_negative: bool = False,
+) -> None:
+    """One value per instrument, finite, and positive or non-negative where the model needs it."""
     if values.shape != (n_instruments,):
         raise ValueError(f"{name} must have one value per instrument ({n_instruments})")
     if not np.all(np.isfinite(values)):
         raise ValueError(f"{name} must be finite")
     if positive and not np.all(values > 0):
         raise ValueError(f"{name} must be positive")
+    if non_negative and not np.all(values >= 0):
+        raise ValueError(f"{name} must not be negative")
