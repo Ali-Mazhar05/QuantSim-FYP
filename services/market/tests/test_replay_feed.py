@@ -253,6 +253,34 @@ async def test_what_is_outside_the_environment_does_not_change_the_fingerprint(
     assert fp_after == fp and after == before
 
 
+async def test_symbols_are_ordered_by_code_point_whatever_the_database_locale(
+    client: httpx.AsyncClient, database: Database
+) -> None:
+    # a locale ignores punctuation (BRKA before BRK.B); the feed and its fingerprint do not
+    symbols = ["BRKA", "BRK.B", "BRK-C"]
+    ids = [await add_instrument(database, s) for s in symbols]
+    async with database.transaction() as session:
+        for instrument_id in ids:
+            for offset in range(2):
+                await support.insert_bar(
+                    session, instrument_id, date(2024, 1, 2) + timedelta(days=offset), "10"
+                )
+    await sql(
+        database,
+        "UPDATE bar SET adj_open = open, adj_high = high, adj_low = low, adj_close = close,"
+        " adj_volume = volume",
+    )
+    environment = await contract.make_environment(
+        client, ids[0], instruments=ids, start="2024-01-02", end="2024-01-03"
+    )
+    items, served = await read_all(client, environment["id"])
+    assert [t["symbol"] for t in items[:3]] == sorted(symbols)  # BRK-C, BRK.B, BRKA
+    async with database.transaction() as session:
+        stored = await EnvironmentService(session).get(uuid.UUID(environment["id"]))
+        rows = await ReplayService(session).rows(stored)
+    assert served == {feeds.fingerprint(rows)}
+
+
 # ---- what cannot be served ----
 
 
@@ -394,6 +422,7 @@ async def test_forty_instruments_over_a_few_thousand_sessions_page_within_two_se
             ),
             {"ids": ids, "r": uuid.uuid4(), "n": sessions - 1},
         )
+        await session.execute(text("ANALYZE bar"))  # what autovacuum does after a bulk load
     start = date(2010, 1, 1)
     environment = await contract.make_environment(
         client,

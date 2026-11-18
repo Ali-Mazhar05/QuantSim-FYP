@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import Select, Text, cast, func, or_, select, text, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Select, Text, cast, func, literal_column, or_, select, text, update
+from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_market import feeds
@@ -29,8 +29,11 @@ NOT_READY = "urn:quantsim:problem:environment-not-ready"
 MISSING_ADJUSTED = "urn:quantsim:problem:missing-adjusted-prices"
 
 ADJUSTED = (bar.c.adj_open, bar.c.adj_high, bar.c.adj_low, bar.c.adj_close, bar.c.adj_volume)
-# the feed order; the instrument id makes it total
-FEED_ORDER = (bar.c.session_date, instrument.c.symbol, bar.c.instrument_id)
+# Symbols compare by code point ("C" collation), exactly as feeds.ordered does in Python, so the
+# order cannot depend on the database's locale (which ignores punctuation, so BRK.B and BRKA could
+# swap); it is also much cheaper than a locale comparison on 100,000 rows. The id makes it total.
+SYMBOL_ORDER = instrument.c.symbol.collate("C")
+FEED_ORDER = (bar.c.session_date, SYMBOL_ORDER, bar.c.instrument_id)
 
 
 def check_replayable(environment: dict[str, Any]) -> None:
@@ -86,22 +89,22 @@ class ReplayService:
         self._session = session
         self._actor = actor_id
 
-    def _in_window(self, query: Select[Any], environment: dict[str, Any]) -> Select[Any]:
+    def _in_window(
+        self, query: Select[Any], environment: dict[str, Any], *, feed_order: bool = True
+    ) -> Select[Any]:
         ids = [uuid.UUID(i) for i in environment["instrument_ids"]]
-        return (
-            query.join(instrument, instrument.c.id == bar.c.instrument_id)
-            .where(
-                bar.c.instrument_id.in_(ids),
-                bar.c.session_date.between(environment["start_date"], environment["end_date"]),
-            )
-            .order_by(*FEED_ORDER)
+        query = query.join(instrument, instrument.c.id == bar.c.instrument_id).where(
+            bar.c.instrument_id.in_(ids),
+            bar.c.session_date.between(environment["start_date"], environment["end_date"]),
         )
+        return query.order_by(*FEED_ORDER) if feed_order else query
 
     async def window(self, environment: dict[str, Any]) -> Window:
         """The fingerprint, the size and the session index of the environment's window.
 
-        The database renders the canonical line of every bar; a bar with a missing adjusted value
-        is counted instead of rendered and refuses the whole window.
+        The database renders the canonical line of every bar and joins the lines of one session
+        (ordered by symbol) into one text, so about as many values come back as there are sessions,
+        not bars. A bar with a missing adjusted value refuses the whole window.
         """
         line = func.concat_ws(
             "|",
@@ -111,30 +114,44 @@ class ReplayService:
             *(cast(column, Text) for column in ADJUSTED),
         )
         incomplete = or_(*(column.is_(None) for column in ADJUSTED))
+        block = func.string_agg(
+            line,
+            aggregate_order_by(literal_column("E'\\n'"), SYMBOL_ORDER, bar.c.instrument_id),
+        )
         result = await self._session.execute(
             self._in_window(
                 select(
                     bar.c.session_date,
-                    instrument.c.symbol,
-                    incomplete.label("incomplete"),
-                    line.label("line"),
+                    func.count().label("bars"),
+                    func.bool_or(incomplete).label("has_gap"),
+                    block.label("block"),
                 ),
                 environment,
+                feed_order=False,
             )
+            .group_by(bar.c.session_date)
+            .order_by(bar.c.session_date)
         )
-        lines: list[str] = []
         per_session: Counter[date] = Counter()
-        missing: dict[str, int] = {}
-        for day, symbol, has_gap, text_line in result:
-            per_session[day] += 1
-            if has_gap:
-                missing[symbol] = missing.get(symbol, 0) + 1
-            else:
-                lines.append(text_line)
-        if missing:
-            raise _missing(missing)
-        sessions = {day: index for index, day in enumerate(sorted(per_session))}
-        return Window(feeds.fingerprint_of_lines(lines), len(lines), sessions, per_session)
+        blocks: list[str] = []
+        any_gap = False
+        for day, bars, has_gap, text_block in result:
+            per_session[day] = bars
+            any_gap = any_gap or bool(has_gap)
+            blocks.append(text_block)
+        if any_gap:
+            counted = await self._session.execute(
+                self._in_window(
+                    select(instrument.c.symbol, func.count()).where(incomplete),
+                    environment,
+                    feed_order=False,
+                ).group_by(instrument.c.symbol)
+            )
+            raise _missing({symbol: count for symbol, count in counted})
+        sessions = {day: index for index, day in enumerate(per_session)}
+        return Window(
+            feeds.fingerprint_of_blocks(blocks), sum(per_session.values()), sessions, per_session
+        )
 
     async def rows(self, environment: dict[str, Any]) -> list[feeds.BarRow]:
         """Every bar of the window as values (for tests and tools; the feed does not use it)."""
@@ -162,6 +179,20 @@ class ReplayService:
         environment = await EnvironmentService(self._session).get(environment_id)
         check_replayable(environment)
         window = await self.window(environment)
+        # seq is the position in (session, symbol) order and the window knows how many bars each
+        # session has, so only the sessions the page touches are read, not the whole window
+        first_day, skip, last_day = None, 0, None
+        passed = 0
+        for day, count in window.per_session.items():  # in session order
+            if first_day is None and after_seq < passed + count:
+                first_day, skip = day, after_seq - passed
+            if first_day is not None:
+                last_day = day
+                if passed + count >= after_seq + limit:
+                    break
+            passed += count
+        if first_day is None or last_day is None:  # after_seq is past the end of the feed
+            return [], None, window.fingerprint
         result = await self._session.execute(
             self._in_window(
                 select(
@@ -174,7 +205,8 @@ class ReplayService:
                 ),
                 environment,
             )
-            .offset(after_seq)
+            .where(bar.c.session_date.between(first_day, last_day))
+            .offset(skip)
             .limit(limit)
         )
         items = [

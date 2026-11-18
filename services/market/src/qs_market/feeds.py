@@ -108,6 +108,17 @@ def fingerprint_of_lines(lines: Iterable[str]) -> str:
     return FINGERPRINT_PREFIX + digest.hexdigest()
 
 
+def fingerprint_of_blocks(blocks: Iterable[str]) -> str:
+    """The same fingerprint as ``fingerprint_of_lines``, for lines already joined by newlines into
+    blocks (one block per session): each block is followed by one newline, so the bytes hashed
+    are identical. This is how the replay service gets a window from the database."""
+    digest = xxhash.xxh3_128()
+    for block in blocks:
+        digest.update(block.encode())
+        digest.update(b"\n")
+    return FINGERPRINT_PREFIX + digest.hexdigest()
+
+
 def fingerprint(rows: Sequence[BarRow]) -> str:
     """Identifies the exact data served: xxh3 over the ordered served values and revisions.
 

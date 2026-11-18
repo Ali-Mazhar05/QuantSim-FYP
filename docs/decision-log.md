@@ -389,4 +389,11 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   restatement that commits during a request cannot give a page and a header from different data.
 - **If it is still too slow later:** cache the fingerprint per environment against a database-side
   checksum of the window; do not weaken what the fingerprint covers.
+- **Measured after that, three more changes:** (1) both queries sort symbols by code point (`COLLATE "C"`),
+  as `feeds.ordered` does, so a database locale that ignores punctuation cannot reorder `BRK.B` and `BRKA`
+  (a test holds it) and the sort is cheaper; (2) the window query groups by session, so a window comes back
+  as about 2,900 texts, not 116,000 rows; (3) a page reads only the sessions its seq range covers, found
+  from the per-session bar counts, instead of sorting the whole window for an `OFFSET`. A cached
+  fingerprint was not built: a restated price changes the data without a trustworthy change marker, so no
+  cheap signal was provably exact.
 - **Affects:** `qs_market/replay.py`, `feeds.canonical_line` and `feeds.fingerprint_of_lines`.
