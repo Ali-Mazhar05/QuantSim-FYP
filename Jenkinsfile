@@ -217,6 +217,13 @@ pipeline {
               try {
                 sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
                 sh 'ci/scripts/smoke.sh "$QS_ENV" .ci/release.env'
+                // DEV only, last: runs a portfolio through the trading API and engine on
+                // the bundled demo market data and checks its event chain. A failure
+                // fails the deploy, so DEV is not verified. Signs in as test.admin with the
+                // password decrypted from the environment's secrets (sops-age-key above)
+                if (env.QS_ENV == 'dev') {
+                  sh 'ci/scripts/trading-live-check.sh dev'
+                }
               } catch (err) {
                 if (env.QS_ENV in ['acc', 'prod']) {
                   echo "Deploy to ${env.QS_ENV} failed, rolling back to the last known-good release"

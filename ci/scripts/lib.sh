@@ -257,3 +257,21 @@ pages_url() {
     printf 'https://%s.%s' "$alias" "$subdomain"
   fi
 }
+
+# Decrypts one secret of deploy/secrets/<env>.enc.env into an exported shell variable,
+# without printing it. Pass the value on by name only (docker run -e NAME), never in a
+# command line. Needs SOPS_AGE_KEY_FILE (Jenkins binds the sops-age-key credential).
+#   read_secret <env> <SECRET_NAME> <variable>
+read_secret() {
+  local env=$1 secret=$2 var=$3 encrypted="deploy/secrets/$1.enc.env" value
+  [[ -f "$REPO_ROOT/$encrypted" ]] || die "no $encrypted to read $secret from"
+  require_env SOPS_AGE_KEY_FILE
+  value="$(SOPS_AGE_KEY="$(cat "$SOPS_AGE_KEY_FILE")" run_in_image "$SOPS_IMAGE" -e SOPS_AGE_KEY -- \
+    --decrypt --input-type dotenv --output-type dotenv "$encrypted" \
+    | sed -n "s/^$secret=//p" | tr -d '\r')" \
+    || die "could not decrypt $encrypted; is SOPS_AGE_KEY_FILE one of the keys in .sops.yaml?"
+  [[ -n "$value" ]] \
+    || die "$secret is not in $encrypted; add it with ci/scripts/set-secret.sh $secret $env"
+  printf -v "$var" '%s' "$value"
+  export "${var?}"
+}
