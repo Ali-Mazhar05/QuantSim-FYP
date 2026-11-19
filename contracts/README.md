@@ -83,6 +83,7 @@ their paths, parameters, models and the other errors below are final and tested.
 | `GET /api/market/environments?type=&owner=` | any signed-in role | Environments, newest first. `type`: `historical_replay` or `synthetic`. `owner`: the creator's user id. 422 for a bad value |
 | `GET /api/market/environments/{id}/ticks?after_seq=0&limit=500` | any signed-in role | A page of ticks; header `X-Source-Fingerprint`. `limit` 1 to 2000, default 500 |
 | `POST /api/market/environments/{id}/activate` | quant, admin | Freezes the fingerprint: `{environment_id, status: "active", source_fingerprint, missing_session_count, activated_by, activated_at}` |
+| `GET/POST /api/market/replay-sessions`, `GET /replay-sessions/{id}`, `POST /replay-sessions/{id}/control` | read: all roles; create and control: quant, admin | A server-side clock over an activated environment: `position` and `session_date` computed at `server_time`, `state`, `speed`, `finished`, the pinned and current fingerprints. Control body `{action: play|pause|speed|seek, speed?, index?}` (DL-032 to DL-034) |
 | `GET /api/simulation/runs?status=&instrument=` | any signed-in role | Completed or other runs for a picker: id, status, model, sizes, symbols, `median_path_index`, `parent_run_id`, `scenario` |
 | `GET /api/simulation/runs/{id}` | any signed-in role | The run with progress, seed, storage mode and per-instrument statistics |
 | `GET /api/simulation/runs/{id}/ticks?path=0&after_seq=0&limit=500` | any signed-in role | A page of one path's ticks, from the stored values or regenerated from the seed |

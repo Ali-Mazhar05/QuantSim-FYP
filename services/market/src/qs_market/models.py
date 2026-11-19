@@ -352,3 +352,45 @@ environment_activation = Table(
         "missing_session_count >= 0", name="environment_activation_missing_not_negative"
     ),
 )
+
+# A virtual replay clock over an activated environment (B13, DL-003). Nothing ticks on the server:
+# the row holds the session index the clock stood at (the anchor), the server time of that moment,
+# the speed and the state, and the position is computed from them on every read. Pause, a speed
+# change and a seek each write a new anchor. The session count is frozen at creation, so the
+# anchor can be bounded by the database as well as by the API.
+REPLAY_SPEEDS = (1, 5, 20)
+REPLAY_STATES = ("playing", "paused")
+
+replay_session = Table(
+    "replay_session",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column(
+        "environment_id",
+        Uuid,
+        ForeignKey("market_environment.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("anchor_index", Integer, nullable=False),
+    Column("anchor_at", DateTime(timezone=True), nullable=False),
+    Column("speed", Integer, nullable=False, server_default=text("1")),
+    Column("state", Text, nullable=False, server_default=text("'paused'")),
+    Column("session_count", Integer, nullable=False),
+    Column("source_fingerprint", Text, nullable=False),
+    Column("created_by", Uuid, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index("replay_session_environment", "environment_id", "created_at"),
+    CheckConstraint(
+        "speed IN (" + ", ".join(str(s) for s in REPLAY_SPEEDS) + ")",
+        name="replay_session_speed_valid",
+    ),
+    CheckConstraint(_one_of("state", REPLAY_STATES), name="replay_session_state_valid"),
+    CheckConstraint("session_count >= 1", name="replay_session_has_sessions"),
+    CheckConstraint(
+        "anchor_index >= 0 AND anchor_index < session_count", name="replay_session_anchor_in_range"
+    ),
+    CheckConstraint(
+        "source_fingerprint ~ '^xxh3:[0-9a-f]{32}$'", name="replay_session_fingerprint_format"
+    ),
+)
