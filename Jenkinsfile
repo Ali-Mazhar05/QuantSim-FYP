@@ -217,6 +217,12 @@ pipeline {
               try {
                 sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
                 sh 'ci/scripts/smoke.sh "$QS_ENV" .ci/release.env'
+                // Playwright gates: a red run fails the deploy, so the environment's
+                // verified status (required on the next promotion PR) is never set
+                def gates = [dev: 'dev-smoke', test: 'demo-spine']
+                if (gates[env.QS_ENV]) {
+                  sh "ci/scripts/playwright-gate.sh '${env.QS_ENV}' '${gates[env.QS_ENV]}'"
+                }
               } catch (err) {
                 if (env.QS_ENV in ['acc', 'prod']) {
                   echo "Deploy to ${env.QS_ENV} failed, rolling back to the last known-good release"
