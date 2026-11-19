@@ -8,7 +8,43 @@
 //   main                       checks, approval, promote, deploy PROD, release tag
 //   hotfix/*                   checks and build, reaches main through a pull request
 //
-// Every checkout is retried: the build host's link to GitHub sometimes drops mid-clone.
+// Every checkout goes through qsCheckout(): the build host's link to GitHub can be slow
+// and drop mid-clone, so builds borrow objects from a mirror on the agent's volume.
+
+// A bare mirror of the repository on the agent's persistent volume. Checkouts borrow its
+// objects (git alternates), so a build downloads only commits newer than the mirror.
+// The first build on a new host fills it once.
+MIRROR = '/home/jenkins/agent/git-mirror/QuantSim-FYP.git'
+
+def qsCheckout() {
+  // Refresh the mirror under a lock (several builds share it). A failed refresh is not
+  // fatal: the checkout below still fetches whatever the mirror lacks.
+  sh """
+    set +e
+    mirror='${MIRROR}'
+    mkdir -p "\$(dirname "\$mirror")"
+    (
+      command -v flock >/dev/null && flock -w 960 9
+      if [ -f "\$mirror/HEAD" ]; then
+        timeout 600 git -C "\$mirror" fetch --prune --quiet origin || echo "mirror refresh failed; continuing"
+      else
+        rm -rf "\$mirror.tmp"
+        # Bounded, so a very slow link cannot use up the build; a later build tries again
+        timeout 900 git clone --mirror --quiet https://github.com/Ali-Mazhar05/QuantSim-FYP.git "\$mirror.tmp" \\
+          && mv "\$mirror.tmp" "\$mirror" || echo "mirror clone failed; checking out without it"
+      fi
+    ) 9>"\$mirror.lock"
+    exit 0
+  """
+  retry(3) {
+    checkout([
+      $class: 'GitSCM',
+      branches: scm.branches,
+      userRemoteConfigs: scm.userRemoteConfigs,
+      extensions: scm.extensions + [[$class: 'CloneOption', reference: MIRROR, noTags: true, shallow: false, timeout: 30]],
+    ])
+  }
+}
 
 def ghcrLogin() {
   withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
@@ -59,7 +95,7 @@ pipeline {
       stages {
         stage('Prepare') {
           steps {
-            retry(3) { checkout scm }
+            script { qsCheckout() }
             script {
               def qsMode = sh(script: "ci/scripts/env-for-branch.sh '${env.BRANCH_NAME}'", returnStdout: true).trim().tokenize(' ')[1]
               if (qsMode != 'ci') {
@@ -201,7 +237,7 @@ pipeline {
       }
       options { timeout(time: 20, unit: 'MINUTES') }
       steps {
-        retry(3) { checkout scm }
+        script { qsCheckout() }
         lock(resource: "env-${env.QS_ENV}") {
           script {
             ghcrLogin()
@@ -268,7 +304,7 @@ pipeline {
             accepted = false
           }
           node('docker') {
-            retry(3) { checkout scm }
+            qsCheckout()
             withGitHub {
               def state = accepted ? 'success' : 'failure'
               def text = !accepted ? 'Rejected or timed out at acceptance'
@@ -293,7 +329,7 @@ pipeline {
       }
       options { timeout(time: 10, unit: 'MINUTES') }
       steps {
-        retry(3) { checkout scm }
+        script { qsCheckout() }
         script {
           ghcrLogin()
           for (c in env.QS_COMPONENTS.tokenize(' ')) {
