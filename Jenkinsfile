@@ -18,14 +18,19 @@ MIRROR = '/home/jenkins/agent/git-mirror/QuantSim-FYP.git'
 
 def qsCheckout() {
   // Refresh the mirror under a lock (several builds share it). A failed refresh is not
-  // fatal: the checkout below still fetches whatever the mirror lacks.
+  // fatal, and a mirror that is not a valid bare repository (e.g. a half-finished seed)
+  // is removed and cloned again.
   sh """
     set +e
     mirror='${MIRROR}'
     mkdir -p "\$(dirname "\$mirror")"
     (
       command -v flock >/dev/null && flock -w 960 9
-      if [ -f "\$mirror/HEAD" ]; then
+      if [ -e "\$mirror" ] && [ "\$(git -C "\$mirror" rev-parse --is-bare-repository 2>/dev/null)" != true ]; then
+        echo "mirror at \$mirror is not a valid repository; removing it"
+        rm -rf "\$mirror"
+      fi
+      if [ -d "\$mirror" ]; then
         timeout 600 git -C "\$mirror" fetch --prune --quiet origin || echo "mirror refresh failed; continuing"
       else
         rm -rf "\$mirror.tmp"
@@ -36,12 +41,23 @@ def qsCheckout() {
     ) 9>"\$mirror.lock"
     exit 0
   """
+  // Borrow from the mirror only when it is a usable repository
+  def mirrorOk = sh(
+    script: "test \"\$(git -C '${MIRROR}' rev-parse --is-bare-repository 2>/dev/null)\" = true",
+    returnStatus: true,
+  ) == 0
+  def clone = [$class: 'CloneOption', noTags: true, shallow: false, timeout: 30]
+  if (mirrorOk) {
+    clone.reference = MIRROR
+  } else {
+    echo 'checking out without the mirror'
+  }
   retry(3) {
     checkout([
       $class: 'GitSCM',
       branches: scm.branches,
       userRemoteConfigs: scm.userRemoteConfigs,
-      extensions: scm.extensions + [[$class: 'CloneOption', reference: MIRROR, noTags: true, shallow: false, timeout: 30]],
+      extensions: scm.extensions + [clone],
     ])
   }
 }
