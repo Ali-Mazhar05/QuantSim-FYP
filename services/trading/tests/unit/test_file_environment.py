@@ -86,7 +86,7 @@ async def test_session_3_has_no_bar_for_bbb() -> None:
     assert [t.symbol for t in page.items if t.session == 3] == ["AAA"]
 
 
-@pytest.mark.parametrize(("after_seq", "limit"), [(-1, 10), (0, 0), (0, 5001)])
+@pytest.mark.parametrize(("after_seq", "limit"), [(-1, 10), (0, 0), (0, 2001)])
 async def test_bad_paging_arguments_are_refused(after_seq: int, limit: int) -> None:
     with pytest.raises(ValueError):
         await FileEnvironment(FIXTURE).ticks(after_seq, limit)

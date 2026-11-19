@@ -27,3 +27,4 @@ Caddyfile    text eol=lf
 # byte-identical on every checkout (no line-ending conversion)
 services/trading/src/qs_trading/demo/environments/*.json  -text
 services/trading/tests/fixtures/environments/*.json      -text
+services/trading/tests/fixtures/contracts/*.json         -text
