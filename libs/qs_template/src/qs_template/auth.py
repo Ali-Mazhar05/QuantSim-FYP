@@ -17,6 +17,7 @@ fails closed: a missing, expired, forged or unverifiable token is refused.
 """
 
 import asyncio
+import hmac
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -141,10 +142,28 @@ class Principal:
     # Millisecond issue time ("iat_ms" claim, falling back to iat), so a revocation can
     # cut off exactly the tokens issued before it
     issued_at_ms: int = 0
+    # True for another service calling with the DEV service token (no user behind it)
+    is_service: bool = False
 
     def __post_init__(self) -> None:
         if not self.issued_at_ms:
             object.__setattr__(self, "issued_at_ms", self.issued_at * 1000)
+
+
+# Environments where the shared DEV service token is accepted (kit K3)
+SERVICE_TOKEN_ENVIRONMENTS = frozenset({"local", "dev"})
+
+# Who a call made with the DEV service token acts as: read-only, like a viewer, because
+# service calls only read other services' data (one hop deep)
+_SERVICE_ID = "urn:quantsim:service"
+SERVICE_PRINCIPAL = Principal(
+    user_id=uuid.uuid5(uuid.NAMESPACE_URL, _SERVICE_ID),
+    username="service",
+    role=Role.VIEWER,
+    token_id=_SERVICE_ID,
+    issued_at=0,
+    is_service=True,
+)
 
 
 def _unauthenticated(detail: str) -> ServiceError:
@@ -264,8 +283,20 @@ class Authenticator:
         self._audience = settings.auth_audience
         self._leeway = settings.auth_leeway_seconds
         self._is_revoked = is_revoked
+        self._service_token: bytes | None = None
+        if settings.service_token is not None:
+            if settings.environment not in SERVICE_TOKEN_ENVIRONMENTS:
+                raise ValueError(
+                    "QS_SERVICE_TOKEN is for local and dev only, "
+                    f"not {settings.environment!r}; remove it from this environment"
+                )
+            self._service_token = settings.service_token.get_secret_value().encode()
 
     async def verify(self, token: str) -> Principal:
+        if self._service_token is not None and hmac.compare_digest(
+            token.encode(), self._service_token
+        ):
+            return SERVICE_PRINCIPAL
         try:
             header = jwt.get_unverified_header(token)
         except jwt.InvalidTokenError:

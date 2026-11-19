@@ -43,6 +43,11 @@ class ServiceSettings(BaseSettings):
     auth_audience: str = "quantsim"
     auth_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
+    # Shared DEV-only service token (qs_template.service_client, kit K3): workers send it
+    # when calling another service, and services accept it as a read-only service
+    # principal. Allowed in local and dev only; replaced by real service tokens before TEST.
+    service_token: SecretStr | None = None
+
     # Websites allowed to call this API from a browser, comma-separated exact origins
     # (scheme://host[:port]). Empty: no cross-site calls are allowed.
     cors_origins: str = ""
