@@ -10,12 +10,17 @@ portfolio. Each :meth:`~PortfolioStore.commit` is one transaction per session:
 2. The session's ``trade_event`` rows, ``seq = last_seq + 1`` onwards, with
    ``prev_hash``/``hash``. A plain ``INSERT``: the A13 trigger refuses a repeated or
    skipped ``seq`` itself.
-3. Rows derived from those events: ``order`` (inserted on ``ORDER_PLACED``, its ``status``
-   moved on ``ORDER_FILLED``, ``ORDER_EXPIRED`` and a fill-time ``ORDER_REJECTED``),
-   ``fill`` (one per ``ORDER_FILLED``) and the ``portfolio_value`` point of ``VALUED``.
-   ``holding_history`` and the rebuild are left to A15.
+3. The projection rows of those events, folded onto the locked state row by
+   :func:`qs_trading.projections.fold.fold` and written with
+   :func:`qs_trading.projections.persist.write_rows` (A15): ``order`` (inserted on
+   ``ORDER_PLACED``, its ``status`` moved on ``ORDER_FILLED``, ``ORDER_EXPIRED`` and a
+   fill-time ``ORDER_REJECTED``), ``fill`` and ``holding_history`` (one each per
+   ``ORDER_FILLED``) and the ``portfolio_value`` point of ``VALUED``. The rebuild folds the
+   whole log with the same function, so live and rebuilt rows cannot drift apart; the
+   folded books must also equal the engine's, or the session is not committed.
 4. ``portfolio_state_current``: ``last_seq``, ``last_hash``, ``last_session``, cash and
-   the positions cache, ``{"<symbol>": {"quantity": <int>, "cost_basis": "<cents>"}}``.
+   the positions cache, ``{"<symbol>": {"quantity": <int>, "cost_basis": "<cents>"}}``,
+   as the fold's :meth:`~qs_trading.projections.fold.Ledger.state_row`.
 5. Outbox rows (:func:`qs_template.messaging.add_event`) on topic
    ``quantsim.trading.portfolio``, keyed by portfolio id: ``fill.executed`` per fill,
    ``portfolio.updated`` per session and ``run.completed`` at the end. Event ids are
@@ -33,27 +38,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from qs_template import Database
 from qs_template.events import EventEnvelope
 from qs_template.messaging import add_event
-from qs_trading.domain.events import (
-    OrderExpiredV1,
-    OrderFilledV1,
-    OrderPlacedV1,
-    OrderRejectedV1,
-    RunCompletedV1,
-    ValuedV1,
-)
-from qs_trading.domain.orders import OrderStatus
+from qs_trading.domain.events import OrderFilledV1, RunCompletedV1, ValuedV1
 from qs_trading.engine.core import Engine, LoggedEvent, RunSpec, SessionResult
 from qs_trading.engine.runner import ChainHead
-from qs_trading.models import (
-    fill,
-    order,
-    portfolio,
-    portfolio_state_current,
-    portfolio_value,
-    strategy,
-    trade_event,
-)
+from qs_trading.models import portfolio, portfolio_state_current, strategy, trade_event
 from qs_trading.ports.market_environment import EnvironmentRef, FingerprintChanged
+from qs_trading.projections.fold import (
+    Ledger,
+    ProjectedEvent,
+    ProjectionError,
+    ProjectionRows,
+    fold,
+)
+from qs_trading.projections.persist import write_rows
 
 __all__ = ["ChainConflict", "PortfolioNotFound", "PortfolioStore", "load_spec", "outbox_event_id"]
 
@@ -112,11 +109,24 @@ async def load_spec(session: AsyncSession, portfolio_id: uuid.UUID) -> RunSpec:
     )
 
 
-def _positions_json(result: SessionResult) -> dict[str, Any]:
-    return {
-        symbol: {"quantity": position.quantity, "cost_basis": str(position.cost_basis)}
-        for symbol, position in sorted(result.state.portfolio.positions.items())
-    }
+def _folded(head: Ledger, result: SessionResult) -> tuple[Ledger, ProjectionRows]:
+    """The session's events folded onto the committed head; the folded books must be the
+    engine's."""
+    ledger, rows = fold(
+        head,
+        (ProjectedEvent(e.seq, e.prev_hash, e.hash, e.payload) for e in result.events),
+    )
+    state = result.state
+    books = ledger.books
+    if (
+        books is None
+        or (ledger.last_seq, ledger.last_hash, ledger.last_session)
+        != (state.last_seq, state.last_hash, result.session)
+        or books.cash != state.portfolio.cash
+        or dict(books.positions) != dict(state.portfolio.positions)
+    ):
+        raise ProjectionError(state.last_seq, "the folded books differ from the engine's")
+    return ledger, rows
 
 
 class PortfolioStore:
@@ -171,7 +181,7 @@ class PortfolioStore:
         if not result.events:
             raise ValueError("a session always appends events")
         async with self.database.transaction() as session:
-            await self._lock_head(session, engine, result.events[0])
+            head = await self._lock_head(session, engine, result.events[0])
             await session.execute(
                 insert(trade_event),
                 [
@@ -188,28 +198,24 @@ class PortfolioStore:
                     for e in result.events
                 ],
             )
-            for event in result.events:
-                await self._project(session, event)
-            state = result.state
+            ledger, rows = _folded(head, result)
+            await write_rows(session, self.portfolio_id, rows)
+            state_row = ledger.state_row()
+            if state_row is None:
+                raise ProjectionError(result.state.last_seq, "a committed session has a state")
+            del state_row["portfolio_id"]
             await session.execute(
                 update(portfolio_state_current)
                 .where(portfolio_state_current.c.portfolio_id == self.portfolio_id)
-                .values(
-                    last_seq=state.last_seq,
-                    last_hash=state.last_hash,
-                    last_session=result.session,
-                    cash=state.portfolio.cash,
-                    positions=_positions_json(result),
-                    updated_at=func.now(),
-                )
+                .values(**state_row, updated_at=func.now())
             )
             for event in result.events:
                 await self._publish(session, event)
 
-    async def _lock_head(self, session: AsyncSession, engine: Engine, first: LoggedEvent) -> None:
+    async def _lock_head(self, session: AsyncSession, engine: Engine, first: LoggedEvent) -> Ledger:
         psc = portfolio_state_current.c
         locked = (
-            select(psc.last_seq, psc.last_hash)
+            select(psc.last_seq, psc.last_hash, psc.last_session, psc.cash, psc.positions)
             .where(psc.portfolio_id == self.portfolio_id)
             .with_for_update()
         )
@@ -231,72 +237,7 @@ class PortfolioStore:
                 f"portfolio {self.portfolio_id} log ends at seq {row.last_seq}; this session"
                 f" chains onto seq {first.seq - 1}"
             )
-
-    async def _set_status(self, session: AsyncSession, order_id: str, status: OrderStatus) -> None:
-        await session.execute(
-            update(order)
-            .where(order.c.portfolio_id == self.portfolio_id, order.c.order_id == order_id)
-            .values(status=status.value, updated_at=func.now())
-        )
-
-    async def _project(self, session: AsyncSession, event: LoggedEvent) -> None:
-        payload = event.payload
-        if isinstance(payload, OrderPlacedV1):
-            await session.execute(
-                insert(order).values(
-                    portfolio_id=self.portfolio_id,
-                    order_id=payload.order_id,
-                    symbol=payload.symbol,
-                    side=payload.side.value,
-                    quantity=payload.quantity,
-                    order_type=payload.order_type.value,
-                    limit_price=payload.limit_price,
-                    placed_seq=event.seq,
-                    placed_session=payload.session,
-                    expires_session=payload.expires_session,
-                    status=OrderStatus.OPEN.value,
-                )
-            )
-        elif isinstance(payload, OrderFilledV1):
-            await session.execute(
-                insert(fill).values(
-                    portfolio_id=self.portfolio_id,
-                    seq=event.seq,
-                    order_id=payload.order_id,
-                    session=payload.session,
-                    symbol=payload.symbol,
-                    side=payload.side.value,
-                    quantity=payload.quantity,
-                    reference_price=payload.reference_price,
-                    fill_price=payload.fill_price,
-                    slippage=payload.slippage,
-                    cost_fixed=payload.cost_fixed,
-                    cost_per_share=payload.cost_per_share,
-                    cost_percentage=payload.cost_percentage,
-                    cost_total=payload.cost_total,
-                    cash_after=payload.cash_after,
-                )
-            )
-            await self._set_status(session, payload.order_id, OrderStatus.FILLED)
-        elif isinstance(payload, OrderExpiredV1):
-            await self._set_status(session, payload.order_id, OrderStatus.EXPIRED)
-        elif isinstance(payload, OrderRejectedV1) and payload.order_id is not None:
-            await self._set_status(session, payload.order_id, OrderStatus.REJECTED)
-        elif isinstance(payload, ValuedV1):
-            await session.execute(
-                insert(portfolio_value).values(
-                    portfolio_id=self.portfolio_id,
-                    ts=payload.ts,
-                    session=payload.session,
-                    seq=event.seq,
-                    cash=payload.cash,
-                    market_value=payload.market_value,
-                    value=payload.portfolio_value,
-                    realised_pnl=payload.realised_pnl,
-                    unrealised_pnl=payload.unrealised_pnl,
-                    total_costs=payload.total_costs,
-                )
-            )
+        return Ledger.from_state_row(self.portfolio_id, dict(row._mapping))
 
     def _envelope(
         self, event: LoggedEvent, event_type: str, data: Mapping[str, Any]
