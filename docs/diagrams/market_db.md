@@ -47,6 +47,8 @@ erDiagram
     instrument ||--o{ rejected_bar : "instrument_id"
     instrument ||--o{ return_series : "instrument_id"
     instrument ||--o{ staging_bar : "instrument_id"
+    market_environment ||--o{ environment_activation : "environment_id"
+    market_environment ||--o{ replay_session : "environment_id"
     audit_log {
         bigint id PK
         text table_name
@@ -107,6 +109,13 @@ erDiagram
         timestamptz opened_at
         uuid resolved_by_run "optional"
         timestamptz resolved_at "optional"
+    }
+    environment_activation {
+        uuid environment_id PK, FK
+        text source_fingerprint
+        int missing_session_count
+        uuid activated_by
+        timestamptz activated_at
     }
     ingestion_run {
         uuid id PK
@@ -198,6 +207,19 @@ erDiagram
         jsonb rules
         jsonb payload
         timestamptz rejected_at
+    }
+    replay_session {
+        uuid id PK
+        uuid environment_id FK
+        int anchor_index
+        timestamptz anchor_at
+        int speed
+        text state
+        int session_count
+        text source_fingerprint
+        uuid created_by
+        timestamptz created_at
+        timestamptz updated_at
     }
     return_series {
         uuid instrument_id PK, FK
