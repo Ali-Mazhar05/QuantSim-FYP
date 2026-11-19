@@ -82,6 +82,9 @@ class OrderPlacedV1(Payload):
 
 
 class OrderRejectedV1(Payload):
+    """An intent refused at placement (``order_id`` is ``None``), or a placed order refused
+    when it came to fill (``order_id`` names its ``ORDER_PLACED``)."""
+
     type: ClassVar[EventType] = EventType.ORDER_REJECTED
 
     session: int
@@ -92,6 +95,7 @@ class OrderRejectedV1(Payload):
     limit_price: Decimal | None = None
     reason: RejectReason
     detail: str = ""
+    order_id: str | None = None
 
 
 class OrderFilledV1(Payload):
