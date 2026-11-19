@@ -47,8 +47,11 @@ def build_routers(
     (none until the shared metrics library is wired in)."""
     make_store = store or sql_store(queue or JobQueue(job))
 
+    # scope="function": the session commits when the route returns, before the response is
+    # sent. With FastAPI's default ("request") the commit ran after the response, so a client
+    # could get 201 for a strategy and have its next request not find it yet.
     async def request_store(
-        session: Annotated[AsyncSession, Depends(database.session)],
+        session: Annotated[AsyncSession, Depends(database.session, scope="function")],
     ) -> TradingStore:
         return make_store(session)
 
