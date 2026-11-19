@@ -4,10 +4,15 @@ The routes talk to a :class:`TradingStore` made per request from the request's s
 so they can be exercised without a database by handing :func:`build_routers` another
 store. :class:`SqlTradingStore` is the trading_db implementation; it never commits, the
 request's transaction does.
+
+The projection reads (A16 part 2) share their row-to-response conversions with any other
+store: :func:`fill_out`, :func:`value_out`, :func:`holding_change_out` and
+:func:`holdings_out` take a row as :mod:`qs_trading.projections.fold` yields it (column
+name to value), so the fold's rows and the stored rows give the same responses.
 """
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from decimal import Decimal
 from typing import Any, Protocol
 
@@ -17,13 +22,40 @@ from sqlalchemy.sql import func
 
 from qs_template.jobs import JobQueue
 from qs_trading.jobs import ENGINE_RUN, submit_engine_run
-from qs_trading.models import job, portfolio, strategy, trade_event
+from qs_trading.metrics import RunFigures
+from qs_trading.models import (
+    fill,
+    holding_history,
+    job,
+    portfolio,
+    portfolio_state_current,
+    portfolio_value,
+    strategy,
+    trade_event,
+)
+from qs_trading.projections.fold import PortfolioSnapshot, positions_json
+from qs_trading.projections.rebuild import (
+    RebuildResult,
+    rebuild_portfolio,
+    state_as_of,
+    verify_portfolio,
+)
+from qs_trading.projections.verify import ChainReport
 from qs_trading.schemas import (
+    ChainReportOut,
     EventOut,
+    FillOut,
+    HoldingChangeOut,
+    HoldingsOut,
     PortfolioOut,
+    PositionOut,
+    RebuildOut,
     RunAccepted,
     RunOut,
+    StateOut,
     StrategyOut,
+    TableDifferenceOut,
+    ValuePointOut,
     money_text,
 )
 
@@ -33,7 +65,14 @@ __all__ = [
     "StoreDependency",
     "StoreFactory",
     "TradingStore",
+    "chain_report_out",
+    "fill_out",
+    "holding_change_out",
+    "holdings_out",
+    "rebuild_out",
     "sql_store",
+    "state_out",
+    "value_out",
 ]
 
 PortfolioValues = dict[str, Any]
@@ -79,6 +118,45 @@ class TradingStore(Protocol):
         """Up to ``limit`` log events with ``seq > after_seq``, ascending."""
         ...
 
+    async def fills(self, portfolio_id: uuid.UUID, after_seq: int, limit: int) -> list[FillOut]:
+        """Up to ``limit`` fills with ``seq > after_seq``, ascending."""
+        ...
+
+    async def holdings(self, portfolio_id: uuid.UUID) -> HoldingsOut:
+        """The current positions and cash; empty before the first run."""
+        ...
+
+    async def holding_history(
+        self, portfolio_id: uuid.UUID, after_seq: int, limit: int
+    ) -> list[HoldingChangeOut]:
+        """Up to ``limit`` holding changes with ``seq > after_seq``, ascending."""
+        ...
+
+    async def value_series(self, portfolio_id: uuid.UUID) -> list[ValuePointOut]:
+        """Every valuation, ascending by session."""
+        ...
+
+    async def state_as_of(self, portfolio_id: uuid.UUID, seq: int | None) -> StateOut:
+        """The state right after the event at ``seq`` (the last event when ``None``).
+        Raises ``LookupError`` when there is no such event, and
+        :class:`~qs_trading.projections.rebuild.ChainBroken` or
+        :class:`~qs_trading.projections.fold.ProjectionError` for a broken log."""
+        ...
+
+    async def rebuild(self, portfolio_id: uuid.UUID, *, apply: bool) -> RebuildOut:
+        """Rebuilds the projections from the log and compares them with the stored ones
+        (:func:`~qs_trading.projections.rebuild.rebuild_portfolio`); raises as
+        :meth:`state_as_of` does for a broken log."""
+        ...
+
+    async def verify(self, portfolio_id: uuid.UUID) -> ChainReportOut:
+        """The hash-chain report of the log."""
+        ...
+
+    async def run_figures(self, portfolio_id: uuid.UUID) -> RunFigures:
+        """What the portfolio's metrics are computed from."""
+        ...
+
 
 StoreFactory = Callable[[AsyncSession], TradingStore]
 
@@ -118,6 +196,134 @@ def _portfolio_out(row: Any) -> PortfolioOut:
         source_fingerprint=row.source_fingerprint,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+_MONEY_FILL_COLUMNS = (
+    "reference_price",
+    "fill_price",
+    "slippage",
+    "cost_fixed",
+    "cost_per_share",
+    "cost_percentage",
+    "cost_total",
+    "cash_after",
+)
+_MONEY_VALUE_COLUMNS = (
+    "cash",
+    "market_value",
+    "value",
+    "realised_pnl",
+    "unrealised_pnl",
+    "total_costs",
+)
+
+
+def _positions(positions: Mapping[str, Any]) -> list[PositionOut]:
+    """Open positions from the ``{"<symbol>": {"quantity", "cost_basis"}}`` cache."""
+    return [
+        PositionOut(
+            symbol=symbol,
+            quantity=int(item["quantity"]),
+            cost_basis=money_text(Decimal(str(item["cost_basis"]))),
+        )
+        for symbol, item in sorted(positions.items())
+    ]
+
+
+def fill_out(row: Mapping[str, Any]) -> FillOut:
+    """A ``fill`` row as served."""
+    money = {name: money_text(row[name]) for name in _MONEY_FILL_COLUMNS}
+    return FillOut(
+        seq=row["seq"],
+        order_id=row["order_id"],
+        session=row["session"],
+        symbol=row["symbol"],
+        side=row["side"],
+        quantity=row["quantity"],
+        **money,
+    )
+
+
+def holding_change_out(row: Mapping[str, Any]) -> HoldingChangeOut:
+    """A ``holding_history`` row as served."""
+    return HoldingChangeOut(
+        seq=row["seq"],
+        session=row["session"],
+        symbol=row["symbol"],
+        quantity=row["quantity"],
+        cost_basis=money_text(row["cost_basis"]),
+    )
+
+
+def value_out(row: Mapping[str, Any]) -> ValuePointOut:
+    """A ``portfolio_value`` row as served."""
+    money = {name: money_text(row[name]) for name in _MONEY_VALUE_COLUMNS}
+    return ValuePointOut(session=row["session"], ts=row["ts"], seq=row["seq"], **money)
+
+
+def holdings_out(portfolio_id: uuid.UUID, state: Mapping[str, Any] | None) -> HoldingsOut:
+    """The ``portfolio_state_current`` row as served; ``None`` before the first run."""
+    if state is None:
+        return HoldingsOut(
+            portfolio_id=portfolio_id, last_seq=0, last_session=None, cash=None, positions=[]
+        )
+    return HoldingsOut(
+        portfolio_id=portfolio_id,
+        last_seq=state["last_seq"],
+        last_session=state["last_session"],
+        cash=money_text(state["cash"]),
+        positions=_positions(state["positions"] or {}),
+    )
+
+
+def state_out(snapshot: PortfolioSnapshot) -> StateOut:
+    last_value = snapshot.last_value
+    return StateOut(
+        portfolio_id=snapshot.portfolio_id,
+        seq=snapshot.seq,
+        hash=snapshot.hash,
+        session=snapshot.session,
+        initial_capital=money_text(snapshot.initial_capital),
+        cash=money_text(snapshot.cash),
+        positions=_positions(positions_json(snapshot.positions)),
+        realised_pnl=money_text(snapshot.realised_pnl),
+        total_costs=money_text(snapshot.total_costs),
+        open_orders=list(snapshot.open_orders),
+        last_value=None if last_value is None else money_text(last_value),
+        last_valued_seq=snapshot.last_valued_seq,
+    )
+
+
+def rebuild_out(result: RebuildResult) -> RebuildOut:
+    return RebuildOut(
+        portfolio_id=result.portfolio_id,
+        status=result.status,
+        events=result.events,
+        final_seq=result.final_seq,
+        final_hash=result.final_hash,
+        differences=[
+            TableDifferenceOut(
+                table=d.table,
+                missing=list(d.missing),
+                unexpected=list(d.unexpected),
+                changed=list(d.changed),
+            )
+            for d in result.differences
+        ],
+        applied=result.applied,
+    )
+
+
+def chain_report_out(report: ChainReport) -> ChainReportOut:
+    return ChainReportOut(
+        portfolio_id=report.portfolio_id,
+        valid=report.valid,
+        events=report.events,
+        last_seq=report.last_seq,
+        last_hash=report.last_hash,
+        broken_seq=report.broken_seq,
+        reason=report.reason,
     )
 
 
@@ -266,6 +472,94 @@ class SqlTradingStore:
             )
             for row in rows
         ]
+
+    async def fills(self, portfolio_id: uuid.UUID, after_seq: int, limit: int) -> list[FillOut]:
+        rows = await self.session.execute(
+            select(fill)
+            .where(fill.c.portfolio_id == portfolio_id, fill.c.seq > after_seq)
+            .order_by(fill.c.seq)
+            .limit(limit)
+        )
+        return [fill_out(dict(row._mapping)) for row in rows]
+
+    async def _state_row(self, portfolio_id: uuid.UUID) -> Mapping[str, Any] | None:
+        row = (
+            await self.session.execute(
+                select(portfolio_state_current).where(
+                    portfolio_state_current.c.portfolio_id == portfolio_id
+                )
+            )
+        ).first()
+        return None if row is None else dict(row._mapping)
+
+    async def holdings(self, portfolio_id: uuid.UUID) -> HoldingsOut:
+        return holdings_out(portfolio_id, await self._state_row(portfolio_id))
+
+    async def holding_history(
+        self, portfolio_id: uuid.UUID, after_seq: int, limit: int
+    ) -> list[HoldingChangeOut]:
+        h = holding_history.c
+        rows = await self.session.execute(
+            select(holding_history)
+            .where(h.portfolio_id == portfolio_id, h.seq > after_seq)
+            .order_by(h.seq, h.symbol)
+            .limit(limit)
+        )
+        return [holding_change_out(dict(row._mapping)) for row in rows]
+
+    def _values(self, portfolio_id: uuid.UUID, *columns: Any) -> Any:
+        v = portfolio_value.c
+        return select(*columns).where(v.portfolio_id == portfolio_id).order_by(v.session, v.seq)
+
+    async def value_series(self, portfolio_id: uuid.UUID) -> list[ValuePointOut]:
+        rows = await self.session.execute(self._values(portfolio_id, portfolio_value))
+        return [value_out(dict(row._mapping)) for row in rows]
+
+    async def state_as_of(self, portfolio_id: uuid.UUID, seq: int | None) -> StateOut:
+        if seq is None:
+            seq = await self.session.scalar(
+                select(func.max(trade_event.c.seq)).where(
+                    trade_event.c.portfolio_id == portfolio_id
+                )
+            )
+            if seq is None:
+                raise LookupError(f"portfolio {portfolio_id} has no events")
+        return state_out(await state_as_of(self.session, portfolio_id, seq))
+
+    async def rebuild(self, portfolio_id: uuid.UUID, *, apply: bool) -> RebuildOut:
+        return rebuild_out(await rebuild_portfolio(self.session, portfolio_id, apply=apply))
+
+    async def verify(self, portfolio_id: uuid.UUID) -> ChainReportOut:
+        return chain_report_out(await verify_portfolio(self.session, portfolio_id))
+
+    async def run_figures(self, portfolio_id: uuid.UUID) -> RunFigures:
+        capital = await self.session.scalar(
+            select(portfolio.c.initial_capital).where(portfolio.c.id == portfolio_id)
+        )
+        if capital is None:
+            raise LookupError(f"no portfolio has id {portfolio_id}")
+        f = fill.c
+        trades, costs, notional = (
+            await self.session.execute(
+                select(
+                    func.count(),
+                    func.coalesce(func.sum(f.cost_total), 0),
+                    func.coalesce(func.sum(f.fill_price * f.quantity), 0),
+                ).where(f.portfolio_id == portfolio_id)
+            )
+        ).one()
+        values = await self.session.scalars(self._values(portfolio_id, portfolio_value.c.value))
+        state = await self._state_row(portfolio_id)
+        return RunFigures(
+            portfolio_id=portfolio_id,
+            initial_capital=capital,
+            values=tuple(values),
+            trades=int(trades),
+            total_costs=Decimal(costs),
+            traded_notional=Decimal(notional),
+            final_seq=0 if state is None else int(state["last_seq"]),
+            final_hash=None if state is None else state["last_hash"],
+        )
 
 
 def sql_store(queue: JobQueue) -> StoreFactory:

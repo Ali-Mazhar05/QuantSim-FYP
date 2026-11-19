@@ -9,6 +9,8 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -21,21 +23,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_template import Database, create_app
 from qs_template.auth import Authenticator, Role, StaticKeys
+from qs_trading.adapters.file_environment import FileEnvironment
 from qs_trading.api import build_routers
-from qs_trading.api_store import PortfolioValues, TradingStore
+from qs_trading.api_store import (
+    PortfolioValues,
+    TradingStore,
+    chain_report_out,
+    fill_out,
+    holding_change_out,
+    holdings_out,
+    rebuild_out,
+    state_out,
+    value_out,
+)
+from qs_trading.engine.core import RunSpec
+from qs_trading.engine.runner import MemorySink, run_portfolio
 from qs_trading.jobs import engine_run_key
 from qs_trading.main import build_app
+from qs_trading.metrics import PENDING, MetricsCalculator, RunFigures
+from qs_trading.ports.market_environment import EnvironmentRef
+from qs_trading.projections import (
+    ProjectedEvent,
+    Projection,
+    StoredEvent,
+    compare_projections,
+    project_log,
+    snapshot_at,
+    verify_chain,
+)
+from qs_trading.projections.rebuild import ChainBroken, RebuildResult, rebuild_projection
 from qs_trading.schemas import (
+    ChainReportOut,
     EventOut,
+    FillOut,
+    HoldingChangeOut,
+    HoldingsOut,
     PortfolioOut,
+    RebuildOut,
     RunAccepted,
     RunOut,
+    StateOut,
     StrategyOut,
+    ValuePointOut,
     money_text,
 )
 from qs_trading.settings import TradingSettings
 
 API = "/api/trading"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/environments/two_symbols_10_sessions.json"
+ENV_ID = "5d0c6c1e-7a14-4a14-8a14-000000000001"
 KEY_ID = "trading-test-key"
 _PRIVATE = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 _FORGED = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -97,6 +133,9 @@ class FakeStore:
     portfolios: dict[uuid.UUID, PortfolioOut] = field(default_factory=dict)
     jobs: dict[str, RunOut] = field(default_factory=dict)
     logs: dict[uuid.UUID, list[EventOut]] = field(default_factory=dict)
+    # The stored log and the stored projection rows of a portfolio that has run
+    stored_logs: dict[uuid.UUID, list[StoredEvent]] = field(default_factory=dict)
+    projections: dict[uuid.UUID, Projection] = field(default_factory=dict)
 
     async def list_strategies(self) -> list[StrategyOut]:
         return list(reversed(self.strategies.values()))
@@ -200,7 +239,139 @@ class FakeStore:
         log = self.logs.get(portfolio_id, [])
         return [e for e in log if e.seq > after_seq][:limit]
 
+    async def fills(self, portfolio_id: uuid.UUID, after_seq: int, limit: int) -> list[FillOut]:
+        rows = self._projection(portfolio_id).fills
+        return [fill_out(rows[seq]) for seq in sorted(rows) if seq > after_seq][:limit]
+
+    async def holdings(self, portfolio_id: uuid.UUID) -> HoldingsOut:
+        return holdings_out(portfolio_id, self._projection(portfolio_id).state)
+
+    async def holding_history(
+        self, portfolio_id: uuid.UUID, after_seq: int, limit: int
+    ) -> list[HoldingChangeOut]:
+        rows = self._projection(portfolio_id).holdings
+        ordered = [rows[key] for key in sorted(rows) if key[0] > after_seq]
+        return [holding_change_out(row) for row in ordered][:limit]
+
+    async def value_series(self, portfolio_id: uuid.UUID) -> list[ValuePointOut]:
+        return [value_out(row) for row in self._values(portfolio_id)]
+
+    async def state_as_of(self, portfolio_id: uuid.UUID, seq: int | None) -> StateOut:
+        log = self.stored_logs.get(portfolio_id, [])
+        if seq is None:
+            if not log:
+                raise LookupError("no events")
+            seq = log[-1].seq
+        prefix = [event for event in log if event.seq <= seq]
+        return state_out(snapshot_at(portfolio_id, self._verified(portfolio_id, prefix), seq))
+
+    async def rebuild(self, portfolio_id: uuid.UUID, *, apply: bool) -> RebuildOut:
+        log = self.stored_logs.get(portfolio_id, [])
+        rebuilt = rebuild_projection(portfolio_id, self._verified(portfolio_id, log))
+        differences = compare_projections(self._projection(portfolio_id), rebuilt)
+        if apply and differences:
+            self.projections[portfolio_id] = rebuilt
+        return rebuild_out(
+            RebuildResult(
+                portfolio_id=portfolio_id,
+                status="differs" if differences else "identical",
+                events=len(log),
+                final_seq=log[-1].seq if log else 0,
+                final_hash=log[-1].hash if log else None,
+                differences=differences,
+                applied=apply and bool(differences),
+            )
+        )
+
+    async def verify(self, portfolio_id: uuid.UUID) -> ChainReportOut:
+        return chain_report_out(verify_chain(portfolio_id, self.stored_logs.get(portfolio_id, [])))
+
+    async def run_figures(self, portfolio_id: uuid.UUID) -> RunFigures:
+        stored = self._projection(portfolio_id)
+        fills = list(stored.fills.values())
+        state = stored.state
+        return RunFigures(
+            portfolio_id=portfolio_id,
+            initial_capital=Decimal(self.portfolios[portfolio_id].initial_capital),
+            values=tuple(row["value"] for row in self._values(portfolio_id)),
+            trades=len(fills),
+            total_costs=sum((row["cost_total"] for row in fills), Decimal(0)),
+            traded_notional=sum((row["fill_price"] * row["quantity"] for row in fills), Decimal(0)),
+            final_seq=0 if state is None else state["last_seq"],
+            final_hash=None if state is None else state["last_hash"],
+        )
+
+    def _projection(self, portfolio_id: uuid.UUID) -> Projection:
+        return self.projections.get(portfolio_id, Projection())
+
+    def _values(self, portfolio_id: uuid.UUID) -> list[dict[str, Any]]:
+        rows = self._projection(portfolio_id).values.values()
+        return sorted(rows, key=lambda row: (row["session"], row["seq"]))
+
+    @staticmethod
+    def _verified(portfolio_id: uuid.UUID, log: list[StoredEvent]) -> list[ProjectedEvent]:
+        report = verify_chain(portfolio_id, log)
+        if not report.valid:
+            raise ChainBroken(report)
+        return [
+            ProjectedEvent.from_stored(
+                seq=e.seq,
+                prev_hash=e.prev_hash,
+                hash=e.hash,
+                event_type=e.type,
+                version=e.version,
+                payload=e.payload,
+            )
+            for e in log
+        ]
+
     # Seeding helpers for the tests
+
+    async def add_run(self, portfolio_id: uuid.UUID) -> list[StoredEvent]:
+        """Runs the portfolio on the A14 fixture as the worker would, and stores its log
+        (payloads through JSON, as JSONB gives them back) and its projections."""
+        held = self.portfolios[portfolio_id]
+        chosen = self.strategies[held.strategy_id]
+        spec = RunSpec(
+            portfolio_id=portfolio_id,
+            strategy_kind=chosen.kind,
+            strategy_params=chosen.params,
+            initial_capital=Decimal(held.initial_capital),
+            cost_model=held.cost_model,
+            slippage_model=held.slippage_model,
+            environment=EnvironmentRef("replay", ENV_ID),
+        )
+        sink = MemorySink()
+        await run_portfolio(spec, FileEnvironment(FIXTURE), sink)
+        log = [
+            StoredEvent(
+                portfolio_id=portfolio_id,
+                seq=e.seq,
+                event_time=e.event_time,
+                type=e.type.value,
+                version=e.version,
+                payload=json.loads(json.dumps(e.payload_json)),
+                prev_hash=e.prev_hash,
+                hash=e.hash,
+            )
+            for e in sink.events
+        ]
+        ledger, rows = project_log(portfolio_id, self._verified(portfolio_id, log))
+        self.stored_logs[portfolio_id] = log
+        self.projections[portfolio_id] = Projection.from_rows(rows, ledger.state_row())
+        self.logs[portfolio_id] = [
+            EventOut(
+                seq=e.seq,
+                type=e.type,
+                version=e.version,
+                event_time=e.event_time,
+                payload=dict(e.payload),
+                prev_hash=e.prev_hash,
+                hash=e.hash,
+            )
+            for e in log
+        ]
+        return log
 
     def add_log(self, portfolio_id: uuid.UUID, count: int) -> list[EventOut]:
         start = datetime(2024, 1, 2, 21, tzinfo=UTC)
@@ -224,7 +395,11 @@ class FakeStore:
         return log
 
 
-def fake_app(store: TradingStore, settings: TradingSettings | None = None) -> FastAPI:
+def fake_app(
+    store: TradingStore,
+    settings: TradingSettings | None = None,
+    metrics: MetricsCalculator = PENDING,
+) -> FastAPI:
     """The service's routes over ``store``; the database is never reached."""
     settings = settings or make_settings()
     database = Database(settings)
@@ -235,7 +410,9 @@ def fake_app(store: TradingStore, settings: TradingSettings | None = None) -> Fa
     return create_app(
         settings,
         database=database,
-        routers=build_routers(auth=authenticator(settings), database=database, store=factory),
+        routers=build_routers(
+            auth=authenticator(settings), database=database, store=factory, metrics=metrics
+        ),
     )
 
 
@@ -281,6 +458,7 @@ def error_locations(response: httpx.Response) -> list[list[Any]]:
 
 ALL_ROLES = frozenset(Role)
 WRITERS = frozenset({Role.QUANT, Role.ADMIN})
+ADMINS = frozenset({Role.ADMIN})
 
 # (method, path) -> who may call it. Every route of the service is listed, so a new route
 # fails test_every_route_has_a_declared_rule until it is added here.
@@ -297,7 +475,19 @@ MATRIX: dict[tuple[str, str], frozenset[Role] | None] = {
     ("POST", "/portfolios/{portfolio_id}/runs"): WRITERS,
     ("GET", "/portfolios/{portfolio_id}/runs/{job_id}"): ALL_ROLES,
     ("GET", "/portfolios/{portfolio_id}/events"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/fills"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/holdings"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/holdings/history"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/value-series"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/state"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/verify"): ALL_ROLES,
+    ("GET", "/portfolios/{portfolio_id}/metrics"): ALL_ROLES,
+    ("POST", "/portfolios/{portfolio_id}/rebuild"): ADMINS,
 }
+
+# The matrix's portfolio has not run, so it has no state to read yet: a not-found problem
+# from these routes means the caller got past authorisation
+NOT_FOUND_BEFORE_A_RUN = frozenset({("GET", "/portfolios/{portfolio_id}/state")})
 
 
 @dataclass(frozen=True)
@@ -357,7 +547,11 @@ async def check_role_matrix(
             if who in ("anonymous", "forged"):
                 assert response.status_code == 401, where
             elif Role(who) in allowed:
-                assert response.status_code in (200, 201, 202), where
+                if (method, path) in NOT_FOUND_BEFORE_A_RUN:
+                    assert response.status_code == 404, where
+                    assert response.json()["type"] == "urn:quantsim:problem:not-found", where
+                else:
+                    assert response.status_code in (200, 201, 202), where
             else:
                 assert response.status_code == 403, where
                 assert response.json()["type"] == "urn:quantsim:problem:forbidden", where

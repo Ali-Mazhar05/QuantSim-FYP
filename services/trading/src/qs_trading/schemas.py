@@ -20,15 +20,28 @@ from qs_trading.domain.slippage import FixedBpsSlippage, SlippageConfig
 from qs_trading.domain.strategies import KINDS
 
 __all__ = [
+    "ChainReportOut",
     "EventOut",
     "EventPage",
+    "FillOut",
+    "FillPage",
+    "HoldingChangeOut",
+    "HoldingHistoryPage",
+    "HoldingsOut",
     "JobStatus",
+    "MetricsOut",
     "PortfolioCreate",
     "PortfolioOut",
+    "PositionOut",
+    "RebuildOut",
     "RunAccepted",
     "RunOut",
+    "StateOut",
     "StrategyIn",
     "StrategyOut",
+    "TableDifferenceOut",
+    "ValuePointOut",
+    "log_broken",
     "money_text",
     "not_found",
     "validation_problem",
@@ -175,6 +188,154 @@ class EventPage(BaseModel):
     )
 
 
+Money = Annotated[str, Field(description="Decimal string, USD")]
+Price = Annotated[str, Field(description="Decimal string, USD per share")]
+
+
+class FillOut(BaseModel):
+    """One ``fill`` row: an order filled at ``session`` with its slippage and costs."""
+
+    seq: int = Field(description="The ORDER_FILLED event")
+    order_id: str
+    session: int
+    symbol: str
+    side: Literal["buy", "sell"]
+    quantity: int
+    reference_price: Price
+    fill_price: Price
+    slippage: Price
+    cost_fixed: Money
+    cost_per_share: Money
+    cost_percentage: Money
+    cost_total: Money = Field(description="cost_fixed + cost_per_share + cost_percentage")
+    cash_after: Money
+
+
+class FillPage(BaseModel):
+    items: list[FillOut] = Field(description="Ascending by seq")
+    next_cursor: int | None = Field(
+        description="Pass as after_seq to get the next page; null on the last page"
+    )
+
+
+class PositionOut(BaseModel):
+    symbol: str
+    quantity: int
+    cost_basis: Money
+
+
+class HoldingsOut(BaseModel):
+    """The current positions and cash (the ``portfolio_state_current`` row)."""
+
+    portfolio_id: uuid.UUID
+    last_seq: int = Field(description="The last event folded in; 0 before the first run")
+    last_session: int | None
+    cash: Money | None = Field(description="Null until the portfolio has run")
+    positions: list[PositionOut] = Field(description="Open positions, by symbol")
+
+
+class HoldingChangeOut(BaseModel):
+    """One ``holding_history`` row: a symbol's position right after the fill at ``seq``
+    (quantity and cost basis zero when the fill closed it)."""
+
+    seq: int
+    session: int
+    symbol: str
+    quantity: int
+    cost_basis: Money
+
+
+class HoldingHistoryPage(BaseModel):
+    items: list[HoldingChangeOut] = Field(description="Ascending by seq")
+    next_cursor: int | None = Field(
+        description="Pass as after_seq to get the next page; null on the last page"
+    )
+
+
+class ValuePointOut(BaseModel):
+    """One ``portfolio_value`` row: the portfolio marked at the close of ``session``."""
+
+    session: int
+    ts: datetime
+    seq: int = Field(description="The VALUED event")
+    cash: Money
+    market_value: Money
+    value: Money
+    realised_pnl: Money
+    unrealised_pnl: Money
+    total_costs: Money
+
+
+class StateOut(BaseModel):
+    """The portfolio right after the event at ``seq``, folded from the verified log."""
+
+    portfolio_id: uuid.UUID
+    seq: int
+    hash: str
+    session: int | None
+    initial_capital: Money
+    cash: Money
+    positions: list[PositionOut]
+    realised_pnl: Money
+    total_costs: Money
+    open_orders: list[str]
+    last_value: Money | None = Field(description="The latest valuation at or before seq")
+    last_valued_seq: int | None
+
+
+class TableDifferenceOut(BaseModel):
+    """How one stored table differs from the log; every entry names a row by its key."""
+
+    table: str
+    missing: list[str]
+    unexpected: list[str]
+    changed: list[str]
+
+
+class RebuildOut(BaseModel):
+    portfolio_id: uuid.UUID
+    status: Literal["identical", "differs"]
+    events: int
+    final_seq: int = Field(description="0 for an empty log")
+    final_hash: str | None
+    differences: list[TableDifferenceOut]
+    applied: bool = Field(description="The rebuilt rows replaced the differing stored ones")
+
+
+class ChainReportOut(BaseModel):
+    portfolio_id: uuid.UUID
+    valid: bool
+    events: int
+    last_seq: int = Field(description="The end of the intact prefix")
+    last_hash: str | None
+    broken_seq: int | None
+    reason: str | None
+
+
+Ratio = Annotated[str | None, Field(description="Decimal string; null while pending")]
+
+
+class MetricsOut(BaseModel):
+    """Run metrics. Trades, costs, sessions and the final value are computed from the
+    projections; the ratios come from the shared metrics library and are null, and named
+    in ``pending``, until it is available."""
+
+    portfolio_id: uuid.UUID
+    final_seq: int = Field(description="The last event folded in; 0 before the first run")
+    final_hash: str | None
+    sessions: int = Field(description="Valued sessions")
+    initial_capital: Money
+    final_value: Money | None = Field(description="Value at the last session; null before")
+    trades: int = Field(description="Number of fills")
+    total_costs: Money = Field(description="Sum of cost_total over the fills")
+    total_return: Ratio
+    volatility: Ratio
+    sharpe: Ratio
+    max_drawdown: Ratio
+    turnover: Ratio
+    pending: list[str] = Field(description="The metrics not computed yet")
+
+
 def money_text(value: Decimal) -> str:
     """A stored decimal exactly as stored (``format`` never switches to an exponent)."""
     return format(value, "f")
@@ -198,4 +359,19 @@ def not_found(what: str) -> ServiceError:
         f"{what} not found",
         f"No {what.lower()} has this id.",
         type_="urn:quantsim:problem:not-found",
+    )
+
+
+LOG_BROKEN = "urn:quantsim:problem:log-broken"
+
+
+def log_broken(seq: int | None, reason: str | None) -> ServiceError:
+    """A 409 for a log that fails verification or does not fold: nothing can be derived
+    from it until it is repaired. ``broken_seq`` names the first bad event."""
+    return ServiceError(
+        409,
+        "Trade log is broken",
+        f"The trade log breaks at seq {seq}: {reason}",
+        type_=LOG_BROKEN,
+        extra={"broken_seq": seq, "reason": reason},
     )

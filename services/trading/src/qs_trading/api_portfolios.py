@@ -71,10 +71,7 @@ def build_portfolio_routers(*, auth: Authenticator, store: StoreDependency) -> l
             )
         return await store.create_portfolio(portfolio_values(body), owner_id=actor.user_id)
 
-    # A16 part 2 (needs the A15 projections and K6 metrics), under this prefix:
-    #   GET /{portfolio_id}/fills, /holdings, /value-series   projections, any role
-    #   GET /{portfolio_id}/state?as_of_seq=                  point-in-time state, any role
-    #   GET /{portfolio_id}/metrics                           per-run metrics, any role
-    #   POST /{portfolio_id}/rebuild                          rebuild projections, admin
+    # The projection, state, verify, rebuild and metrics routes under this prefix are in
+    # qs_trading.api_projections
 
     return [router]
