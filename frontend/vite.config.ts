@@ -1,7 +1,7 @@
-/// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,6 +10,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // e2e/ holds the Playwright suites, which run against a deployed site instead
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     // The CI machine also runs the backend suites at the same time; UI tests that click
     // through several screens need more than the 5 s default there
     testTimeout: 30_000,
