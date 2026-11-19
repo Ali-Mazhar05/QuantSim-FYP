@@ -34,17 +34,7 @@ esac
 
 export QS_E2E_USERNAME="${QS_E2E_USERNAME:-test.admin}"
 if [[ -z "${QS_E2E_PASSWORD:-}" ]]; then
-  encrypted="deploy/secrets/$env.enc.env"
-  [[ -f "$REPO_ROOT/$encrypted" ]] \
-    || die "no $encrypted to read the test account's password from; set QS_E2E_PASSWORD"
-  require_env SOPS_AGE_KEY_FILE
-  QS_E2E_PASSWORD="$(SOPS_AGE_KEY="$(cat "$SOPS_AGE_KEY_FILE")" run_in_image "$SOPS_IMAGE" -e SOPS_AGE_KEY -- \
-    --decrypt --input-type dotenv --output-type dotenv "$encrypted" \
-    | sed -n 's/^TEST_USERS_PASSWORD=//p' | tr -d '\r')" \
-    || die "could not decrypt $encrypted; is SOPS_AGE_KEY_FILE one of the keys in .sops.yaml?"
-  [[ -n "$QS_E2E_PASSWORD" ]] \
-    || die "TEST_USERS_PASSWORD is not in $encrypted; add it with ci/scripts/set-secret.sh TEST_USERS_PASSWORD $env"
-  export QS_E2E_PASSWORD
+  read_secret "$env" TEST_USERS_PASSWORD QS_E2E_PASSWORD
 fi
 
 log "running Playwright suite $suite against $base_url as $QS_E2E_USERNAME"
