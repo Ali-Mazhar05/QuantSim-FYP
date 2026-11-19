@@ -2,9 +2,11 @@
 emit, checked without a database by running the migrations in Alembic's offline (SQL)
 mode. The database tests then compare the two against a real schema as well."""
 
+import importlib.util
 import io
 import re
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from alembic import command
@@ -16,6 +18,7 @@ from sqlalchemy.schema import CreateIndex, CreateTable
 from qs_template.messaging import messaging_metadata
 from qs_trading import models
 from qs_trading.domain.events import EventType
+from qs_trading.domain.strategies import KINDS
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 DIALECT = postgresql.dialect()  # type: ignore[no-untyped-call]
@@ -58,9 +61,49 @@ def migration_sql() -> str:
     return buffer.getvalue()
 
 
+def _check_end(ddl: str, start: int) -> int:
+    """The index just past the parenthesis that closes the one at ``start``."""
+    depth, quoted = 0, False
+    for index in range(start, len(ddl)):
+        char = ddl[index]
+        if char == "'":
+            quoted = not quoted
+        elif not quoted and char == "(":
+            depth += 1
+        elif not quoted and char == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    raise AssertionError(f"unbalanced CHECK in {ddl}")
+
+
+def _drop_check(ddl: str, name: str) -> str:
+    marker = f", CONSTRAINT {name} CHECK "
+    start = ddl.index(marker)
+    return ddl[:start] + ddl[_check_end(ddl, start + len(marker)) :]
+
+
+def _add_check(ddl: str, name: str, condition: str) -> str:
+    assert ddl.endswith(" )"), ddl
+    return f"{ddl[:-2]}, CONSTRAINT {name} CHECK {condition} )"
+
+
+_ALTER_CHECK = re.compile(
+    r"^ALTER TABLE (\w+) (?:DROP CONSTRAINT (\w+)|ADD CONSTRAINT (\w+) CHECK (.*));$", re.MULTILINE
+)
+
+
 def _created_tables(sql: str) -> dict[str, str]:
+    """Each table's CREATE TABLE, with the CHECKs later migrations dropped or added applied
+    in order (an added CHECK goes last, as the models list it)."""
     blocks = re.findall(r"^(CREATE TABLE (\"?\w+\"?) \(.*?^\));", sql, re.MULTILINE | re.DOTALL)
-    return {name.strip('"'): _normalise(block) for block, name in blocks}
+    tables = {name.strip('"'): _normalise(block) for block, name in blocks}
+    for table, dropped, added, condition in _ALTER_CHECK.findall(sql):
+        if dropped:
+            tables[table] = _drop_check(tables[table], dropped)
+        else:
+            tables[table] = _add_check(tables[table], added, condition)
+    return tables
 
 
 def _created_indexes(sql: str) -> set[str]:
@@ -108,6 +151,25 @@ def test_the_event_type_check_lists_every_event_type(migration_sql: str) -> None
     found = re.search(r"CONSTRAINT trade_event_type_valid CHECK \(type IN \(([^)]*)\)\)", ddl)
     assert found is not None
     assert [value.strip().strip("'") for value in found.group(1).split(",")] == list(EventType)
+
+
+def _migration(name: str) -> ModuleType:
+    path = SERVICE_ROOT / "migrations" / "versions" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"trading_migration_{name}", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_strategy_kind_check_lists_every_built_in_kind(migration_sql: str) -> None:
+    ddl = _created_tables(migration_sql)["strategy"]
+    found = re.search(r"CONSTRAINT strategy_kind_known CHECK \(kind IN \(([^)]*)\)\)", ddl)
+    assert found is not None
+    assert "strategy_kind_format" not in ddl
+    listed = [value.strip().strip("'") for value in found.group(1).split(",")]
+    assert listed == list(KINDS) == list(models.STRATEGY_KINDS)
+    assert tuple(listed) == _migration("0003_strategy_kind_known").STRATEGY_KINDS
 
 
 @pytest.mark.parametrize(

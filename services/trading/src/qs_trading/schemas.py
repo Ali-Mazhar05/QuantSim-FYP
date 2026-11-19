@@ -41,9 +41,11 @@ __all__ = [
     "StrategyOut",
     "TableDifferenceOut",
     "ValuePointOut",
+    "forbidden",
     "log_broken",
     "money_text",
     "not_found",
+    "run_in_progress",
     "validation_problem",
 ]
 
@@ -359,6 +361,29 @@ def not_found(what: str) -> ServiceError:
         f"{what} not found",
         f"No {what.lower()} has this id.",
         type_="urn:quantsim:problem:not-found",
+    )
+
+
+FORBIDDEN = "urn:quantsim:problem:forbidden"
+
+
+def forbidden(detail: str) -> ServiceError:
+    """A 403 in the kit's shape, for a caller whose role passes but who may not act on
+    this resource."""
+    return ServiceError(403, "Forbidden", detail, type_=FORBIDDEN)
+
+
+RUN_IN_PROGRESS = "urn:quantsim:problem:run-in-progress"
+
+
+def run_in_progress(job_id: uuid.UUID) -> ServiceError:
+    """A 409 for a new run while the portfolio's run ``job_id`` is queued or running."""
+    return ServiceError(
+        409,
+        "Run in progress",
+        f"Run {job_id} of this portfolio is still queued or running; wait for it to finish.",
+        type_=RUN_IN_PROGRESS,
+        extra={"job_id": str(job_id)},
     )
 
 

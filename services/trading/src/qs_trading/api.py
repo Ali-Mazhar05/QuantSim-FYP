@@ -2,8 +2,10 @@
 
 Signed-in users (any role):  GET /strategies, GET /strategies/{id}, GET /portfolios,
     GET /portfolios/{id}, GET /portfolios/{id}/runs/{job_id}, GET /portfolios/{id}/events
-Quants and admins (``create_strategies``):  POST /strategies, PUT /strategies/{id}
+Quants and admins (``create_strategies``):  POST /strategies; PUT /strategies/{id} only
+    by the strategy's owner or an admin (403 otherwise)
 Quants and admins (``create_portfolios``):  POST /portfolios, POST /portfolios/{id}/runs
+    (409 ``run-in-progress`` while another run of the portfolio is queued or running)
 Projections, state, verify and metrics (any role), rebuild (admins): see
 :mod:`qs_trading.api_projections`
 

@@ -6,7 +6,10 @@ Signed-in users (any role):  GET /portfolios/{id}/runs/{job_id},
 
 A POST only queues the ``engine.run`` job and answers 202 with its id; the worker runs it.
 The ``Idempotency-Key`` header makes a retried submit return the same job. Without one a
-portfolio has a single run job, so a repeated POST also returns it.
+portfolio has a single run job, so a repeated POST also returns it. A portfolio runs one
+job at a time: a new key while another run job of the portfolio is queued or running is
+a 409 ``urn:quantsim:problem:run-in-progress`` naming that job in ``job_id``; once it has
+succeeded or failed, a new key is accepted.
 
 The event log is paged by keyset on ``seq`` (ADR 01): a page holds the events after
 ``after_seq``, ascending and gap-free, and ``next_cursor`` is the ``after_seq`` of the
@@ -20,8 +23,8 @@ from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 
 from qs_template.auth import Authenticator, Capability, Principal
 from qs_trading.api_portfolios import PORTFOLIO_NOT_FOUND
-from qs_trading.api_store import StoreDependency, TradingStore
-from qs_trading.schemas import EventPage, RunAccepted, RunOut, not_found
+from qs_trading.api_store import RunInProgress, StoreDependency, TradingStore
+from qs_trading.schemas import EventPage, RunAccepted, RunOut, not_found, run_in_progress
 
 RUN_NOT_FOUND = not_found("Run")
 
@@ -52,7 +55,7 @@ def build_run_routers(*, auth: Authenticator, store: StoreDependency) -> list[AP
     @router.post(
         "/runs",
         status_code=status.HTTP_202_ACCEPTED,
-        responses={401: {}, 403: {}, 404: {}, 422: {}},
+        responses={401: {}, 403: {}, 404: {}, 409: {}, 422: {}},
     )
     async def start_run(
         portfolio_id: uuid.UUID,
@@ -63,7 +66,10 @@ def build_run_routers(*, auth: Authenticator, store: StoreDependency) -> list[AP
         idempotency_key: IdempotencyKey = None,
     ) -> RunAccepted:
         await known(store, portfolio_id)
-        accepted = await store.submit_run(portfolio_id, idempotency_key)
+        try:
+            accepted = await store.submit_run(portfolio_id, idempotency_key)
+        except RunInProgress as exc:
+            raise run_in_progress(exc.job_id) from None
         response.headers["Location"] = request.url_for(
             "get_run", portfolio_id=str(portfolio_id), job_id=str(accepted.job_id)
         ).path

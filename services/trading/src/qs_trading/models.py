@@ -33,6 +33,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from qs_template.jobs import job_table
 from qs_trading.domain.events import EventType
+from qs_trading.domain.strategies import KINDS
 
 metadata = MetaData()
 
@@ -42,6 +43,12 @@ CASH = Numeric(20, 2)
 RATIO = Numeric(20, 12)
 
 EVENT_TYPES = tuple(member.value for member in EventType)
+# The built-in strategy kinds (migration 0003 holds a frozen copy)
+STRATEGY_KINDS = KINDS
+
+
+def _one_of(column: str, values: tuple[str, ...]) -> str:
+    return f"{column} IN (" + ", ".join(f"'{value}'" for value in values) + ")"
 
 
 def _now(name: str) -> Column[Any]:
@@ -65,8 +72,9 @@ strategy = Table(
     _now("created_at"),
     _now("updated_at"),
     CheckConstraint("char_length(name) BETWEEN 1 AND 120", name="strategy_name_length"),
-    CheckConstraint("kind ~ '^[a-z][a-z0-9_]{0,39}$'", name="strategy_kind_format"),
     CheckConstraint("jsonb_typeof(params) = 'object'", name="strategy_params_object"),
+    # Added by 0003 (replacing the format-only strategy_kind_format), so it comes last
+    CheckConstraint(_one_of("kind", STRATEGY_KINDS), name="strategy_kind_known"),
 )
 
 portfolio = Table(
