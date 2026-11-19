@@ -7,6 +7,8 @@
 //   acceptance                 checks, promote, deploy ACC, human sign-off
 //   main                       checks, approval, promote, deploy PROD, release tag
 //   hotfix/*                   checks and build, reaches main through a pull request
+//
+// Every checkout is retried: the build host's link to GitHub sometimes drops mid-clone.
 
 def ghcrLogin() {
   withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
@@ -57,7 +59,7 @@ pipeline {
       stages {
         stage('Prepare') {
           steps {
-            checkout scm
+            retry(3) { checkout scm }
             script {
               def qsMode = sh(script: "ci/scripts/env-for-branch.sh '${env.BRANCH_NAME}'", returnStdout: true).trim().tokenize(' ')[1]
               if (qsMode != 'ci') {
@@ -199,7 +201,7 @@ pipeline {
       }
       options { timeout(time: 20, unit: 'MINUTES') }
       steps {
-        checkout scm
+        retry(3) { checkout scm }
         lock(resource: "env-${env.QS_ENV}") {
           script {
             ghcrLogin()
@@ -266,7 +268,7 @@ pipeline {
             accepted = false
           }
           node('docker') {
-            checkout scm
+            retry(3) { checkout scm }
             withGitHub {
               def state = accepted ? 'success' : 'failure'
               def text = !accepted ? 'Rejected or timed out at acceptance'
@@ -291,7 +293,7 @@ pipeline {
       }
       options { timeout(time: 10, unit: 'MINUTES') }
       steps {
-        checkout scm
+        retry(3) { checkout scm }
         script {
           ghcrLogin()
           for (c in env.QS_COMPONENTS.tokenize(' ')) {
