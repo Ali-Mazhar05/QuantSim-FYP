@@ -159,6 +159,8 @@ UV_IMAGE="ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7d
 REDPANDA_IMAGE="redpandadata/redpanda:v25.2.9@sha256:bd6c35647153a4dbc19507c8037dcca0802484c23e6e5fbb97591a62539e313a"
 SOPS_IMAGE="ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea"
 TIMESCALE_IMAGE="timescale/timescaledb:2.22.1-pg17@sha256:fba60021a224479e174ae1ec577c1a0576d5185b09fe9e622f1d19e4bf5bab0d"
+# Browsers for the Playwright gates; the @playwright/test version in frontend must match
+PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v1.49.1-noble@sha256:70e367e0cbf60340a5b5fd562f6247a34eb3196efab9f88a3dd56482d9fe09d2"
 
 # Public HTTPS address of an environment's API, from its tunnel; empty when it has none yet
 #   api_public_url <compose-project>
