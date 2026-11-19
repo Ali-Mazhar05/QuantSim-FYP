@@ -13,6 +13,11 @@ release="${2:?usage: smoke.sh <env> <release-file>}"
 load_env "$env"
 load_release "$release"
 
+# deploy/env sets SMOKE_BASE_URL for the build agent (host.docker.internal), which a
+# Windows host cannot reach; SMOKE_BASE_URL_OVERRIDE points the checks elsewhere,
+# e.g. SMOKE_BASE_URL_OVERRIDE=http://localhost:8081
+SMOKE_BASE_URL="${SMOKE_BASE_URL_OVERRIDE:-${SMOKE_BASE_URL:-}}"
+
 # Cloudflare Pages needs a few minutes to issue the HTTPS certificate for a new site or
 # branch alias, so Pages targets get up to 5 minutes; local stacks answer within a minute.
 if [[ "$FRONTEND_TARGET" == "pages" ]]; then
@@ -66,6 +71,35 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
     retry "$ATTEMPTS" "$DELAY" reports_hash "$url" "${!var}" || die "service $name failed its health check"
     log "service $name OK (${!var})"
   done < <(component_names)
+fi
+
+# The market service: readiness and, where the recorded vendor is configured, one manual run
+if [[ "$COMPOSE_TARGET" != "none" ]] && component_names | grep -qx market; then
+  "$(dirname "$0")/smoke-market.sh" "$env" || die "market smoke test failed"
+fi
+
+# The relay sends account email; it must be able to open a connection to the mail server
+if [[ "$COMPOSE_TARGET" == "local" && -n "${SMTP_HOST:-}" ]]; then
+  log "checking that $QS_PROJECT can reach the mail server $SMTP_HOST:${SMTP_PORT:-587}"
+  reaches_mail() {
+    docker exec "$QS_PROJECT-platform-relay-1" python -c \
+      "import socket; socket.create_connection(('$SMTP_HOST', ${SMTP_PORT:-587}), 10).close()" >/dev/null 2>&1
+  }
+  retry "$ATTEMPTS" "$DELAY" reaches_mail || die "the relay of $env cannot reach $SMTP_HOST"
+  log "mail server reachable"
+fi
+
+# Browsers reach the API through its public address, from the site's config.json
+if [[ "$FRONTEND_TARGET" == "pages" && "$COMPOSE_TARGET" == "local" ]]; then
+  config_url="$(pages_url)/config.json"
+  log "checking the public API address published at $config_url"
+  public_api() {
+    local api
+    api="$(body_of "$config_url" | sed -n 's/.*"apiBaseUrl":"\([^"]*\)".*/\1/p')"
+    [[ -n "$api" ]] && body_of "$api/api/platform/health" >/dev/null
+  }
+  retry "$ATTEMPTS" "$DELAY" public_api || die "the website's API address does not reach the platform"
+  log "public API OK"
 fi
 
 log "smoke test passed for $env"

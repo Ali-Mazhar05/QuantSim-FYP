@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import DataTable, { type Column } from '../../components/tables/DataTable'
+import EmptyState from '../../components/status/EmptyState'
 import StatusPill from '../../components/status/StatusPill'
-import { AUDIT_EVENTS } from '../../services/mock/data'
+import { listAuditEvents } from '../../services/api/system'
 import type { AuditEvent } from '../../types'
+import { errorMessage } from '../auth/authShared'
 
 const columns: Column<AuditEvent>[] = [
   { key: 'time', header: 'Time', render: (r) => <span className="mono">{r.timestamp}</span> },
@@ -22,9 +24,22 @@ const columns: Column<AuditEvent>[] = [
 
 export default function AuditLog() {
   const [severity, setSeverity] = useState<string>('All')
+  const [events, setEvents] = useState<AuditEvent[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    listAuditEvents()
+      .then((rows) => !cancelled && setEvents(rows))
+      .catch((failure: unknown) => !cancelled && setError(errorMessage(failure)))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const rows = useMemo(
-    () => (severity === 'All' ? AUDIT_EVENTS : AUDIT_EVENTS.filter((e) => e.severity === severity)),
-    [severity],
+    () => (severity === 'All' ? (events ?? []) : (events ?? []).filter((e) => e.severity === severity)),
+    [events, severity],
   )
 
   return (
@@ -45,9 +60,19 @@ export default function AuditLog() {
           </button>
         ))}
       </div>
-      <Panel bodyClassName="p-0">
-        <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} />
-      </Panel>
+      {error ? (
+        <p role="alert" className="text-sm text-[var(--color-risk-severe)]">
+          {error}
+        </p>
+      ) : events === null ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Loading the audit log…</p>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No events" description={severity === 'All' ? 'Nothing has been recorded yet.' : `No ${severity.toLowerCase()} events.`} />
+      ) : (
+        <Panel bodyClassName="p-0">
+          <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} />
+        </Panel>
+      )}
     </div>
   )
 }

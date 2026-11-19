@@ -532,6 +532,35 @@ Each module below follows the same format: **what it does → libraries → how 
 4. **Deactivate / role change:** the update and an outbox event (`user.deactivated` / `role.changed`) are written in one transaction. Every service consumes it into a small **local denylist** (Redis set with TTL = access-token lifetime), which the template checks on each request.
 5. **Audit index:** consumes `audit.recorded` from all services into `platform.audit_index(service, table, row_pk, op, actor_id, changed_at, correlation_id)`. The Audit Log page reads this. For the full before/after, it calls the owning service's `GET /v1/<svc>/audit/{row_pk}`.
 
+**Accounts as built (Iteration 1, OpenSpec change `add-account-signup`)**
+
+The steps above are the original plan; what runs today differs in these ways:
+
+- **Sign-up** (`POST /api/platform/auth/signup`): username, email, password and an account type
+  of Viewer, Analyst or Quant (never Admin). The account starts unverified and a single-use
+  verification link is emailed. Every well-formed sign-up gets the same 202, so nobody learns
+  whether an email is registered; a taken username is reported (409).
+- **Approval:** Viewers sign in once verified. Quant and Analyst sign-ups also wait for an
+  admin (`POST /users/{id}/approve` or `/reject`); until then sign-in answers 403
+  `approval-pending` and the website shows a waiting screen.
+- **Sign-in** takes a username or an email. A correct password on an unverified or unapproved
+  account gets 403 `email-unverified` or `approval-pending`; every other failure gets the same 401.
+- **Admins invite** (`POST /users`, no password): the user gets a link to set their own password.
+- **Forgot password** emails a one-hour link to `/set-password`; setting a password verifies the
+  email, clears any lockout and ends every existing session.
+- **Links** are 256-bit random tokens in the URL fragment, stored only as SHA-256 hashes in
+  `account_tokens`, single-use (verify 24 h, invitation 72 h, reset 1 h).
+- **Email** is written to `mail_outbox` in the same transaction and sent by `platform-relay`
+  over SMTP through Gmail (`alimazhar3005+QuantSim@gmail.com`), retried for 24 hours. No paid
+  email service is used.
+- **Reaching the API:** each environment's gateway has a public HTTPS address through a free
+  Cloudflare quick tunnel; the website reads it from `/config.json`, written on every deploy.
+- **Limits** (Redis, failing closed): 10 sign-up, resend and forgot-password requests per client
+  address per hour, and 3 account emails per address per hour. Unverified sign-ups are removed
+  after 7 days.
+- Tokens are RS256 (not Ed25519) and the refresh token is returned in the response body, not a
+  cookie, because the API and the website are on different origins.
+
 **Data (`platform_db`)**
 
 ```sql

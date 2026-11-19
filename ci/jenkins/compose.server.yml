@@ -1,0 +1,45 @@
+# Additions for the always-on CI server, layered on compose.yml through COMPOSE_FILE
+# in ci/jenkins/.env (init-env.sh --server writes it):
+#   - Caddy serves Jenkins, DEV and TEST over HTTPS with Let's Encrypt certificates
+#   - team members sign in to Jenkins with their GitHub accounts
+services:
+  caddy:
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CI_HOST: ${CI_HOST:?set by init-env.sh --server}
+      DEV_HOST: ${DEV_HOST:?set by init-env.sh --server}
+      TEST_HOST: ${TEST_HOST:?set by init-env.sh --server}
+      ACME_EMAIL: ${ACME_EMAIL:?set by init-env.sh --server}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - jenkins
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  jenkins:
+    secrets:
+      - github_oauth_client_id
+      - github_oauth_client_secret
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  github_oauth_client_id:
+    file: ./secrets/github_oauth_client_id
+  github_oauth_client_secret:
+    file: ./secrets/github_oauth_client_secret

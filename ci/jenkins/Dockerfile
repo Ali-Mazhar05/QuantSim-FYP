@@ -1,6 +1,5 @@
-# QuantSim Jenkins controller: the LTS image plus the Docker CLI (with the buildx and
-# compose plugins) and jq. Every pipeline tool beyond these runs in a pinned container
-# started by the CI scripts, so Jenkins itself stays small.
+# QuantSim Jenkins controller: the LTS image with pinned plugins and configuration as
+# code. It runs no builds itself (see agent/); the Docker CLI is kept for maintenance.
 FROM jenkins/jenkins:2.580.1-lts
 
 USER root
@@ -21,7 +20,8 @@ USER jenkins
 COPY --chown=jenkins:jenkins plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-# Configuration as code lives outside JENKINS_HOME so a rebuilt image always applies it
-COPY casc.yaml /usr/share/jenkins/casc/jenkins.yaml
-ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/casc \
+# Configuration as code lives outside JENKINS_HOME so a rebuilt image always applies it.
+# compose.yml selects casc/security/<JENKINS_AUTH>.yaml next to the shared jenkins.yaml.
+COPY casc/ /usr/share/jenkins/casc/
+ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/casc/jenkins.yaml,/usr/share/jenkins/casc/security/local.yaml \
     JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Xmx1g"
