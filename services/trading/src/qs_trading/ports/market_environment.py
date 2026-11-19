@@ -12,8 +12,17 @@ Tick rules (ADR 01 and 08): ``seq`` starts at 1 with no gaps; ticks are ordered 
 environment; a symbol with no bar on a session has no tick for it; prices are split- and
 dividend-adjusted; ``ts`` is the session close in UTC.
 
-Until Lane B's C1 schema merges, :class:`Tick` follows the two ADRs; fields the schema adds
-are ignored by the adapters.
+:class:`Tick` keeps the fields of ``market.tick.v1`` the engine uses; the others
+(``env_id``, ``env_type``, ``instrument_id``, ``session_date``, ``path_index``,
+``scenario`` ...) are ignored by the adapters.
+
+**Paging** (ADR 01, decision DL-008): ``limit`` defaults to :data:`DEFAULT_PAGE_SIZE` (500)
+and is at most :data:`MAX_PAGE_SIZE` (2000), the convention of the market service's
+lists; a page is ``{items, next_after_seq}``. No caller may ask for more than 2000.
+
+**Fingerprint** (ADR 08, decision DL-004): ``xxh3:`` over the served values, computed by the
+provider. A consumer cannot recompute it (the bar revision is not served); it only compares
+the value it reads with the one frozen at activation.
 """
 
 from collections.abc import Sequence
@@ -24,8 +33,10 @@ from typing import Literal, Protocol
 
 EnvType = Literal["replay", "simulation"]
 
-DEFAULT_PAGE_SIZE = 1000
-MAX_PAGE_SIZE = 5000
+DEFAULT_PAGE_SIZE = 500
+"""The page size when none is asked for (ADR 01, DL-008)."""
+MAX_PAGE_SIZE = 2000
+"""The largest page a feed serves (ADR 01, DL-008); a larger ``limit`` is refused."""
 
 
 class MarketEnvironmentError(RuntimeError):
