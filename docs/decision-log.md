@@ -56,6 +56,10 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-035 | One calibration resource from queued to stored | Adopted | team |
 | DL-036 | What a calibration refuses, and where | Adopted | team |
 | DL-037 | Calibration without a price source or a fit | Adopted | team |
+| DL-038 | The shape of a run request and what a run starts from | Adopted | team |
+| DL-039 | How a run is stored and reproduced | Adopted | team |
+| DL-040 | VaR and CVaR before K6 is installed | Adopted | team |
+| DL-041 | What the demo-size run costs, and why | Adopted | team |
 
 ---
 
@@ -500,3 +504,72 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   market service (tested here on the adapter's side with injected failures), a real K5 equality test, the
   service-token path (D14).
 - **Affects:** `adapters/`, `main.build_app(price_source=, calibrator=)`.
+
+### DL-038 The shape of a run request and what a run starts from
+
+- **Asked:** what does `POST /runs` take, and where do the start prices, the correlation matrix and the seed
+  come from? The plan says "validate limits, insert run with idempotency key, enqueue job".
+- **Decided:** `{model, instruments: [{instrument_id, calibration_id}], n_paths, n_steps, seed?,
+  correlation_window?}`. Every calibration must exist, belong to its instrument, be of the run's model and have
+  converged (422 naming each problem). Limits: 20 to 100,000 paths (20 is the least the VaR/CVaR sample
+  accepts), 1 to 2,520 steps, 1 to 40 instruments each once, and at most `max_run_values` prices
+  (paths x steps x instruments, 60 million by default, about 480 MB) so one run cannot exhaust a worker (422
+  `run-too-large`). The start price of each instrument is its adjusted close on the last session of its
+  calibration window, read when the job runs and written to 10 decimals before anything is generated. The
+  correlation matrix is measured over `correlation_window`, by default the overlap of the calibration windows;
+  a single instrument needs no matrix. The seed is drawn by the server when left out and is always returned.
+  Roles: quants and admins launch (`launch_simulations`); every signed-in role reads.
+- **Why:** a calibration already names the instrument, the model and the window the parameters are valid
+  for, so the run neither re-fits nor guesses; the last calibrated close is the price the parameters describe.
+  Rounding the start price before generating is what lets a stored run be regenerated exactly (DL-039).
+- **Affects:** `qs_simulation/runs.py`, `api_runs.py`, the Configure page (B20).
+
+### DL-039 How a run is stored and reproduced
+
+- **Decided:** the run's id is its job's id; the run row is inserted at submit with its storage mode decided
+  (DL-013), and the job writes the instruments, the correlation, the statistics, the per-step quantiles, the
+  paths (when stored in full), the `completed` status and the `sim.completed` event in **one transaction**, so
+  a run is complete and announced or not there at all. A job killed before that leaves nothing and its re-run
+  gives identical statistics. Progress goes out as `sim.progress` events about every tenth. A refusal (an
+  undefined correlation cell, DL-012; a start price that does not exist; an instrument the market does not
+  know; prices that cannot be stored) marks the run `failed` with `code: reason` and a `sim.failed` event and is
+  not retried; any other failure is retried by the queue, and on the last attempt the run is marked failed
+  with the error. `run_correlation.matrix` holds the matrix **as given, before repair**: the repair is
+  deterministic and recorded, so the stored seed, parameters, start prices and matrix regenerate every path bit
+  for bit (tested for all three models and for a matrix that needed repair). Quantiles are stored for every run,
+  the paths only when small. One instrument needs no correlation call.
+- **Why:** a half-written run would show statistics without paths, or paths a portfolio cannot bind to. The
+  stored matrix before repair, not after, is what makes regeneration exact: repairing an already repaired
+  matrix can differ in the last bits.
+- **Affects:** `runs.py`, `run_correlation`, B18 (`GET /runs/{id}/ticks` regenerates from these).
+
+### DL-040 VaR and CVaR before K6 is installed
+
+- **Asked:** K6 (`var_cvar`) is not delivered. Fail runs until it is, or compute it here?
+- **Decided:** the statistics go through a `RiskCalculator` port. It uses K6 when `qs_quant.metrics` is
+  installed, and otherwise the formula of Lane C's specification (7.6): `q = quantile(R, 1 - alpha)` by linear
+  interpolation, `VaR = -q`, `CVaR = -mean(R | R <= q)`, both positive losses, at least 20 returns. The version
+  (`reference-7.6` or K6's) is written in the `sim.completed` event and the job's log line. A test holds the
+  two equal on the same returns the day K6 is installed (it is skipped until then).
+- **Why:** the formula is fully specified and ten lines long, so a run can complete end to end now; a run
+  that could not complete would block the results, the pages and the demo for a ten-line function. K6 stays
+  the owner of the definition (tracker I-04).
+- **Affects:** `adapters/risk.py`, B16 statistics.
+
+### DL-041 What the demo-size run costs, and why
+
+- **Measured** on the development machine (PostgreSQL 17 with TimescaleDB in a container under WSL): the demo
+  run, 5 instruments x 1,000 paths x 252 steps, answers the submit in 55 to 97 ms and completes in about 60 to
+  75 s, and stores 1,260,000 path values. Generating and summarising the paths takes a few seconds; the rest is
+  the database.
+- **Why:** the composite foreign key from `path_value` to `run_instrument` is checked row by row by
+  PostgreSQL. The same 252,000 rows take 13.6 s with the key and 2.0 s without it (about 1.2 s with the primary
+  key alone), so 1.26 million rows spend about a minute on the key. Formatting prices as CSV text for `COPY`
+  (rather than building a decimal per value) was done and helps less than the key costs.
+- **Decided:** keep the key: it is what guarantees a stored path belongs to a run's instrument and goes with it.
+  B-NFR-03 asks that the 10,000 x 252 run completes and is measured, not for a time; Hamza's performance study
+  records that one. The run page shows progress while it works.
+- **If it must be faster** (the end-to-end spine waits on it): replace the key with one set-based check per
+  statement (a constraint trigger over the inserted rows), which keeps the guarantee for about the cost of the
+  insert; or store less (quantiles only). Neither is built; tracker I-31.
+- **Affects:** `runs._store`, `path_value`, the B22 timeouts.

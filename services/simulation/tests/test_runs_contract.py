@@ -1,6 +1,7 @@
-"""C2 for simulation: the run list, the run detail and the path tick feed are fixed in OpenAPI now
-and answer 501 until B16 and B18 build them. What is final is tested: who may call, the parameters,
-the models and how they relate to the tick contract C1 (B-FR-05, B-US-09)."""
+"""C2 for simulation: the run list and the path tick feed are fixed in OpenAPI now and answer 501
+until B18 builds them (the run detail and creation are built: tests/test_runs.py). What is final is
+tested: who may call, the parameters, the models and how they relate to the tick contract C1
+(B-FR-05, B-US-09)."""
 
 import uuid
 
@@ -18,10 +19,11 @@ from tests.contract_support import TICK_SCHEMA, tick_problems
 client = support.client
 RUN = uuid.uuid4()
 ROUTES = [f"{API}/runs", f"{API}/runs/{RUN}", f"{API}/runs/{RUN}/ticks"]
+NOT_BUILT = [f"{API}/runs", f"{API}/runs/{RUN}/ticks"]  # the detail route is built (B16)
 
 
 @pytest.mark.parametrize("role", list(Role))
-@pytest.mark.parametrize("path", ROUTES)
+@pytest.mark.parametrize("path", NOT_BUILT)
 async def test_every_signed_in_role_reaches_the_routes_and_is_told_it_is_not_built_yet(
     client: httpx.AsyncClient, role: Role, path: str
 ) -> None:

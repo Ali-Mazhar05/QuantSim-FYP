@@ -19,3 +19,10 @@ class SimulationSettings(ServiceSettings):
     # DEV runs the job worker and outbox relay inside the API process (one container per
     # service); other environments run them in their own containers
     embedded_workers: bool = False
+
+    # Monte Carlo runs (B16, B-NFR-14)
+    # Processes that generate shards of a run; 0 means one fewer than the cores, at least one
+    shard_workers: int = Field(default=0, ge=0)
+    # The most prices (paths x steps x instruments) a run may hold in memory while it is generated:
+    # 60 million is about 480 MB of float64, which a laptop-hosted worker can take
+    max_run_values: int = Field(default=60_000_000, ge=1)

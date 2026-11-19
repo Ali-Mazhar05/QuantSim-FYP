@@ -1,20 +1,32 @@
 """HTTP API of simulation runs, under ``/api/simulation/runs`` (contract C2).
 
-Every signed-in role may read. The routes are built by the Monte Carlo and read API tasks (B16,
-B18); until then they answer 501 with a problem body, so the contract (paths, parameters, models
-and errors) is fixed and testable now, and those tasks only replace the 501 (ADR 01, ADR 03).
+Quants and admins (``launch_simulations``):  POST /runs          answers 202 at once (B16)
+Every signed-in role:                        GET  /runs/{id}     state, progress, statistics (B16)
+                                             GET  /runs, /runs/{id}/ticks     the read API (B18)
+
+A run's id is its job's id: the 202 carries the id to poll. ``Idempotency-Key`` returns the run
+that already exists. The list and the path ticks answer 501 with a problem body until B18, so the
+contract (paths, parameters, models and errors) is fixed and testable now (ADR 01, ADR 03).
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from qs_simulation.domain.runs import MAX_INSTRUMENTS, MIN_PATHS
+from qs_simulation.models import MAX_PATHS, MAX_STEPS
+from qs_simulation.ports import RiskCalculator
+from qs_simulation.runs import RunInstrument, RunRequest, RunService
 from qs_template import Database
-from qs_template.auth import Authenticator, Principal
+from qs_template.audit import set_audit_context
+from qs_template.auth import Authenticator, Capability, Principal
 from qs_template.errors import ServiceError
+from qs_template.jobs import IdempotencyConflict, JobQueue
 
 NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
 
@@ -139,6 +151,65 @@ class RunOut(RunSummary):
     error: str | None = None
 
 
+class RunInstrumentIn(BaseModel):
+    instrument_id: uuid.UUID
+    calibration_id: uuid.UUID = Field(
+        description="A converged calibration of this instrument, of the run's model"
+    )
+
+
+class CorrelationWindowIn(BaseModel):
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "CorrelationWindowIn":
+        if self.start >= self.end:
+            raise ValueError("start must be before end")
+        return self
+
+
+class RunCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "model": "gbm",
+                    "instruments": [
+                        {
+                            "instrument_id": "8d0aba1d-1737-59a8-8b52-846d1791226f",
+                            "calibration_id": "5b0e6f1c-2d3a-4c8b-9e7f-1a2b3c4d5e6f",
+                        }
+                    ],
+                    "n_paths": 1000,
+                    "n_steps": 252,
+                    "seed": 42,
+                }
+            ]
+        }
+    )
+
+    model: Literal["gbm", "ou", "merton"]
+    instruments: list[RunInstrumentIn] = Field(min_length=1, max_length=MAX_INSTRUMENTS)
+    n_paths: int = Field(
+        ge=MIN_PATHS,
+        le=MAX_PATHS,
+        description=f"At least {MIN_PATHS}: the risk statistics need that many returns",
+    )
+    n_steps: int = Field(ge=1, le=MAX_STEPS, description="Sessions to simulate")
+    seed: int | None = Field(
+        default=None,
+        ge=0,
+        lt=2**63,
+        description="Same seed, same run; the server draws one when it is left out",
+    )
+    correlation_window: CorrelationWindowIn | None = Field(
+        default=None,
+        description="The sessions the correlation matrix is measured over; by default the "
+        "overlap of the calibration windows",
+    )
+
+
 def _not_built(what: str) -> ServiceError:
     return ServiceError(
         501,
@@ -148,9 +219,92 @@ def _not_built(what: str) -> ServiceError:
     )
 
 
-def build_run_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]:
+def build_run_routers(
+    *,
+    auth: Authenticator,
+    database: Database,
+    queue: JobQueue,
+    risk: RiskCalculator,
+    max_run_values: int,
+    can_run: bool,
+) -> list[APIRouter]:
+    """``can_run`` is False when no price or correlation source is configured: the job could not do
+    its work, so a run is refused up front instead of being queued for nobody."""
     router = APIRouter(prefix="/runs", tags=["runs"])
     Reader = Annotated[Principal, Depends(auth.principal)]
+    Launcher = Annotated[Principal, Depends(auth.require_capability(Capability.LAUNCH_SIMULATIONS))]
+    Session = Annotated[AsyncSession, Depends(database.session)]
+
+    def service(session: AsyncSession) -> RunService:
+        return RunService(session, queue, max_run_values=max_run_values, risk=risk)
+
+    async def writer(
+        request: Request, actor: Launcher
+    ) -> AsyncIterator[tuple[AsyncSession, Principal]]:
+        async with database.transaction() as session:
+            await set_audit_context(
+                session,
+                user_id=actor.user_id,
+                request_id=getattr(request.state, "request_id", None),
+            )
+            yield session, actor
+
+    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer)]
+
+    @router.post(
+        "",
+        response_model=RunOut,
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={401: {}, 403: {}, 409: {}, 422: {}, 503: {}},
+    )
+    async def create_run(
+        body: RunCreate,
+        scope: Writer,
+        response: Response,
+        idempotency_key: Annotated[
+            str | None,
+            Header(
+                alias="Idempotency-Key",
+                min_length=1,
+                max_length=200,
+                description="Repeat a request with the same key to get the same run back",
+            ),
+        ] = None,
+    ) -> RunOut:
+        session, actor = scope
+        if not can_run:
+            raise ServiceError(
+                503,
+                "Simulation is not available",
+                "No price or correlation source is configured for this deployment.",
+                type_="urn:quantsim:problem:simulation-unavailable",
+            )
+        window = body.correlation_window
+        request = RunRequest(
+            model=body.model,
+            instruments=tuple(
+                RunInstrument(i.instrument_id, i.calibration_id) for i in body.instruments
+            ),
+            n_paths=body.n_paths,
+            n_steps=body.n_steps,
+            seed=body.seed,
+            correlation_start=window.start if window else None,
+            correlation_end=window.end if window else None,
+        )
+        runs = service(session)
+        # the queue's keys are global; a caller's key is theirs alone
+        scoped = None if idempotency_key is None else f"run:{actor.user_id}:{idempotency_key}"
+        try:
+            run_id, _ = await runs.submit(request, actor=actor.user_id, idempotency_key=scoped)
+        except IdempotencyConflict as conflict:
+            raise ServiceError(
+                409,
+                "Idempotency key already used",
+                "This key belongs to a different kind of request.",
+                type_="urn:quantsim:problem:idempotency-conflict",
+            ) from conflict
+        response.headers["Location"] = f"/api/simulation/runs/{run_id}"
+        return RunOut.model_validate(await runs.describe(run_id))
 
     @router.get("", response_model=list[RunSummary], responses={401: {}, 422: {}, 501: {}})
     async def list_runs(
@@ -164,9 +318,9 @@ def build_run_routers(*, auth: Authenticator, database: Database) -> list[APIRou
     ) -> list[RunSummary]:
         raise _not_built("The run list")
 
-    @router.get("/{run_id}", response_model=RunOut, responses={401: {}, 404: {}, 422: {}, 501: {}})
-    async def get_run(run_id: uuid.UUID, _: Reader) -> RunOut:
-        raise _not_built("The run detail")
+    @router.get("/{run_id}", response_model=RunOut, responses={401: {}, 404: {}, 422: {}})
+    async def get_run(run_id: uuid.UUID, _: Reader, session: Session) -> RunOut:
+        return RunOut.model_validate(await service(session).describe(run_id))
 
     @router.get(
         "/{run_id}/ticks",

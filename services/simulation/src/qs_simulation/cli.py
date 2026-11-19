@@ -9,7 +9,8 @@ import asyncio
 import signal
 from collections.abc import Callable
 
-from qs_simulation.jobs import HANDLERS, job_queue
+from qs_simulation.composition import build_handlers, default_dependencies
+from qs_simulation.jobs import job_queue
 from qs_simulation.settings import SimulationSettings
 from qs_template import Database
 from qs_template.jobs import Worker
@@ -51,7 +52,8 @@ def _settings(process: str) -> SimulationSettings:
 async def _worker() -> None:
     settings = _settings("worker")
     database = Database(settings)
-    worker = Worker(database, job_queue(settings), HANDLERS, poll_seconds=settings.job_poll_seconds)
+    handlers = build_handlers(settings, database, default_dependencies(settings))
+    worker = Worker(database, job_queue(settings), handlers, poll_seconds=settings.job_poll_seconds)
     _on_signals(asyncio.get_running_loop(), worker.stop)
     try:
         await worker.run()

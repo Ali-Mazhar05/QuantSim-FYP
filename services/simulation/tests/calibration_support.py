@@ -109,6 +109,7 @@ class ScriptedSource:
     failures: int = 0  # how many calls raise PriceSourceError before it works
     calls: int = 0
     error: Exception | None = None  # raised by every window call when set
+    symbols: dict[uuid.UUID, str] = field(default_factory=dict)  # default: AAPL
 
     def add(self, instrument_id: uuid.UUID, points: list[PricePoint]) -> None:
         self.points[instrument_id] = points
@@ -116,7 +117,9 @@ class ScriptedSource:
     async def instrument(self, instrument_id: uuid.UUID) -> InstrumentInfo:
         if instrument_id not in self.points:
             raise InstrumentNotFound(str(instrument_id))
-        return InstrumentInfo(instrument_id, "AAPL", "Apple Inc.", "active")
+        symbol = self.symbols.get(instrument_id, "AAPL")
+        name = "Apple Inc." if symbol == "AAPL" else f"{symbol} Inc."
+        return InstrumentInfo(instrument_id, symbol, name, "active")
 
     async def window(self, instrument_id: uuid.UUID, start: date, end: date) -> list[PricePoint]:
         self.calls += 1
@@ -147,7 +150,7 @@ class World:
         return ran
 
 
-CLEAR = "TRUNCATE calibration, job, instrument_ref CASCADE"
+CLEAR = "TRUNCATE run, scenario, calibration, job, instrument_ref, outbox CASCADE"
 
 
 @pytest.fixture
