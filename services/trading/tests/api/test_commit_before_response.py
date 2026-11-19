@@ -62,7 +62,7 @@ def recording_app(events: list[str]) -> FastAPI:
 
         await inner(scope, receive, recording_send)
 
-    app.middleware_stack = record_response  # type: ignore[assignment]
+    app.middleware_stack = record_response
     return app
 
 
