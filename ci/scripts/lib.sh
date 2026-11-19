@@ -31,6 +31,33 @@ require_env() {
   done
 }
 
+# json_get <dotted.path>: prints one field of the JSON document on stdin, or nothing when
+# it is missing or null. Booleans print as true/false. Uses jq when installed and falls
+# back to Python, so the scripts also run on a host without jq (e.g. Git Bash on Windows).
+json_get() {
+  local path=$1 py
+  if command -v jq >/dev/null 2>&1; then
+    jq -r ".$path // empty"
+    return
+  fi
+  for py in python3 python; do
+    if "$py" -c '' >/dev/null 2>&1; then
+      "$py" -c '
+import json, sys
+value = json.load(sys.stdin)
+for key in sys.argv[1].split("."):
+    value = value.get(key) if isinstance(value, dict) else None
+if isinstance(value, bool):
+    print("true" if value else "false")
+elif value is not None:
+    print(value)
+' "$path"
+      return
+    fi
+  done
+  die "json_get needs jq or Python"
+}
+
 # retry <attempts> <delay-seconds> <command...>
 retry() {
   local attempts=$1 delay=$2 n=1
@@ -174,7 +201,7 @@ wait_for_api_url() {
   local project=$1 url attempt
   for attempt in $(seq 1 60); do
     url="$(api_public_url "$project")"
-    if [[ -n "$url" ]] && curl -fsS --max-time 10 -o /dev/null "$url/api/platform/health"; then
+    if [[ -n "$url" ]] && curl -fsS --max-time 10 "$url/api/platform/health" >/dev/null; then
       printf '%s' "$url"
       return 0
     fi
@@ -221,7 +248,7 @@ cf_pages_api() {
 pages_url() {
   require_env PAGES_PROJECT PAGES_BRANCH PAGES_PRODUCTION_BRANCH
   local subdomain alias
-  subdomain="$(cf_pages_api GET "/$PAGES_PROJECT" | jq -r '.result.subdomain // empty')"
+  subdomain="$(cf_pages_api GET "/$PAGES_PROJECT" | json_get result.subdomain)"
   [[ -n "$subdomain" ]] || die "Cloudflare Pages project $PAGES_PROJECT not found"
   if [[ "$PAGES_BRANCH" == "$PAGES_PRODUCTION_BRANCH" ]]; then
     printf 'https://%s' "$subdomain"
