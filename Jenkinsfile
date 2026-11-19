@@ -279,6 +279,12 @@ pipeline {
                 if (gates[env.QS_ENV]) {
                   sh "ci/scripts/playwright-gate.sh '${env.QS_ENV}' '${gates[env.QS_ENV]}'"
                 }
+                // DEV only, last: runs a portfolio through the trading API and engine on
+                // the bundled demo market data and checks its event chain. A failure
+                // fails the deploy, so DEV is not verified
+                if (env.QS_ENV == 'dev') {
+                  sh 'ci/scripts/trading-live-check.sh dev'
+                }
               } catch (err) {
                 if (env.QS_ENV in ['acc', 'prod']) {
                   echo "Deploy to ${env.QS_ENV} failed, rolling back to the last known-good release"
