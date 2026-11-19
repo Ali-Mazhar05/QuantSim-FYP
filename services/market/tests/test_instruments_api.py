@@ -1,0 +1,208 @@
+"""Authorization and validation of the instrument routes."""
+
+import uuid
+from typing import Any
+
+import httpx
+import pytest
+from fakeredis import FakeAsyncRedis
+
+from qs_market.main import build_app
+from qs_template.auth import Role
+from qs_template.revocation import RevocationList
+from tests import instrument_support as support
+from tests.instrument_support import (
+    API,
+    NEW_INSTRUMENT,
+    bearer,
+    make_settings,
+    make_token,
+)
+
+client = support.client
+database = support.database
+pytestmark = pytest.mark.db
+
+EVERYONE = "everyone"  # no token needed
+ALL_ROLES = frozenset(Role)
+ADMIN_ONLY = frozenset({Role.ADMIN})
+RUN_READERS = frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST})
+CREATORS = frozenset({Role.ADMIN, Role.QUANT})
+
+# (method, path) -> who may call it
+MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
+    ("GET", "/health"): EVERYONE,
+    ("GET", "/ready"): EVERYONE,
+    ("GET", "/instruments"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}"): ALL_ROLES,
+    ("POST", "/instruments"): ADMIN_ONLY,
+    ("PATCH", "/instruments/{instrument_id}"): ADMIN_ONLY,
+    ("POST", "/instruments/{instrument_id}/retire"): ADMIN_ONLY,
+    ("GET", "/instruments/{instrument_id}/bars"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/candles"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/metrics"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/returns"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/corporate-actions"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/gaps"): ALL_ROLES,
+    ("GET", "/instruments/{instrument_id}/quote"): ALL_ROLES,
+    ("POST", "/correlations"): ALL_ROLES,
+    ("GET", "/data-quality"): frozenset({Role.ADMIN, Role.QUANT, Role.ANALYST}),
+    ("POST", "/ingestion-runs"): ADMIN_ONLY,
+    ("GET", "/ingestion-runs"): RUN_READERS,
+    ("GET", "/ingestion-runs/{run_id}"): RUN_READERS,
+    ("GET", "/ingestion-runs/{run_id}/rejected"): RUN_READERS,
+    ("GET", "/environments"): ALL_ROLES,
+    ("GET", "/environments/{environment_id}"): ALL_ROLES,
+    ("POST", "/environments"): CREATORS,
+    ("GET", "/audit"): ADMIN_ONLY,
+}
+
+
+def test_every_route_has_a_declared_rule() -> None:
+    app = build_app(
+        make_settings("postgresql+asyncpg://x/y"), revocations=RevocationList(FakeAsyncRedis())
+    )
+    found = {
+        (method.upper(), path.removeprefix(API))
+        for path, operations in app.openapi()["paths"].items()
+        for method in operations
+    }
+    assert found == set(MATRIX)
+
+
+def body_for(method: str, path: str, n: int, target: str = "") -> dict[str, Any] | None:
+    if method == "POST" and path == "/environments":
+        return {
+            "name": f"Env {n}",
+            "type": "historical_replay",
+            "universe": "Test basket",
+            "instrument_ids": [target],
+            "start_date": "2024-01-02",
+            "end_date": "2024-03-28",
+        }
+    if method == "POST" and path == "/ingestion-runs":
+        return {"mode": "manual", "start": "2024-01-02", "end": "2024-01-03"}
+    if method == "POST" and path == "/instruments":
+        return {**NEW_INSTRUMENT, "symbol": f"T{n}"}
+    if method == "PATCH":
+        return {"notes": "hello"}
+    if path == "/correlations":
+        # a basket of one: a signed-in caller gets past authorisation and is refused with 422
+        return {"symbols": ["ZZTEST"], "windows": [{"start": "2024-01-01", "end": "2024-02-01"}]}
+    return None
+
+
+async def test_every_route_allows_exactly_the_declared_roles(client: httpx.AsyncClient) -> None:
+    admin = bearer(make_token(Role.ADMIN))
+    created = await client.post(f"{API}/instruments", json=NEW_INSTRUMENT, headers=admin)
+    assert created.status_code == 201, created.text
+    target = created.json()["id"]
+    queued = await client.post(
+        f"{API}/ingestion-runs",
+        json={"mode": "manual", "start": "2024-01-02", "end": "2024-01-03"},
+        headers=admin,
+    )
+    assert queued.status_code == 202, queued.text
+    run_id = queued.json()["id"]
+    # The matrix retires `target` before it reaches the environment routes, so environments
+    # use an instrument of their own that stays active
+    kept = await client.post(
+        f"{API}/instruments", json={**NEW_INSTRUMENT, "symbol": "ZZKEEP"}, headers=admin
+    )
+    assert kept.status_code == 201, kept.text
+    env_instrument = kept.json()["id"]
+    environment = await client.post(
+        f"{API}/environments",
+        json=body_for("POST", "/environments", 0, env_instrument),
+        headers=admin,
+    )
+    assert environment.status_code == 201, environment.text
+    environment_id = environment.json()["id"]
+    callers: list[tuple[str, dict[str, str]]] = [
+        ("anonymous", {}),
+        ("forged", bearer(make_token(Role.ADMIN, forged=True))),
+    ] + [(role.value, bearer(make_token(role))) for role in Role]
+    n = 0
+    for (method, path), rule in MATRIX.items():
+        url = API + path.replace("{instrument_id}", target).replace("{run_id}", run_id).replace(
+            "{environment_id}", environment_id
+        )
+        for who, headers in callers:
+            n += 1
+            response = await client.request(
+                method, url, headers=headers, json=body_for(method, path, n, env_instrument)
+            )
+            where = (method, path, who, response.text)
+            if rule == EVERYONE:
+                assert response.status_code in (200, 503), where
+                continue
+            assert isinstance(rule, frozenset)
+            if who in {role.value for role in rule}:
+                # A second run while the first is still pending is a 409 conflict: the
+                # caller got past authorisation
+                accepted = {
+                    "/correlations": (422,),
+                    "/ingestion-runs": (200, 202, 409),
+                }.get(path, (200, 201))
+                assert response.status_code in accepted, where
+            elif who in ("anonymous", "forged"):
+                assert response.status_code == 401, where
+            else:
+                assert response.status_code == 403, where
+
+
+async def test_an_admin_can_add_annotate_and_retire_and_a_viewer_sees_it(
+    client: httpx.AsyncClient,
+) -> None:
+    admin, viewer = bearer(make_token(Role.ADMIN)), bearer(make_token(Role.VIEWER))
+    created = (await client.post(f"{API}/instruments", json=NEW_INSTRUMENT, headers=admin)).json()
+    again = await client.post(f"{API}/instruments", json=NEW_INSTRUMENT, headers=admin)
+    assert again.status_code == 409
+    assert again.json()["existing_id"] == created["id"]
+    patched = await client.patch(
+        f"{API}/instruments/{created['id']}", json={"sector": "Software"}, headers=admin
+    )
+    assert patched.json()["sector"] == "Software"
+    await client.post(f"{API}/instruments/{created['id']}/retire", headers=admin)
+    listed = await client.get(f"{API}/instruments", params={"status": "retired"}, headers=viewer)
+    assert [i["symbol"] for i in listed.json()] == ["ZZTEST"]
+    missing = await client.get(f"{API}/instruments/{uuid.uuid4()}", headers=viewer)
+    assert missing.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        ({"symbol": "aapl"}, "symbol"),
+        ({"symbol": "A" * 16}, "symbol"),
+        ({"symbol": ""}, "symbol"),
+        ({"exchange": "NASDAQ"}, "exchange"),
+        ({"exchange": "xnas"}, "exchange"),
+        ({"currency": "US"}, "currency"),
+        ({"currency": "usd"}, "currency"),
+        ({"asset_class": "bond"}, "asset_class"),
+        ({"sector": ""}, "sector"),
+        ({"sector": "S" * 81}, "sector"),
+        ({"name": ""}, "name"),
+        ({"surprise": 1}, "surprise"),
+    ],
+)
+async def test_a_bad_body_is_a_422_and_never_a_500(
+    client: httpx.AsyncClient, overrides: dict[str, Any], field: str
+) -> None:
+    admin = bearer(make_token(Role.ADMIN))
+    response = await client.post(
+        f"{API}/instruments", json={**NEW_INSTRUMENT, **overrides}, headers=admin
+    )
+    assert response.status_code == 422, response.text
+
+
+async def test_patch_validates_and_refuses_an_empty_or_unknown_change(
+    client: httpx.AsyncClient,
+) -> None:
+    admin = bearer(make_token(Role.ADMIN))
+    created = (await client.post(f"{API}/instruments", json=NEW_INSTRUMENT, headers=admin)).json()
+    url = f"{API}/instruments/{created['id']}"
+    for body in ({}, {"sector": "S" * 81}, {"symbol": "OTHER"}, {"status": "retired"}):
+        assert (await client.patch(url, json=body, headers=admin)).status_code == 422
+    assert (await client.get(f"{API}/instruments/not-a-uuid", headers=admin)).status_code == 422

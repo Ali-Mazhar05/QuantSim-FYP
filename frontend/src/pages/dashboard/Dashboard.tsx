@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowUpRight, Play, TrendingDown, TrendingUp } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
+import { useCan } from '../../demo/useCan'
 import DrawdownChart from '../../components/charts/DrawdownChart'
 import EquityCurve from '../../components/charts/EquityCurve'
 import Panel from '../../components/layout/Panel'
@@ -15,6 +16,7 @@ import { LATEST_PORTFOLIO_VALUE, MAX_DRAWDOWN_PCT } from '../../services/mock/po
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const canLaunch = useCan('launch_simulations')
   const role = useDemoStore((s) => s.role)
   const flowStep = useDemoStore((s) => s.flowStep)
   const { completedModules, composite } = useRiskAnalysis()
@@ -51,7 +53,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        <Button icon={Play} onClick={() => navigate('/market/environments/new')}>
+        <Button icon={Play} disabled={!canLaunch} title={canLaunch ? undefined : "Your role cannot do this"} onClick={() => navigate('/market/environments/new')}>
           Run New Analysis
         </Button>
       </div>

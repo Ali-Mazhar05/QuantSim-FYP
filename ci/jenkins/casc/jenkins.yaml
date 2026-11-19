@@ -1,45 +1,45 @@
-# Jenkins configuration as code. Applied on every start; changes made in the UI are
-# overwritten, so change this file instead.
+# Jenkins configuration as code, shared by every installation. Applied on every start;
+# changes made in the UI are overwritten, so change these files instead.
 #
-# ${name} values are read from Docker secrets mounted at /run/secrets/<name>
-# (see compose.yml and secrets/README.md).
+# Login and permissions live in casc/security/<mode>.yaml; JENKINS_AUTH in
+# ci/jenkins/.env picks the mode (local on a laptop, github on the CI server).
+#
+# ${name} values come from Docker secrets mounted at /run/secrets/<name> or from
+# environment variables set in compose.yml.
 
 jenkins:
-  systemMessage: "QuantSim CI/CD. Configuration is managed in ci/jenkins/casc.yaml in the repository."
-  numExecutors: 3
-  mode: NORMAL
-  labelString: "docker"
+  systemMessage: "QuantSim CI/CD. Configuration is managed in ci/jenkins/ in the repository."
+  # The controller only schedules; every build runs on an agent
+  numExecutors: 0
+  mode: EXCLUSIVE
 
-  securityRealm:
-    local:
-      allowsSignup: false
-      users:
-        - id: "admin"
-          name: "QuantSim Admin"
-          password: "${admin_password}"
-
-  authorizationStrategy:
-    roleBased:
-      roles:
-        global:
-          - name: "admin"
-            description: "Full control"
-            permissions:
-              - "Overall/Administer"
-            entries:
-              - user: "admin"
-          - name: "developer"
-            description: "Every signed-in team member: view, build and cancel jobs"
-            permissions:
-              - "Overall/Read"
-              - "Job/Read"
-              - "Job/Build"
-              - "Job/Cancel"
-              - "Job/Workspace"
-              - "Run/Replay"
-              - "View/Read"
-            entries:
-              - group: "authenticated"
+  nodes:
+    - permanent:
+        name: "docker-agent"
+        nodeDescription: "Runs every QuantSim build; has the Docker CLI and the host's Docker socket"
+        labelString: "docker"
+        numExecutors: 3
+        mode: NORMAL
+        remoteFS: "/home/jenkins/agent"
+        retentionStrategy: "always"
+        launcher:
+          ssh:
+            host: "agent"
+            port: 22
+            credentialsId: "agent-ssh-key"
+            launchTimeoutSeconds: 60
+            maxNumRetries: 10
+            retryWaitTime: 15
+            # The agent is reachable only on the private compose network
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+        nodeProperties:
+          - envVars:
+              env:
+                - key: "BUILDX_CONFIG"
+                  value: "/home/jenkins/agent/.buildx"
+                # Known-good releases per environment, kept in the agent's volume
+                - key: "QS_RELEASES_DIR"
+                  value: "/home/jenkins/agent/releases"
 
   globalNodeProperties:
     - envVars:
@@ -52,10 +52,10 @@ jenkins:
             value: "Ali-Mazhar05/QuantSim-FYP"
           # Jenkins user ids, comma separated, allowed to approve ACC and PROD
           - key: "RELEASE_APPROVERS"
-            value: "admin"
-          # Known-good releases per environment, kept in the persistent volume
-          - key: "QS_RELEASES_DIR"
-            value: "/var/jenkins_home/releases"
+            value: "${QS_RELEASE_APPROVERS:-admin}"
+          # Image platforms; the ARM CI server builds linux/arm64,linux/amd64
+          - key: "PLATFORMS"
+            value: "${QS_PLATFORMS:-linux/amd64}"
 
 unclassified:
   location:
@@ -77,6 +77,14 @@ credentials:
   system:
     domainCredentials:
       - credentials:
+          - basicSSHUserPrivateKey:
+              id: "agent-ssh-key"
+              description: "Controller to build agent SSH key"
+              scope: SYSTEM
+              username: "jenkins"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/run/secrets/agent_ssh_key}"
           - gitHubApp:
               id: "github-app"
               description: "GitHub App quantsim-jenkins: repository access, commit statuses, release tags"
@@ -142,7 +150,8 @@ jobs:
           discardOldItems { daysToKeep(7) }
         }
         triggers {
-          // Fallback for when the GitHub webhook cannot reach Jenkins
-          periodicFolderTrigger { interval('2m') }
+          // Webhooks start builds at once when Jenkins has a public URL; this scan also
+          // catches every push when it does not (a laptop host)
+          periodicFolderTrigger { interval('${QS_SCAN_INTERVAL:-2m}') }
         }
       }

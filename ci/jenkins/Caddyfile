@@ -1,0 +1,22 @@
+# HTTPS front door of the CI server. Certificates come from Let's Encrypt
+# automatically; the host names are set in ci/jenkins/.env.
+{
+	email {$ACME_EMAIL}
+}
+
+# Jenkins: UI, GitHub webhooks (/github-webhook/) and GitHub sign-in
+{$CI_HOST} {
+	encode gzip
+	reverse_proxy jenkins:8080
+}
+
+# DEV and TEST environments, deployed by Jenkins on this host
+{$DEV_HOST} {
+	encode gzip
+	reverse_proxy host.docker.internal:8081
+}
+
+{$TEST_HOST} {
+	encode gzip
+	reverse_proxy host.docker.internal:8082
+}

@@ -1,23 +1,113 @@
 import clsx from 'clsx'
 import { ArrowRight } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CandlestickChart from '../../components/charts/CandlestickChart'
 import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import EmptyState from '../../components/status/EmptyState'
 import { useDemoStore } from '../../demo/demoState'
-import { INSTRUMENTS } from '../../services/mock/data'
+import { useNotifications } from '../../demo/notifications'
+import {
+  type Candle,
+  type MarketInstrument,
+  createEnvironment,
+  getCandles,
+  listInstruments,
+} from '../../services/api/market'
 import type { MarketEnvironment } from '../../types'
+import { errorMessage } from '../auth/authShared'
+
+// The prototype's data window, basket and starting selection: what the page shows is what
+// is saved
+const UNIVERSE = 'US Technology Basket'
+const START = '2025-01-01'
+const END = '2026-06-30'
+const DEFAULT_SELECTION = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL']
+
+type Preview = { symbol: string; candles: Candle[] } | { symbol: string; error: string }
 
 export default function CreateMarketEnvironment() {
   const navigate = useNavigate()
   const advanceTo = useDemoStore((s) => s.advanceTo)
+  const setActiveEnvironment = useDemoStore((s) => s.setActiveEnvironment)
+  const push = useNotifications((s) => s.push)
   const [type, setType] = useState<MarketEnvironment['type']>('Synthetic Market')
-  const [selected, setSelected] = useState<string[]>(['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL'])
+  const [instruments, setInstruments] = useState<MarketInstrument[] | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    listInstruments('active')
+      .then((rows) => {
+        if (cancelled) return
+        setInstruments(rows)
+        const known = new Set(rows.map((r) => r.symbol))
+        setSelected(DEFAULT_SELECTION.filter((s) => known.has(s)))
+      })
+      .catch((error: unknown) => !cancelled && setFailure(errorMessage(error)))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const toggle = (sym: string) => {
     setSelected((s) => (s.includes(sym) ? s.filter((x) => x !== sym) : [...s, sym]))
+  }
+
+  // The preview is the first selected instrument's series over the data window
+  const reference = instruments?.find((i) => i.symbol === selected[0])
+  const referenceId = reference?.id
+  const referenceSymbol = reference?.symbol
+  useEffect(() => {
+    if (!referenceId || !referenceSymbol) return
+    let cancelled = false
+    getCandles(referenceId, START, END)
+      .then((candles) => !cancelled && setPreview({ symbol: referenceSymbol, candles }))
+      .catch((error: unknown) => !cancelled && setPreview({ symbol: referenceSymbol, error: errorMessage(error) }))
+    return () => {
+      cancelled = true
+    }
+  }, [referenceId, referenceSymbol])
+
+  const shown = preview && preview.symbol === referenceSymbol ? preview : null
+  let chart
+  if (!reference) {
+    chart = <EmptyState title="No instrument selected" description="Select at least one instrument for the universe." />
+  } else if (!shown) {
+    chart = <p className="text-sm text-[var(--color-text-muted)]">Loading…</p>
+  } else if ('error' in shown) {
+    chart = <p role="alert" className="text-sm text-[var(--color-risk-severe)]">{shown.error}</p>
+  } else if (shown.candles.length === 0) {
+    chart = <EmptyState title="No observations in this window" description={`${shown.symbol} has no ingested sessions between ${START} and ${END}.`} />
+  } else {
+    chart = <CandlestickChart candles={shown.candles} height={180} />
+  }
+
+  const create = async () => {
+    const ids = (instruments ?? []).filter((i) => selected.includes(i.symbol)).map((i) => i.id)
+    setSaving(true)
+    try {
+      const environment = await createEnvironment({
+        name: UNIVERSE,
+        type,
+        universe: UNIVERSE,
+        instrumentIds: ids,
+        start: START,
+        end: END,
+        frequency: 'Daily',
+      })
+      setActiveEnvironment(environment.id)
+      advanceTo('MARKET_SELECTED')
+      navigate('/simulation/configure')
+    } catch (error) {
+      push(errorMessage(error), 'warning')
+      setSaving(false)
+    }
   }
 
   return (
@@ -51,23 +141,31 @@ export default function CreateMarketEnvironment() {
         </div>
       </Panel>
 
-      <Panel title="Universe" subtitle="US Technology Basket">
-        <div className="flex flex-wrap gap-2">
-          {INSTRUMENTS.map((inst) => (
-            <button
-              key={inst.symbol}
-              onClick={() => toggle(inst.symbol)}
-              className={clsx(
-                'mono rounded border px-3 py-1.5 text-xs font-semibold transition-colors',
-                selected.includes(inst.symbol)
-                  ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
-                  : 'border-[var(--color-border-strong)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]/80',
-              )}
-            >
-              {inst.symbol}
-            </button>
-          ))}
-        </div>
+      <Panel title="Universe" subtitle={UNIVERSE}>
+        {failure ? (
+          <p role="alert" className="text-sm text-[var(--color-risk-severe)]">{failure}</p>
+        ) : instruments === null ? (
+          <p className="text-sm text-[var(--color-text-muted)]">Loading instruments…</p>
+        ) : instruments.length === 0 ? (
+          <EmptyState title="No instruments yet" description="An administrator adds instruments through the market API." />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {instruments.map((inst) => (
+              <button
+                key={inst.symbol}
+                onClick={() => toggle(inst.symbol)}
+                className={clsx(
+                  'mono rounded border px-3 py-1.5 text-xs font-semibold transition-colors',
+                  selected.includes(inst.symbol)
+                    ? 'border-[var(--color-accent-strong)] bg-[var(--color-accent)]/12 text-[var(--color-accent-strong)]'
+                    : 'border-[var(--color-border-strong)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]/80',
+                )}
+              >
+                {inst.symbol}
+              </button>
+            ))}
+          </div>
+        )}
       </Panel>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -75,11 +173,11 @@ export default function CreateMarketEnvironment() {
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-xs text-[var(--color-text-muted)]">Start</dt>
-              <dd className="mono mt-0.5 text-[var(--color-text-primary)]">2025-01-01</dd>
+              <dd className="mono mt-0.5 text-[var(--color-text-primary)]">{START}</dd>
             </div>
             <div>
               <dt className="text-xs text-[var(--color-text-muted)]">End</dt>
-              <dd className="mono mt-0.5 text-[var(--color-text-primary)]">2026-06-30</dd>
+              <dd className="mono mt-0.5 text-[var(--color-text-primary)]">{END}</dd>
             </div>
             <div>
               <dt className="text-xs text-[var(--color-text-muted)]">Frequency</dt>
@@ -87,23 +185,17 @@ export default function CreateMarketEnvironment() {
             </div>
             <div>
               <dt className="text-xs text-[var(--color-text-muted)]">Universe</dt>
-              <dd className="mt-0.5 text-[var(--color-text-primary)]">US Technology Basket</dd>
+              <dd className="mt-0.5 text-[var(--color-text-primary)]">{UNIVERSE}</dd>
             </div>
           </dl>
         </Panel>
-        <Panel title="Preview" subtitle="AAPL — reference series">
-          <CandlestickChart seed={11} start={190} vol={0.018} count={70} height={180} />
+        <Panel title="Preview" subtitle={`${referenceSymbol ?? '—'} — reference series`}>
+          {chart}
         </Panel>
       </div>
 
       <div className="flex justify-end">
-        <Button
-          icon={ArrowRight}
-          onClick={() => {
-            advanceTo('MARKET_SELECTED')
-            navigate('/simulation/configure')
-          }}
-        >
+        <Button icon={ArrowRight} disabled={saving || selected.length === 0} onClick={() => void create()}>
           Continue to Simulation
         </Button>
       </div>

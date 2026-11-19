@@ -1,0 +1,22 @@
+# Login for a Jenkins running on a developer machine: one local admin account.
+# Selected with JENKINS_AUTH=local (the default).
+
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          name: "QuantSim Admin"
+          password: "${admin_password}"
+
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            description: "Full control"
+            permissions:
+              - "Overall/Administer"
+            entries:
+              - user: "admin"
