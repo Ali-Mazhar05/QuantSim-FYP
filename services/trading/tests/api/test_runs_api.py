@@ -1,7 +1,9 @@
 """Run submit, run status and the paged trade log over the in-memory store: a repeated
 Idempotency-Key returns the same job, and the log pages gap-free with a correct cursor."""
 
+import json
 import uuid
+from pathlib import Path
 
 import httpx
 import pytest
@@ -16,6 +18,16 @@ from api_support import (
 )
 
 from qs_template.auth import Role
+from qs_trading.adapters.file_environment import FileEnvironment
+from qs_trading.api_portfolios import portfolio_values
+from qs_trading.api_strategies import canonical_params
+from qs_trading.engine.core import RunSpec
+from qs_trading.engine.runner import MemorySink, run_portfolio
+from qs_trading.ports.market_environment import EnvironmentRef
+from qs_trading.schemas import PortfolioCreate, StrategyIn
+
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/environments/two_symbols_10_sessions.json"
+ENV_ID = "5d0c6c1e-7a14-4a14-8a14-000000000001"
 
 
 async def _portfolio(http: httpx.AsyncClient, store: FakeStore) -> str:
@@ -158,3 +170,32 @@ async def test_the_log_of_an_unknown_portfolio_is_404() -> None:
             f"{API}/portfolios/{uuid.uuid4()}/events", headers=as_role(Role.VIEWER)
         )
         assert response.status_code == 404
+
+
+async def test_what_the_api_stores_runs_on_the_engine() -> None:
+    """The strategy params, models and capital exactly as the API stores them (through a
+    JSON round trip, as JSONB does) load into a run spec the engine runs to the end."""
+    params = canonical_params(StrategyIn.model_validate(MOMENTUM))
+    values = portfolio_values(
+        PortfolioCreate.model_validate(
+            portfolio_body(str(uuid.uuid4()), replay_environment_id=ENV_ID)
+        )
+    )
+    stored = json.loads(
+        json.dumps(
+            {"params": params, "cost": values["cost_model"], "slippage": values["slippage_model"]}
+        )
+    )
+    spec = RunSpec(
+        portfolio_id=uuid.uuid4(),
+        strategy_kind=MOMENTUM["kind"],
+        strategy_params=stored["params"],
+        initial_capital=values["initial_capital"],
+        cost_model=stored["cost"],
+        slippage_model=stored["slippage"],
+        environment=EnvironmentRef(values["env_type"], str(values["replay_environment_id"])),
+    )
+    sink = MemorySink()
+    result = await run_portfolio(spec, FileEnvironment(FIXTURE), sink)
+    assert result.sessions == 10 and result.final_seq == len(sink.events)
+    assert sink.events[0].payload.model_dump(mode="json")["strategy_params"] == params

@@ -32,7 +32,7 @@ from qs_template.auth import Role
 from qs_template.jobs import Worker
 from qs_trading.adapters.file_environment import file_environments
 from qs_trading.jobs import ENGINE_RUN, build_handlers, job_queue
-from qs_trading.models import portfolio, portfolio_state_current, strategy
+from qs_trading.models import job, portfolio, portfolio_state_current, strategy
 
 # The database helpers live beside the other database tests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "db"))
@@ -179,10 +179,15 @@ def test_every_route_allows_exactly_the_declared_roles(trading_db: TradingDb) ->
     serve(trading_db, scenario)
 
 
-def test_a_run_submits_once_executes_and_its_log_pages_gap_free(
-    trading_db: TradingDb, tmp_path: Path
-) -> None:
+def test_a_run_submits_once_executes_and_its_log_pages_gap_free(tmp_path: Path) -> None:
+    """On a database of its own: the worker claims the oldest queued job, and the other
+    tests queue runs for environments no fixture serves."""
     shutil.copyfile(FIXTURE, tmp_path / f"{ENV_ID}.json")
+    with migrated_database() as own:
+        _run_and_page_the_log(own, tmp_path)
+
+
+def _run_and_page_the_log(trading_db: TradingDb, tmp_path: Path) -> None:
 
     async def scenario(http: httpx.AsyncClient, database: Database) -> None:
         quant, viewer = as_role(Role.QUANT), as_role(Role.VIEWER)
@@ -214,10 +219,13 @@ def test_a_run_submits_once_executes_and_its_log_pages_gap_free(
         settings = make_settings(trading_db.app_url)
         handlers = build_handlers(database, file_environments(tmp_path))
         worker = Worker(database, job_queue(settings), {ENGINE_RUN: handlers[ENGINE_RUN]})
+        async with database.transaction() as session:
+            # Ours is the only job, so it is the one the worker claims
+            assert await session.scalar(select(func.count()).select_from(job)) == 1
         assert await worker.run_once()
 
         done = (await http.get(f"{base}/runs/{job_id}", headers=viewer)).json()
-        assert done["status"] == "succeeded", done
+        assert done["status"] == "succeeded", done["error"]
         assert done["progress"] == 1.0 and done["error"] is None
         assert done["finished_at"] is not None
 
