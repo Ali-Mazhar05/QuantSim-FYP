@@ -36,6 +36,7 @@ import urllib.request
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 TRADING = "/api/trading"
@@ -259,6 +260,71 @@ def all_events(api: Api, token: str, events_path: str) -> list[dict[str, Any]]:
     raise LiveCheckFailed(f"the log has more than {MAX_PAGES} pages")
 
 
+def check_projections(
+    api: Api,
+    token: str,
+    base: str,
+    events: Sequence[Mapping[str, Any]],
+    result: Mapping[str, Any],
+) -> None:
+    """The projection-backed routes agree with the log just checked: fills and value
+    points match the ORDER_FILLED and VALUED events, state, verify, holdings and metrics
+    end on the run's final seq and hash, and an admin rebuild reports identical."""
+    final_hash, final_seq = result["final_hash"], result["final_seq"]
+    filled = sum(1 for e in events if e.get("type") == "ORDER_FILLED")
+    valued = sum(1 for e in events if e.get("type") == "VALUED")
+
+    fills: list[Any] = []
+    after = 0
+    while True:
+        page = api.expect(
+            200, "GET", f"{base}/fills", token=token, params={"after_seq": after, "limit": 500}
+        )
+        fills.extend(page["items"])
+        if page.get("next_cursor") is None:
+            break
+        after = page["next_cursor"]
+    if len(fills) != filled:
+        raise LiveCheckFailed(f"/fills lists {len(fills)} fills, the log has {filled}")
+
+    series = api.expect(200, "GET", f"{base}/value-series", token=token)
+    if len(series) != valued:
+        raise LiveCheckFailed(f"/value-series has {len(series)} points, the log has {valued}")
+    final_value = result.get("final_value")
+    if final_value is not None and Decimal(series[-1]["value"]) != Decimal(str(final_value)):
+        raise LiveCheckFailed(
+            f"the last value point {series[-1]['value']} is not the run's {final_value}"
+        )
+
+    def ends_on_final(route: str, body: Mapping[str, Any], seq_key: str, hash_key: str) -> None:
+        if body.get(seq_key) != final_seq or body.get(hash_key) != final_hash:
+            raise LiveCheckFailed(
+                f"{route} ends on seq {body.get(seq_key)} hash {body.get(hash_key)}, "
+                f"not the run's seq {final_seq} hash {final_hash}"
+            )
+
+    ends_on_final("/state", api.expect(200, "GET", f"{base}/state", token=token), "seq", "hash")
+    verify = api.expect(200, "GET", f"{base}/verify", token=token)
+    if verify.get("valid") is not True:
+        raise LiveCheckFailed(f"/verify reports a broken chain: {_short(verify)}")
+    ends_on_final("/verify", verify, "last_seq", "last_hash")
+    holdings = api.expect(200, "GET", f"{base}/holdings", token=token)
+    if holdings.get("last_seq") != final_seq:
+        raise LiveCheckFailed(f"/holdings is at seq {holdings.get('last_seq')}, not {final_seq}")
+    metrics = api.expect(200, "GET", f"{base}/metrics", token=token)
+    if metrics.get("trades") != filled:
+        raise LiveCheckFailed(f"/metrics counts {metrics.get('trades')} trades, not {filled}")
+    ends_on_final("/metrics", metrics, "final_seq", "final_hash")
+    rebuild = api.expect(200, "POST", f"{base}/rebuild", token=token)
+    if rebuild.get("status") != "identical":
+        raise LiveCheckFailed(f"rebuild found differences: {_short(rebuild)}")
+    ends_on_final("rebuild", rebuild, "final_seq", "final_hash")
+    log(
+        f"projections agree with the log: {filled} fills, {valued} value points, "
+        "state, verify, holdings, metrics and rebuild end on the final hash"
+    )
+
+
 def live_check() -> None:
     api = Api(_setting("QS_LIVE_BASE_URL"))
     env_id = _setting("QS_LIVE_ENV_ID")
@@ -335,6 +401,7 @@ def live_check() -> None:
             f"the portfolio's source fingerprint {reloaded.get('source_fingerprint')} is not "
             f"the run's {result.get('source_fingerprint')}"
         )
+    check_projections(api, token, base, events, result)
 
     log("passed")
     log(f"  portfolio    {portfolio_id}")

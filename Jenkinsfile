@@ -7,6 +7,60 @@
 //   acceptance                 checks, promote, deploy ACC, human sign-off
 //   main                       checks, approval, promote, deploy PROD, release tag
 //   hotfix/*                   checks and build, reaches main through a pull request
+//
+// Every checkout goes through qsCheckout(): the build host's link to GitHub can be slow
+// and drop mid-clone, so builds borrow objects from a mirror on the agent's volume.
+
+// A bare mirror of the repository on the agent's persistent volume. Checkouts borrow its
+// objects (git alternates), so a build downloads only commits newer than the mirror.
+// The first build on a new host fills it once.
+MIRROR = '/home/jenkins/agent/git-mirror/QuantSim-FYP.git'
+
+def qsCheckout() {
+  // Refresh the mirror under a lock (several builds share it). A failed refresh is not
+  // fatal, and a mirror that is not a valid bare repository (e.g. a half-finished seed)
+  // is removed and cloned again.
+  sh """
+    set +e
+    mirror='${MIRROR}'
+    mkdir -p "\$(dirname "\$mirror")"
+    (
+      command -v flock >/dev/null && flock -w 960 9
+      if [ -e "\$mirror" ] && [ "\$(git -C "\$mirror" rev-parse --is-bare-repository 2>/dev/null)" != true ]; then
+        echo "mirror at \$mirror is not a valid repository; removing it"
+        rm -rf "\$mirror"
+      fi
+      if [ -d "\$mirror" ]; then
+        timeout 600 git -C "\$mirror" fetch --prune --quiet origin || echo "mirror refresh failed; continuing"
+      else
+        rm -rf "\$mirror.tmp"
+        # Bounded, so a very slow link cannot use up the build; a later build tries again
+        timeout 900 git clone --mirror --quiet https://github.com/Ali-Mazhar05/QuantSim-FYP.git "\$mirror.tmp" \\
+          && mv "\$mirror.tmp" "\$mirror" || echo "mirror clone failed; checking out without it"
+      fi
+    ) 9>"\$mirror.lock"
+    exit 0
+  """
+  // Borrow from the mirror only when it is a usable repository
+  def mirrorOk = sh(
+    script: "test \"\$(git -C '${MIRROR}' rev-parse --is-bare-repository 2>/dev/null)\" = true",
+    returnStatus: true,
+  ) == 0
+  def clone = [$class: 'CloneOption', noTags: true, shallow: false, timeout: 30]
+  if (mirrorOk) {
+    clone.reference = MIRROR
+  } else {
+    echo 'checking out without the mirror'
+  }
+  retry(3) {
+    checkout([
+      $class: 'GitSCM',
+      branches: scm.branches,
+      userRemoteConfigs: scm.userRemoteConfigs,
+      extensions: scm.extensions + [clone],
+    ])
+  }
+}
 
 def ghcrLogin() {
   withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
@@ -57,7 +111,7 @@ pipeline {
       stages {
         stage('Prepare') {
           steps {
-            checkout scm
+            script { qsCheckout() }
             script {
               def qsMode = sh(script: "ci/scripts/env-for-branch.sh '${env.BRANCH_NAME}'", returnStdout: true).trim().tokenize(' ')[1]
               if (qsMode != 'ci') {
@@ -199,7 +253,7 @@ pipeline {
       }
       options { timeout(time: 20, unit: 'MINUTES') }
       steps {
-        checkout scm
+        script { qsCheckout() }
         lock(resource: "env-${env.QS_ENV}") {
           script {
             ghcrLogin()
@@ -217,10 +271,17 @@ pipeline {
               try {
                 sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
                 sh 'ci/scripts/smoke.sh "$QS_ENV" .ci/release.env'
+                // Playwright gates: a red run fails the deploy, so the environment's
+                // verified status (required on the next promotion PR) is never set. They
+                // sign in as test.admin, whose password the gate decrypts from the
+                // environment's secrets with the sops-age-key bound above
+                def gates = [dev: 'dev-smoke', test: 'demo-spine']
+                if (gates[env.QS_ENV]) {
+                  sh "ci/scripts/playwright-gate.sh '${env.QS_ENV}' '${gates[env.QS_ENV]}'"
+                }
                 // DEV only, last: runs a portfolio through the trading API and engine on
                 // the bundled demo market data and checks its event chain. A failure
-                // fails the deploy, so DEV is not verified. Signs in as test.admin with the
-                // password decrypted from the environment's secrets (sops-age-key above)
+                // fails the deploy, so DEV is not verified
                 if (env.QS_ENV == 'dev') {
                   sh 'ci/scripts/trading-live-check.sh dev'
                 }
@@ -250,6 +311,7 @@ pipeline {
       post {
         always {
           archiveArtifacts artifacts: '.ci/release.env', allowEmptyArchive: true
+          junit allowEmptyResults: true, testResults: 'frontend/reports/e2e-*.xml'
           cleanWs(deleteDirs: true, notFailBuild: true)
         }
       }
@@ -267,7 +329,7 @@ pipeline {
             accepted = false
           }
           node('docker') {
-            checkout scm
+            qsCheckout()
             withGitHub {
               def state = accepted ? 'success' : 'failure'
               def text = !accepted ? 'Rejected or timed out at acceptance'
@@ -292,7 +354,7 @@ pipeline {
       }
       options { timeout(time: 10, unit: 'MINUTES') }
       steps {
-        checkout scm
+        script { qsCheckout() }
         script {
           ghcrLogin()
           for (c in env.QS_COMPONENTS.tokenize(' ')) {

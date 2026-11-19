@@ -25,7 +25,7 @@ from qs_template.kafka import KafkaPublisher
 from qs_template.logging import configure_logging
 from qs_template.messaging import OutboxRelay
 from qs_trading.engine.store import PortfolioNotFound
-from qs_trading.jobs import build_handlers, job_queue
+from qs_trading.jobs import build_handlers, environment_factory, job_queue
 from qs_trading.projections.rebuild import ChainBroken, rebuild_portfolio, verify_portfolio
 from qs_trading.settings import TradingSettings
 
@@ -81,7 +81,7 @@ async def _worker() -> None:
     worker = Worker(
         database,
         job_queue(settings),
-        build_handlers(database),
+        build_handlers(database, environment_factory(settings)),
         poll_seconds=settings.job_poll_seconds,
     )
     _on_signals(asyncio.get_running_loop(), worker.stop)
