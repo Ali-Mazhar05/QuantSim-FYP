@@ -2,6 +2,7 @@
 # Publishes the frontend of a release to Cloudflare Pages. The site files are copied
 # out of the already-built frontend image, so Pages serves exactly the bytes that
 # were tested in DEV and TEST.
+# It also writes config.json with the environment's current public API address.
 #   usage: pages-deploy.sh <env> <release-file>
 #   needs: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 source "$(dirname "$0")/lib.sh"
@@ -28,11 +29,19 @@ docker cp "$container:/usr/share/nginx/html/." "$REPO_ROOT/$site_dir"
 grep -q "\"content_hash\":\"$FRONTEND_HASH\"" "$REPO_ROOT/$site_dir/version.json" \
   || die "the site copied from $FRONTEND_IMAGE does not carry content hash $FRONTEND_HASH"
 
+# Where the website finds this environment's API (see the api-tunnel service)
+if [[ "$COMPOSE_TARGET" == "local" ]]; then
+  API_PUBLIC_URL="${API_PUBLIC_URL:-$(wait_for_api_url "$QS_PROJECT" || true)}"
+  [[ -n "$API_PUBLIC_URL" ]] || die "the API of $env has no public address to publish"
+  printf '{"apiBaseUrl":"%s"}\n' "$API_PUBLIC_URL" > "$REPO_ROOT/$site_dir/config.json"
+  log "the site will call the API at $API_PUBLIC_URL"
+fi
+
 # Create the Pages project on first use
-if [[ "$(cf_pages_api GET "/$PAGES_PROJECT" | jq -r '.success')" != "true" ]]; then
+if [[ "$(cf_pages_api GET "/$PAGES_PROJECT" | json_get success)" != "true" ]]; then
   log "creating Cloudflare Pages project $PAGES_PROJECT"
   response="$(cf_pages_api POST "" "{\"name\":\"$PAGES_PROJECT\",\"production_branch\":\"$PAGES_PRODUCTION_BRANCH\"}")"
-  [[ "$(jq -r '.success' <<<"$response")" == "true" ]] || die "could not create the Pages project: $response"
+  [[ "$(json_get success <<<"$response")" == "true" ]] || die "could not create the Pages project: $response"
 fi
 
 log "publishing $FRONTEND_IMAGE to Pages project $PAGES_PROJECT, branch $PAGES_BRANCH"

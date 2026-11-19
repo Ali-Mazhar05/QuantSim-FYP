@@ -18,11 +18,23 @@ At request time, :func:`set_audit_context` tells the trigger who is acting.
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Identity,
+    Index,
+    MetaData,
+    Table,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # One statement per item: asyncpg (and so Alembic on asyncpg) runs one statement per call
@@ -83,6 +95,27 @@ AUDIT_SETUP_STATEMENTS: tuple[str, ...] = (
 )
 
 
+# The audit log as a table definition, for diagrams and schema comparison only: the table
+# itself is created by AUDIT_SETUP_STATEMENTS above, and services' schema tests check the
+# two agree.
+audit_metadata = MetaData()
+audit_log = Table(
+    "audit_log",
+    audit_metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("table_name", Text, nullable=False),
+    Column("operation", Text, nullable=False),
+    Column("row_id", Text, nullable=False),
+    Column("old_data", JSONB),
+    Column("new_data", JSONB),
+    Column("changed_by", Text),
+    Column("request_id", Text),
+    Column("changed_at", DateTime(timezone=True), nullable=False),
+    Column("txid", BigInteger, nullable=False),
+    Index("audit_log_record", "table_name", "row_id", "id"),
+)
+
+
 def audit_table_statements(
     table: str, id_column: str = "id", *, exclude: tuple[str, ...] = ()
 ) -> tuple[str, ...]:
@@ -122,6 +155,38 @@ class AuditEntry:
     changed_by: str | None
     request_id: str | None
     changed_at: datetime
+
+
+@dataclass(frozen=True)
+class AuditRecord:
+    """One audit_log row with the table and row it belongs to, for feeds across tables."""
+
+    id: int
+    table_name: str
+    operation: str
+    row_id: str
+    old_data: dict[str, Any] | None
+    new_data: dict[str, Any] | None
+    changed_by: str | None
+    request_id: str | None
+    changed_at: datetime
+
+
+async def recent_changes(
+    session: AsyncSession, tables: Sequence[str], *, limit: int
+) -> list[AuditRecord]:
+    """The latest ``limit`` recorded changes to any of ``tables``, newest first."""
+    if not tables or limit < 1:
+        return []
+    rows = await session.execute(
+        text(
+            "SELECT id, table_name, operation, row_id, old_data, new_data, changed_by,"
+            " request_id, changed_at FROM audit_log WHERE table_name = ANY(:tables)"
+            " ORDER BY id DESC LIMIT :limit"
+        ),
+        {"tables": list(tables), "limit": limit},
+    )
+    return [AuditRecord(*row) for row in rows.all()]
 
 
 async def record_history(session: AsyncSession, table: str, row_id: str) -> list[AuditEntry]:

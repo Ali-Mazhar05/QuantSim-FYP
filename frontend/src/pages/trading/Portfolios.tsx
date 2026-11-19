@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
+import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import DataTable, { type Column } from '../../components/tables/DataTable'
@@ -24,6 +25,7 @@ const columns: Column<Row>[] = [
 
 export default function Portfolios() {
   const navigate = useNavigate()
+  const canCreate = useCan('create_portfolios')
   const rows: Row[] = [
     { id: PORTFOLIO.id, name: PORTFOLIO.name, value: PORTFOLIO.currentValue, returnPct: PORTFOLIO.returnPct, status: 'Active' },
     { id: 'pf-0981', name: 'Value Strategy — Run #0981', value: 942_310, returnPct: -1.2, status: 'Closed' },
@@ -35,7 +37,7 @@ export default function Portfolios() {
         title="Portfolios"
         description="Portfolios constructed from simulated market environments."
         action={
-          <Button icon={Plus} onClick={() => navigate('/trading/portfolios/new')}>
+          <Button icon={Plus} disabled={!canCreate} title={canCreate ? undefined : "Your role cannot do this"} onClick={() => navigate('/trading/portfolios/new')}>
             New Portfolio
           </Button>
         }

@@ -2,10 +2,38 @@
 
 The detailed plan for building QuantSim's market-data ingestion engine: what it must do,
 what it builds on, how it is designed, how it is tested and deployed, and the order of
-work. Implementation starts once the CI/CD server is running; this plan is prepared in
-parallel so work can begin immediately after.
+work.
 
-Task ids (I1-xx) refer to [iteration-plan.md](iteration-plan.md).
+Task ids (I1-xx) refer to [iteration-plan.md](iteration-plan.md). Requirement ids
+(FR-MKT-xxx) refer to the requirements specification.
+
+---
+
+## 0. Status (2026-10-14)
+
+Plan revision 2. The CI/CD server and the platform service are running, and the first
+layers of the market service are built on draft pull requests that are not merged yet.
+
+| Layer | State | Where |
+|---|---|---|
+| `market_db` schema, service skeleton, database rules | Built, 19 tests | PR #14, `feature/market-schema` |
+| Trading calendar, cleaning gate, returns and volatility | Built, 55 tests | PR #18, `feature/market-cleaning-gate` |
+| Generated ERD, kept in step with the schema by a test | Built, 64 tests in total | PR #31, `feature/market-erd` |
+| PRD, epics, stories, OpenSpec change `add-market-ingestion` | Written | PR #15, `feature/market-user-stories` |
+| Instrument master, Tiingo adapter, run queue and worker, publishing, scheduler, read API, deployment, planted-fault demo | **Not started** | section 10 |
+
+The pull requests are stacked (#14, then #18, then #31) and still target branches that
+are already merged. Step 0 of section 10 re-points and merges them first.
+
+What changed in this revision, and why:
+
+| Change | Reason |
+|---|---|
+| Gap grace period is close plus 12 hours (was one hour) | Tiingo end-of-day data often lands late; one hour raised a false "missing bar" every day. The merged code uses 12 hours, so this document now agrees with it (D10) |
+| Scheduled runs are enabled on one environment only, with one vendor budget shared across environments | One free key allows 50 requests an hour; two schedulers at 45 each would exhaust it (D11, D12) |
+| Section 3.1 states where scheduled runs execute | Until an always-on server exists, scheduled runs happen only while someone hosts Jenkins |
+| Correlation series (FR-MKT-004) has its own work item, marked stretch | It is a Core requirement that Risk and TDA depend on and had no task |
+| Work breakdown carries the real branch names, pull request numbers and a cut order | Section 10 now shows delivered and remaining work separately |
 
 ---
 
@@ -28,7 +56,8 @@ Task ids (I1-xx) refer to [iteration-plan.md](iteration-plan.md).
 ### Later (designed for, not built now)
 | Item | When |
 |---|---|
-| Correlation matrices (FR-MKT-004, I1-29) | End of Iteration 1 if time allows, otherwise Iteration 3 with TDA |
+| Correlation matrices (FR-MKT-004, I1-29) | Work item 9 in section 10, a stretch goal. If it is cut it moves to Iteration 3 with TDA, which needs it as input (FR-RSK-011) |
+| Versioned baskets (FR-MKT-005, Extended) | With correlation, whenever it is built |
 | News ingestion (FR-MKT-006) | Iteration 2 |
 | Replay playback and tick streaming (FR-MKT-007) | Iteration 2 |
 | Second vendor for cross-checking outliers | When a second free source is chosen |
@@ -37,13 +66,13 @@ Task ids (I1-xx) refer to [iteration-plan.md](iteration-plan.md).
 
 ## 2. Investigation findings
 
-### 2.1 What it builds on (already built and tested, not yet merged)
+### 2.1 What it builds on (merged and running)
 | Piece | Status | Used for |
 |---|---|---|
-| `libs/qs_template` | 77 tests passing | Configuration, logging, errors, health and readiness, database sessions, JWT verification, revocation, outbox and idempotent consumers, Redpanda adapters, audit trail |
-| `services/platform` (M0) | 34 tests passing | Signs the tokens the market API verifies; the pattern the market service copies (settings, migrations, image, compose entries) |
-| `ci/scripts/python-ci.sh`, `migration-check.sh` | Working | Lint, types and tests with a throwaway PostgreSQL; migrations up, down and up |
-| Deployment stack | Written, not yet deployed | PostgreSQL + TimescaleDB, Redis, Redpanda, gateway |
+| `libs/qs_template` | Merged, tested in CI | Configuration, logging, errors, health and readiness, database sessions, JWT verification, revocation, outbox and idempotent consumers, Redpanda adapters, audit trail |
+| `services/platform` (M0) | Merged, 103 tests, deployed on DEV and TEST | Signs the tokens the market API verifies; the role matrix the market routes reuse; the pattern the market service copies (settings, migrations, image, compose entries) |
+| `ci/scripts/python-ci.sh`, `migration-check.sh` | Working in Jenkins | Lint, types and tests with a throwaway PostgreSQL; migrations up, down and up |
+| Deployment stack | Running on DEV and TEST | PostgreSQL + TimescaleDB, Redis, Redpanda, gateway |
 
 ### 2.2 Vendor: Tiingo end-of-day
 | Item | Finding | Consequence |
@@ -52,7 +81,8 @@ Task ids (I1-xx) refer to [iteration-plan.md](iteration-plan.md).
 | Request cost | One request returns any date range for one symbol, so a full history costs one request, as does a daily update | 40 instruments fit easily: under an hour for a full backfill, 40 requests per day after that |
 | Data | Raw and adjusted OHLC, volume, dividend cash and split factor per session | Corporate actions come for free |
 | Licence | Free plans are for personal, non-commercial use | Fine for the FYP; a paid licence is needed before charging users (already noted in the pricing work) |
-| Account | Needs a free API key | The team signs up; the key goes into the encrypted secrets |
+| Account | Needs a free API key | One shared key for the team, stored as `TIINGO_API_KEY` in the encrypted secrets with `ci/scripts/set-secret.sh`; never in a file, a log or a test fixture |
+| Verification | The limits above are third-party figures | Branch 4 in section 10 includes a one-symbol vendor check that records the real response headers and the actual rate limit before the adapter is trusted |
 
 ### 2.3 Infrastructure
 | Item | Finding |
@@ -61,12 +91,11 @@ Task ids (I1-xx) refer to [iteration-plan.md](iteration-plan.md).
 | TimescaleDB extension | Creating it needs a superuser, so `db-init` (superuser) creates it in `market`; the migration then only creates hypertables |
 | Developer laptops | Disk space is tight; tests reuse the shared throwaway database, and heavy builds run on the CI server once it exists |
 
-### 2.4 Draft code
-A first draft of about ten files exists, uncommitted, on a local branch
-(`feature/market-ingestion`): settings, models, calendar, cleaning gate, returns, Tiingo
-adapter, rate limiter, pipeline, instrument service and API schemas. It follows this
-design and will be split into the branches in section 10, reviewed and tested there,
-rather than merged as one block.
+### 2.4 What was built from the draft
+The first draft was split into reviewed branches, as planned. Schema and skeleton,
+calendar, cleaning gate and returns are built and tested (section 0). The Tiingo adapter,
+rate limiter, pipeline and instrument service from the draft are not merged and will be
+rebuilt branch by branch against the schema that now exists.
 
 ---
 
@@ -98,6 +127,22 @@ gateway ──▶ │ api        /api/market/*         (FastAPI, verifies JWT, r
   readable, unit-tested function. `exchange_calendars` (which brings pandas) is used only
   for trading sessions and close times.
 
+### 3.1 Where scheduled runs execute
+The scheduler is only useful while the process runs, and today the backend runs on
+whichever laptop is hosting Jenkins. So:
+
+- **Scheduled runs happen only while someone hosts.** The 09:30 UTC catch-up run exists
+  to recover a missed 22:30 run, and a missed day is filled by the next run's five-session
+  overlap, so a host that was off for a day loses nothing permanently.
+- **One scheduler across all environments.** It is enabled on TEST only (`QS_SCHEDULER_ENABLED`);
+  DEV and ACC run manual and backfill runs on demand. This keeps the shared vendor
+  budget safe (D11).
+- **A success metric must not depend on a host that does not exist.** "Ten days of
+  scheduled runs" is replaced by "at least three scheduled runs plus a manual-run log with
+  the run reports", until an always-on server is provisioned (D13).
+- **An always-on server remains the target** (Oracle Always Free, or any small VM). When
+  it exists, moving ACC and PROD there needs no code change, only compose targets.
+
 ---
 
 ## 4. Data model (`market_db`) and migration protocol
@@ -115,7 +160,7 @@ gateway ──▶ │ api        /api/market/*         (FastAPI, verifies JWT, r
 | `data_gap` | Expected sessions with no clean bar | Resolved automatically when the bar arrives |
 | `corporate_action` | Splits and dividends | Split factor > 0 |
 | `return_series` (hypertable) | Log returns, adjusted returns, 20- and 60-day volatility | Recomputed from the earliest changed session |
-| `replay_session` | Replay windows | Database check `end_time > start_time` (NFR-INT-003), speed bounds, status set |
+| `market_environment` | Market environments, which are also the replay windows (decided in the PRD, FR-30, as the POC models them) | Database check `end_date > start_date` (NFR-INT-003), type, frequency and status sets, 1 to 100 instruments. Play, pause, speed and playback state arrive with Iteration 2, with their own table then |
 | `outbox`, `processed_events` | Events | From the template |
 | `audit_log` | Change history | From the template; `instrument` audited |
 
@@ -145,12 +190,14 @@ gateway ──▶ │ api        /api/market/*         (FastAPI, verifies JWT, r
 | Trigger | Mode | Window |
 |---|---|---|
 | Scheduler, 22:30 UTC (after the US close) | `daily` | From 5 sessions before the last stored bar to today |
-| Scheduler, 06:00 UTC | `catchup` | Same; picks up bars the vendor published late |
+| Scheduler, 09:30 UTC | `catchup` | Same; picks up bars the vendor published late and is the first run allowed to judge a session missing (close plus 12 hours is 08:00 or 09:00 UTC, so 06:00 was too early; D16) |
 | Admin, `POST /ingestion-runs` | `manual` | Optional explicit window and instrument list |
 | Admin, `POST /ingestion-runs` with `mode=backfill` | `backfill` | Explicit start date (default first run: 2015-01-02) |
 
 The scheduler only enqueues; per-day idempotency keys mean running two schedulers cannot
-create two daily runs.
+create two daily runs. It is enabled on TEST only (section 3.1). "Today" is the UTC date.
+A run whose window holds no expected session (a weekend, a holiday) ends `succeeded`
+with zero new sessions and no events.
 
 ### 5.2 Steps for each instrument (one transaction)
 1. **Window**: an explicit window, or 5 sessions before the last stored bar to today, or
@@ -175,7 +222,11 @@ create two daily runs.
 | Worker crashes mid-run | The lock is released with its connection; the next worker resets the run to pending and re-runs it safely |
 | Vendor outage | After 5 consecutive vendor failures the circuit opens: remaining instruments are deferred, the run ends `partially_succeeded`, the catch-up run retries |
 | Request budget used up | Remaining instruments deferred, not blocked for an hour |
+| Backfill competes with the daily run | One request per active instrument per scheduled run is reserved out of the hourly budget, so a backfill can never starve the daily run |
+| Vendor refuses the key (HTTP 401) | The whole run fails as `vendor_auth` with no retries; it is not counted toward the circuit |
+| Two runs for one instrument and window | The second is refused with 409 and the id of the active run |
 | Unknown symbol | That instrument fails with the reason; the others continue |
+| A vendor correction fails the gate | The published bar is kept, a rejected bar is recorded with the reason, and no revision or `bar.corrected` is produced |
 | Same window run twice | No new rows, no new events |
 | Run status | `succeeded` (all instruments succeeded or had no new data), `partially_succeeded`, `failed` |
 
@@ -199,8 +250,12 @@ create two daily runs.
 
 - Timestamps: every bar gets its session's actual close in UTC from the exchange calendar
   (handles daylight saving and early closes).
-- A session counts as expected only once its close plus one hour has passed, so today's
-  bar is not called missing before the vendor publishes it.
+- A session counts as expected only once its close plus 12 hours has passed, so today's
+  bar is not called missing before the vendor publishes it. The earlier one-hour figure
+  raised a false gap every day because Tiingo end-of-day data often arrives late; the
+  built gate uses 12 hours (`PUBLICATION_GRACE`) and this document now agrees (D10).
+- Every published bar and revision carries its provenance: run id, vendor and ruleset
+  version.
 - The report per instrument: received, passed untouched, corrected, duplicates removed,
   rejected, counts per rule, flags, gaps. **Received = passed untouched + corrected +
   duplicates removed + rejected**, always (a property test checks it).
@@ -271,21 +326,50 @@ explicitly triggered with a key.
 ## 10. Work breakdown
 
 Each row is one `feature/*` branch, one pull request into `develop`, following the
-git-flow skill (preflight, one-line commits, rebase merge when green). Branches stack in
-this order.
+git-flow skill (preflight, one-line commits, merge commit when green).
 
-| # | Branch | Contents | Done when | Depends on |
-|---|---|---|---|---|
-| 1 | `feature/market-schema` | Service skeleton, settings, models, migration `0001`, `db-init` changes, model-matches-migration test | Migration check passes; database rules tested | Template and platform merged |
-| 2 | `feature/market-instruments` | Instrument master service and API, seed universe, audit, events | API tests pass; seed loads 40 instruments | 1 |
-| 3 | `feature/market-cleaning-gate` | Calendar, gate, returns, with unit and property tests | Every rule tested; report always adds up | 1 |
-| 4 | `feature/market-tiingo-adapter` | Source interface, Tiingo adapter, hourly budget, recorded fixtures | Adapter tests pass for every response type | 1 |
-| 5 | `feature/market-pipeline` | Run queue, worker with lock and recovery, per-instrument transaction, revisions, quality records, returns, events, circuit breaker | Database pipeline tests pass, including idempotency and recovery | 2, 3, 4 |
-| 6 | `feature/market-api-and-scheduler` | Run trigger and read endpoints, data quality, replay sessions, scheduler process, command line | API tests pass; scheduler creates one run per day | 5 |
-| 7 | `feature/market-deployment` | Dockerfile, compose entries, secrets, components, README and runbook | DEV deploy: health through the gateway, smoke test green | 6, CI server up |
-| 8 | `feature/market-planted-faults` | Planted-fault dataset and exact-report test, DEV end-to-end check with a real key | Report matches exactly; real run lands bars in DEV | 7 |
+**Status key:** ✅ built (draft PR, not merged) · ⬜ not started · ✂ cut candidate.
 
-Branches 2, 3 and 4 can be built in parallel by different members after branch 1.
+### Step 0: land what is built
+The four open pull requests target branches that are already merged. Before anything new
+starts they are re-pointed at `develop` and merged in this order, each with a green
+Jenkins run:
+
+| Order | PR | Branch | Action |
+|---|---|---|---|
+| 1 | #14 | `feature/market-schema` | Re-point at `develop`, merge |
+| 2 | #18 | `feature/market-cleaning-gate` | Re-point at `develop` after #14, merge |
+| 3 | #31 | `feature/market-erd` | Re-point at `develop` after #18, merge |
+| any | #15 | `feature/market-user-stories` | Docs only; re-point at `develop`, merge any time |
+
+### Built and remaining work
+| # | Branch | Contents | Done when | Depends on | State |
+|---|---|---|---|---|---|
+| 1 | `feature/market-schema` | Service skeleton, settings, models, migration `0001`, model-matches-migration test | Migration check passes; database rules tested | Template and platform merged | ✅ PR #14 |
+| 2 | `feature/market-cleaning-gate` | Calendar, gate, returns, with unit and property tests | Every rule tested; report always adds up | 1 | ✅ PR #18 |
+| 2b | `feature/market-erd` | ERD generator and committed diagram, kept in step by a test | Test fails when the diagram is stale | 2 | ✅ PR #31 |
+| 3 | `feature/market-instruments` | Instrument master service and API, seed universe, audit, events, role-by-route matrix test | API tests pass; seed loads 40 instruments; every route refuses the wrong role | 1 | ⬜ |
+| 4 | `feature/market-tiingo-adapter` | Source interface, Tiingo adapter, shared hourly budget, fixture source, one-symbol vendor check, guard that tests never reach the real host | Adapter tests pass for every response type; vendor check records the real limits | 1, key stored | ⬜ |
+| 5 | `feature/market-pipeline` | Run queue, worker with lock and recovery, per-instrument transaction, revisions, quality records, returns, events, circuit breaker | Database pipeline tests pass, including idempotency and recovery | 2, 3, 4 | ⬜ |
+| 6 | `feature/market-api-and-scheduler` | Run trigger and read endpoints, data quality, replay sessions, tick schema, scheduler (TEST only), command line | API tests pass; scheduler creates one run per day | 5 | ⬜ |
+| 7 | `feature/market-deployment` | `db-init` for `market`, Dockerfile, compose entries, secrets, components, README and runbook | DEV deploy: health through the gateway, smoke test green | 6 | ⬜ |
+| 8 | `feature/market-planted-faults` | Planted-fault dataset and exact-report test, DEV end-to-end check with a real key | Report matches exactly; real run lands bars in DEV | 7 | ⬜ |
+| 9 | `feature/market-correlation` | Baskets and rolling correlation matrices in one request, fingerprinted (FR-MKT-004) | One request returns every window's matrix; identical windows give identical fingerprints | 5 | ✂ stretch |
+| 10 | `feature/market-corporate-actions` | Splits and dividends from the vendor, adjusted series (FR-MKT-010) | Adjusted series served without overwriting raw bars | 5 | ✂ |
+| 11 | `feature/market-symbol-directory` | Nasdaq symbol directory validation on instrument add | No live download in tests | 3 | ✂ first to cut |
+
+Branches 3 and 4 can be built in parallel after step 0.
+
+### Cut order
+If the schedule slips, cut in this order, and record the cut in the progress log:
+1. Symbol directory (11)
+2. Corporate actions (10)
+3. Tracing (I1-17)
+4. Correlation (9), which then moves to Iteration 3 with TDA
+5. The catch-up run, and a backfill bounded to one or two years
+
+**Never cut:** the cleaning gate, idempotent publication, the planted-fault demo and the
+role checks on every route. They are the Mid demonstration.
 
 ---
 
@@ -301,7 +385,16 @@ Branches 2, 3 and 4 can be built in parallel by different members after branch 1
 | D6 | Job queue | PostgreSQL queue instead of Celery for ingestion |
 | D7 | Cleaning implementation | Pure Python with decimals instead of polars and pandera |
 | D8 | Backfill start | 2015-01-02 (about ten years, enough for every analysis planned) |
-| D9 | Draft code | Split into the branches above and reviewed, rather than discarded |
+| D9 | Draft code | Split into the branches above and reviewed, rather than discarded (done for schema, gate and returns) |
+| D10 | Gap grace period | Close plus 12 hours, not one hour; matches the built gate |
+| D11 | Which environment schedules | TEST only. DEV and ACC take manual and backfill runs |
+| D12 | Vendor budget | One hourly budget per API key, shared by every environment through Redis, with one request per active instrument per scheduled run reserved |
+| D13 | Scheduled-run success metric | At least three scheduled runs plus a manual-run log, until an always-on host exists |
+| D14 | Correlation (FR-MKT-004) | Own work item, stretch; moves to Iteration 3 if cut |
+| D15 | Vendor key | One shared Tiingo key as `TIINGO_API_KEY` in the encrypted secrets; the limits are verified by the vendor check in branch 4 |
+| D16 | Catch-up run time | 09:30 UTC. The gate judges a session missing only after close plus 12 hours (08:00 or 09:00 UTC); a 06:00 run could never judge, so gaps would appear a day late |
+| D17 | Replay window table | The PRD's `market_environment` is the replay window (NFR-INT-003); no separate `replay_session` table in Iteration 1 |
+| D18 | Stored precision | Returns and volatility `NUMERIC(20,12)`; adjusted prices `NUMERIC(23,10)` (the vendor's precision); the bar content hash covers raw vendor values only, because adjusted values are restated at every dividend or split |
 
 ---
 
@@ -314,7 +407,12 @@ Branches 2, 3 and 4 can be built in parallel by different members after branch 1
 | A vendor sends a bad bar after it was published | Revisions and `bar.corrected` let consumers correct downstream data |
 | Disk space on developer laptops | Heavy runs on the CI server; caches cleaned after local checks |
 | ARM build differences | All dependencies checked for ARM wheels; the CI server builds natively |
-| Schedule slip | Branches 2, 3 and 4 run in parallel; correlation (I1-29) is the first thing cut |
+| Schedule slip | Branches 3 and 4 run in parallel; follow the cut order in section 10 |
+| No always-on host, so scheduled runs stop when nobody hosts | Catch-up run and five-session overlap recover missed days; success metric relaxed (D13); an always-on server stays the target |
+| Two environments exhaust one Tiingo key | One shared budget per key and a scheduler on TEST only (D11, D12) |
+| A schedule too large for the people available | Cut order in section 10; reviews and pairing spread across members; the pull request chain is merged first so work does not stack up |
+| Pull request chain targets merged branches and carries old red statuses | Step 0 re-points and re-runs them before new work starts |
+| The Tiingo key leaks through a log, fixture or file | Stored only through `set-secret.sh`; redacted from logs (observability tasks); a CI guard fails tests that open a connection to the vendor |
 
 ---
 

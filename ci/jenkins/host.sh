@@ -154,6 +154,29 @@ redeploy_environments() {
   rm -f "$jar"
 }
 
+# Each environment's API tunnel gets a new public address whenever Docker restarts. DEV
+# and TEST are rebuilt above, which publishes theirs; ACC and PROD are not rebuilt (they
+# need approval), so their sites are published again, unchanged except for config.json,
+# from the release already recorded for them.
+republish_sites() {
+  local env release
+  mkdir -p "$here/.state"
+  for env in acc prod; do
+    release="$here/.state/$env-release.env"
+    dk exec "$project-agent-1" cat "/home/jenkins/agent/releases/$env/current.env" \
+      > "$release" 2>/dev/null || { rm -f "$release"; continue; }
+    if QS_LOCAL=1 \
+      CLOUDFLARE_API_TOKEN="$(tr -d '\r\n' < "$secrets/cloudflare_api_token")" \
+      CLOUDFLARE_ACCOUNT_ID="$(tr -d '\r\n' < "$secrets/cloudflare_account_id")" \
+      "$here/../scripts/pages-deploy.sh" "$env" "$release"; then
+      log "published the current API address of $env to its website"
+    else
+      log "WARNING: could not publish the API address of $env; redeploy it from Jenkins"
+    fi
+    rm -f "$release"
+  done
+}
+
 start() {
   local force=${1:-} lease owner seen url
   lease="$(lease_text)"
@@ -193,6 +216,7 @@ start() {
   printf 'host=%s\nat=%s\nurl=%s\n' "$host_id" "$(date +%s)" "$url" | r2 -- "rclone rcat $remote/lease.env"
 
   redeploy_environments
+  republish_sites
   log "Jenkins is hosted here: $url (sign in as admin)"
 }
 

@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi import APIRouter
@@ -148,3 +149,55 @@ def test_unexpected_errors_do_not_leak_details(client: TestClient) -> None:
     assert response.status_code == 500
     assert "hunter2" not in response.text
     assert response.json()["title"] == "Internal error"
+
+
+# Cross-site calls from the websites ----------------------------------------------------
+
+SITE = "https://develop.quantsim-4hz.pages.dev"
+
+
+def cors_client(origins: str) -> TestClient:
+    settings = ServiceSettings(
+        service_name="sample",
+        database_url=SecretStr("postgresql+asyncpg://u:p@localhost/sample"),
+        cors_origins=origins,
+    )
+    return TestClient(create_app(settings, routers=[router]))
+
+
+def preflight(client: TestClient, origin: str) -> Any:
+    return client.options(
+        "/api/sample/items/1",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+            "Access-Control-Request-Private-Network": "true",
+        },
+    )
+
+
+def test_a_listed_website_may_call_the_api_including_on_localhost() -> None:
+    client = cors_client(f"{SITE}, http://localhost:5173")
+    response = preflight(client, SITE)
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == SITE
+    assert response.headers["access-control-allow-private-network"] == "true"
+    assert (
+        client.get("/api/sample/items/1", headers={"Origin": SITE}).headers[
+            "access-control-allow-origin"
+        ]
+        == SITE
+    )
+
+
+def test_other_websites_are_not_allowed() -> None:
+    response = preflight(cors_client(SITE), "https://evil.example")
+    # Refused, and without an allow-origin header the browser blocks the call
+    assert response.status_code == 400
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_no_cross_site_calls_unless_configured() -> None:
+    response = cors_client("").get("/api/sample/items/1", headers={"Origin": SITE})
+    assert "access-control-allow-origin" not in response.headers

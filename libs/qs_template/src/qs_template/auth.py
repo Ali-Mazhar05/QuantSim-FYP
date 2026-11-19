@@ -48,6 +48,87 @@ class Role(StrEnum):
     VIEWER = "viewer"
 
 
+class Capability(StrEnum):
+    """What a role may do. Names match the POC frontend's capability map
+    (frontend/src/demo/permissions.ts) so the UI hides and disables exactly what the
+    backend refuses; the backend-only ones at the end have no POC control."""
+
+    VIEW_DASHBOARDS = "view_dashboards"
+    VIEW_REPORTS = "view_reports"
+    VIEW_ALERTS = "view_alerts"
+    RUN_STRESS_TEST = "run_stress_test"
+    RUN_TDA = "run_tda"
+    COMPUTE_METRICS = "compute_metrics"
+    CONFIGURE_DASHBOARDS = "configure_dashboards"
+    CREATE_ALERTS = "create_alerts"
+    CREATE_STRATEGIES = "create_strategies"
+    CALIBRATE_MODELS = "calibrate_models"
+    LAUNCH_SIMULATIONS = "launch_simulations"
+    CREATE_PORTFOLIOS = "create_portfolios"
+    MANAGE_MODELS = "manage_models"
+    MANAGE_USERS = "manage_users"
+    MANAGE_ROLES = "manage_roles"
+    MANAGE_INSTRUMENTS = "manage_instruments"
+    CONFIGURE_SYSTEM = "configure_system"
+    # Backend-only
+    VIEW_MARKET_DATA = "view_market_data"
+    VIEW_INGESTION_RUNS = "view_ingestion_runs"
+    CREATE_MARKET_ENVIRONMENTS = "create_market_environments"
+    TRIGGER_INGESTION = "trigger_ingestion"
+    BACKFILL_MARKET_DATA = "backfill_market_data"
+    VIEW_AUDIT_LOG = "view_audit_log"
+
+
+_VIEWER = frozenset(
+    {
+        Capability.VIEW_DASHBOARDS,
+        Capability.VIEW_REPORTS,
+        Capability.VIEW_ALERTS,
+        Capability.VIEW_MARKET_DATA,
+    }
+)
+_ANALYST = _VIEWER | {
+    Capability.RUN_STRESS_TEST,
+    Capability.RUN_TDA,
+    Capability.COMPUTE_METRICS,
+    Capability.CONFIGURE_DASHBOARDS,
+    Capability.CREATE_ALERTS,
+    Capability.VIEW_INGESTION_RUNS,
+}
+_QUANT = _ANALYST | {
+    Capability.CREATE_STRATEGIES,
+    Capability.CALIBRATE_MODELS,
+    Capability.LAUNCH_SIMULATIONS,
+    Capability.CREATE_PORTFOLIOS,
+    Capability.MANAGE_MODELS,
+    Capability.CREATE_MARKET_ENVIRONMENTS,
+    Capability.TRIGGER_INGESTION,
+}
+_ADMIN = _QUANT | {
+    Capability.MANAGE_USERS,
+    Capability.MANAGE_ROLES,
+    Capability.MANAGE_INSTRUMENTS,
+    Capability.CONFIGURE_SYSTEM,
+    Capability.BACKFILL_MARKET_DATA,
+    Capability.VIEW_AUDIT_LOG,
+}
+
+# The authoritative role matrix (SPEC section 1): each role adds to the one below it
+ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
+    Role.VIEWER: _VIEWER,
+    Role.ANALYST: frozenset(_ANALYST),
+    Role.QUANT: frozenset(_QUANT),
+    Role.ADMIN: frozenset(_ADMIN),
+}
+
+# Order used for "preview as an equal or lower role" in the frontend
+ROLE_RANK: dict[Role, int] = {Role.VIEWER: 0, Role.ANALYST: 1, Role.QUANT: 2, Role.ADMIN: 3}
+
+
+def can(role: Role, capability: Capability) -> bool:
+    return capability in ROLE_CAPABILITIES[role]
+
+
 @dataclass(frozen=True)
 class Principal:
     """The authenticated user acting on a request."""
@@ -234,6 +315,22 @@ class Authenticator:
         principal = await self.verify(token.strip())
         structlog.contextvars.bind_contextvars(user_id=str(principal.user_id))
         return principal
+
+    def require_capability(self, *capabilities: Capability) -> Callable[..., Awaitable[Principal]]:
+        """FastAPI dependency that also checks the caller's role grants every capability."""
+        needed = frozenset(capabilities)
+
+        async def check(principal: Annotated[Principal, Depends(self.principal)]) -> Principal:
+            if not needed <= ROLE_CAPABILITIES[principal.role]:
+                raise ServiceError(
+                    403,
+                    "Forbidden",
+                    "Your role does not allow this action.",
+                    type_="urn:quantsim:problem:forbidden",
+                )
+            return principal
+
+        return check
 
     def require(self, *roles: Role) -> Callable[..., Awaitable[Principal]]:
         """FastAPI dependency that also checks the caller holds one of ``roles``."""

@@ -10,10 +10,11 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fakeredis import FakeAsyncRedis
 from pydantic import SecretStr
-from sqlalchemy import text
+from sqlalchemy import select, text
 
+from qs_platform.limits import RateLimiter
 from qs_platform.main import build_app
-from qs_platform.models import metadata
+from qs_platform.models import mail_outbox, metadata
 from qs_platform.service import create_first_admin
 from qs_platform.settings import PlatformSettings
 from qs_template import Database, ServiceSettings
@@ -98,12 +99,78 @@ def redis() -> FakeAsyncRedis:
     return FakeAsyncRedis()
 
 
+class PlatformClient(httpx.AsyncClient):
+    """Test client that also knows the test database, to read the emails it queued."""
+
+    database: Database
+
+
 @pytest.fixture
 async def client(database: Database, redis: FakeAsyncRedis) -> AsyncIterator[httpx.AsyncClient]:
-    app = build_app(make_settings(), database=database, revocations=RevocationList(redis))
+    app = build_app(
+        make_settings(),
+        database=database,
+        revocations=RevocationList(redis),
+        limiter=RateLimiter(redis),
+    )
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://platform") as http:
+    async with PlatformClient(transport=transport, base_url="http://platform") as http:
+        http.database = database
         yield http
+
+
+async def mails_to(database: Database, address: str) -> list[tuple[str, dict[str, Any]]]:
+    """Emails queued for ``address``, oldest first, as (template, params)."""
+    async with database.transaction() as session:
+        rows = await session.execute(
+            select(mail_outbox.c.template, mail_outbox.c.params)
+            .where(mail_outbox.c.to_address == address)
+            .order_by(mail_outbox.c.id)
+        )
+        return [(r[0], r[1]) for r in rows]
+
+
+def link_token(link: str) -> str:
+    """The token in an emailed link's fragment (#token=...&purpose=...)."""
+    fragment = link.split("#", 1)[1]
+    values = dict(part.split("=", 1) for part in fragment.split("&"))
+    return values["token"]
+
+
+async def last_link(client: httpx.AsyncClient, address: str, template: str) -> str:
+    database = client.database  # type: ignore[attr-defined]
+    links = [p["link"] for t, p in await mails_to(database, address) if t == template]
+    assert links, f"no {template} email to {address}"
+    link: str = links[-1]
+    return link
+
+
+async def invite_and_accept(
+    client: httpx.AsyncClient,
+    admin: str,
+    username: str,
+    role: str = "quant",
+    password: str | None = None,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Admin invites a user, who then sets their password through the emailed link."""
+    body = {
+        "username": username,
+        "email": f"{username}@quantsim.dev",
+        "display_name": username.title(),
+        "role": role,
+        **extra,
+    }
+    response = await client.post("/api/platform/users", json=body, headers=bearer(admin))
+    assert response.status_code == 201, response.text
+    created: dict[str, Any] = response.json()
+    link = await last_link(client, created["email"], "invite")
+    accepted = await client.post(
+        "/api/platform/auth/reset-password",
+        json={"token": link_token(link), "password": password or f"{username}-password-123"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    return created
 
 
 async def login(client: httpx.AsyncClient, username: str, password: str) -> str:

@@ -4,6 +4,138 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-11-14
+
+**Found and fixed (same branch)**
+- The sign-up route records the new account itself as the acting user, so the audit feed
+  showed self sign-ups as invitations. Invitations are now credited to the admin who sent
+  them, sign-ups to the new account, and accounts created already verified by
+  `bootstrap-admin` and `seed-test-users` to System. Covered by platform tests.
+- The chart's screen-reader line was positioned against the whole page and caused a
+  page-wide horizontal scrollbar on pages with a chart; it is now anchored in the chart.
+
+**Verified**
+- Rebuilt the local stack from empty, with one clean Tiingo backfill: all 40 instruments
+  succeeded (BRK.B included), 119,400 bars from 2015-01-02 to 2026-11-13, 0 rejected.
+  Jenkins' own scripts: template 99, platform 107, market 323, frontend 88 tests, lint,
+  type check, build and migration check, all green. Role walkthrough PDF regenerated
+  (20 pages, including the chart axes and hover).
+
+## 2026-11-13
+
+**Delivered (branch `feature/iteration1-prototype-integration`, not yet merged)**
+- **Iteration 1 prototype integration**, keeping the prototype as the source of truth (no
+  layout changes). Market Environments, Create Market Environment, the top bar, the Replay
+  header and chart, the Audit Log and the System page now show real data. Buttons follow
+  the capabilities the platform returns from `/auth/me`, so the UI never offers what the
+  backend would refuse (I1-42, I1-43, I1-44).
+- **Market environments API** (`GET/POST /api/market/environments`, `GET /{id}`):
+  quant and admin create, everyone reads. An inverted window is refused by the API (422)
+  and by the database CHECK (FR-MKT-008). Status is `ready` when every instrument has data
+  in the window, otherwise `draft`. Migration `0003` audits the table.
+- **Audit feeds** (`GET /api/platform/audit`, `GET /api/market/audit`, admin only), in one
+  row shape the Audit Log page merges. They cover sign-ins, invitations, approvals, role
+  changes and deactivation; instrument and environment changes; and ingestion runs. A run
+  that rejected bars or partly succeeded is a warning; a failed run is critical
+  (FR-PLT-006..008).
+- **Candlestick chart:** a fixed price scale, a date axis, a hover tooltip (open, high, low,
+  close, change, volume) and keyboard reading. Used on Market Data, Create Market
+  Environment and Replay.
+
+**Found and fixed**
+- Rebased commits on `develop` had dropped earlier work. `c2d858a` unmounted the
+  ingestion-run routes (404 when deployed). `898f451` removed the scheduler settings, so
+  `market-scheduler` would crash on TEST. `be4bf02` and `7c8770f` removed market README
+  sections. All restored, with the route-role matrix test covering the run routes again.
+- Tiingo refuses `BRK.B` (404) and serves `BRK-B`; the adapter now converts class shares.
+  Found by a real backfill and verified live.
+- The Audit Log credited command-line changes to the affected user. A change with no
+  recorded actor is now shown as System, except actions only the account holder can take.
+
+**Verified**
+- Jenkins' own scripts, run locally: template 99, platform 106, market 323 tests (118
+  real-data tests skipped by design), market migration up/down/up, frontend lint, type
+  check, 88 tests and build.
+- The real stack, run locally with 119,360 real Tiingo bars for all 40 instruments
+  (2015-01-02 to 2026-11-12, 0 gaps, 0 rejected, 2 flagged as outliers). Clicked through
+  as viewer, analyst, quant and admin. The backend refused each role exactly as the role
+  matrix says (403/401), and accepted calls failed only on deliberately invalid bodies (422).
+  Evidence: the role walkthrough PDF with screenshots.
+
+**Decided**
+- Replay playback (Play/Pause) moves to Iteration 2 with FR-MKT-007.
+- Next for the integration: OpenAPI-generated frontend types with contract checks in
+  Jenkins (I1-41), the remaining unit-test gaps, then Playwright tests against DEV gating
+  promotion to TEST.
+
+**Known limits**
+- DEV uses recorded vendor data (AAPL Jan–Feb 2024, NVDA May–Jun 2024), so most
+  instruments show no price there, and environments made from the UI (window 2025-01-01 to
+  2026-06-30) are draft. TEST, on Tiingo, shows real data.
+- A full 40-instrument backfill on TEST takes about 8 hours with the normal request reserve
+  (5 manual or backfill requests an hour).
+
+## 2026-10-14
+
+**Decided**
+- **Ingestion plan revised** ([ingestion-plan.md](ingestion-plan.md), section 0 and
+  decisions D10 to D15):
+  - the gap grace period is close plus 12 hours, matching the built gate, not one hour;
+  - scheduled runs are enabled on TEST only and share one Tiingo budget per API key;
+  - until an always-on host exists, "ten days of scheduled runs" becomes at least three
+    scheduled runs plus a manual-run log;
+  - correlation (FR-MKT-004) is its own stretch work item, moving to Iteration 3 if cut;
+  - one shared `TIINGO_API_KEY` goes into the encrypted secrets, and its real limits are
+    verified by a one-symbol vendor check before the adapter is trusted.
+
+**Found**
+- The four open market pull requests (#14, #18, #31, #15) still target branches that are
+  already merged, and #14 and #18 carry red statuses from earlier runs on a laptop host.
+  They are re-pointed at `develop` and merged in order before new market work starts.
+- The Tiingo adapter, instrument master, run worker, scheduler, read API and deployment
+  of the market service are not built yet. Only the schema, calendar, cleaning gate,
+  returns and ERD are.
+
+## 2026-10-12
+
+**Delivered**
+- **CI/CD module complete.** Every environment deploys from its branch: DEV and TEST
+  automatically, ACC with an approver's sign-off and PROD with an approver's approval,
+  each skippable per environment with `AUTO_APPROVE` in `deploy/env/acc.env` and
+  `deploy/env/prod.env`.
+- **All four websites on Cloudflare Pages**, DEV and TEST included, at fixed addresses
+  that stay up whoever hosts Jenkins.
+- **Shared laptop hosting** (`ci/jenkins/host.sh`): a host lease and Jenkins' state in
+  Cloudflare R2, a public Jenkins link, a dedicated build agent, per-person logins with
+  GitHub usernames; Ali-Mazhar05 admin, AfnanRizwan1 and SaintOfAllOranges approvers.
+- **Host housekeeping**: a sweep after every build (leftover test containers and volumes,
+  build cache), test containers that no longer leak volumes, short test container names
+  for long branch names, `ci/jenkins/compact-docker-disk.ps1`.
+- **Team guide**: [ci-cd-team-guide.md](ci-cd-team-guide.md).
+
+**Verified**
+- Frontend through every environment: v0.1.0 released to PROD on 2026-10-11 with the
+  ACC sign-off and PROD approval, one image built once and promoted unchanged.
+- Backend on DEV and TEST: Backend CI (111 tests), the migration check, the `platform`
+  image built once on `develop`, `platform-migrate` before the new version, smoke test on
+  `/api/platform/health` with the content hash, the same image promoted to TEST.
+- Hotfix: `hotfix/favicon-link` from `main`, built on its branch, approved and released to
+  PROD as v0.1.1, then merged back into `develop`.
+- Hand-over: an empty second Jenkins restored the full history from R2 and continued the
+  build numbers; a second host was refused while the lease was held.
+
+**Decided**
+- Laptop hosting instead of Oracle Cloud (card verification failed); the CI server
+  setup stays in `ci/jenkins/` for later.
+- Every pull request, feature and promotion alike, merges with a merge commit.
+- The Vercel integration stays; its checks are informational.
+
+**Known limits**
+- Backend runs on DEV and TEST only, and only while someone hosts Jenkins; ACC and PROD
+  serve the frontend until an always-on server exists.
+- On the host laptop Docker's disk file must be compacted now and then, and Docker's
+  memory capped with `.wslconfig`.
+
 ## 2026-10-09
 
 **Delivered (committed, tests pending)**

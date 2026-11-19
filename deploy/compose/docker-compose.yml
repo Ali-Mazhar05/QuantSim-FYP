@@ -135,6 +135,11 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?}
       PGDATABASE: postgres
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD comes from the environment's secrets}
+      MARKET_DB_PASSWORD: ${MARKET_DB_PASSWORD:?MARKET_DB_PASSWORD comes from the environment's secrets}
+      SIMULATION_DB_PASSWORD: ${SIMULATION_DB_PASSWORD:?SIMULATION_DB_PASSWORD comes from the environment's secrets}
+      RISK_DB_PASSWORD: ${RISK_DB_PASSWORD:?RISK_DB_PASSWORD comes from the environment's secrets}
+      TRADING_DB_PASSWORD: ${TRADING_DB_PASSWORD:?TRADING_DB_PASSWORD comes from the environment's secrets}
+      # new-service.sh: generated database passwords go above this line
     networks:
       - backend
     entrypoint: ["sh", "-ec"]
@@ -153,6 +158,20 @@ services:
           echo "database and role ready: $$1"
         }
         create platform "$$PLATFORM_DB_PASSWORD"
+        create market "$$MARKET_DB_PASSWORD"
+        # TimescaleDB needs a superuser, so it is created here and not by a migration
+        PGDATABASE=market psql -v ON_ERROR_STOP=1 -q -c 'CREATE EXTENSION IF NOT EXISTS timescaledb'
+        echo "extension ready: timescaledb in market"
+        create simulation "$$SIMULATION_DB_PASSWORD"
+        PGDATABASE=simulation psql -v ON_ERROR_STOP=1 -q -c 'CREATE EXTENSION IF NOT EXISTS timescaledb'
+        echo "extension ready: timescaledb in simulation"
+        create risk "$$RISK_DB_PASSWORD"
+        PGDATABASE=risk psql -v ON_ERROR_STOP=1 -q -c 'CREATE EXTENSION IF NOT EXISTS timescaledb'
+        echo "extension ready: timescaledb in risk"
+        create trading "$$TRADING_DB_PASSWORD"
+        PGDATABASE=trading psql -v ON_ERROR_STOP=1 -q -c 'CREATE EXTENSION IF NOT EXISTS timescaledb'
+        echo "extension ready: timescaledb in trading"
+        # new-service.sh: generated databases go above this line
 
   # Redis: the shared token revocation list now, the job queue later. Append-only file
   # so revocations survive a restart.
@@ -183,7 +202,7 @@ services:
       - start
       - --mode=dev-container
       - --smp=1
-      - --memory=768M
+      - --memory=${REDPANDA_MEMORY:-768M}
       - --overprovisioned
       - --kafka-addr=internal://0.0.0.0:9092
       - --advertise-kafka-addr=internal://redpanda:9092
@@ -212,12 +231,24 @@ services:
     image: ${PLATFORM_IMAGE:?PLATFORM_IMAGE comes from the release file}
     environment: &platform-env
       QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
       QS_DATABASE_URL: postgresql+asyncpg://platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/platform
       QS_REDIS_URL: redis://redis:6379/0
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_SIGNING_KEY: ${PLATFORM_SIGNING_KEY:?PLATFORM_SIGNING_KEY comes from the environment's secrets}
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
+      # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
+      QS_SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
+      QS_PUBLIC_APP_URL: ${PUBLIC_APP_URL:?PUBLIC_APP_URL is the environment's website}
+      QS_EMAIL_REQUIRED: ${EMAIL_REQUIRED:-false}
+      QS_SMTP_HOST: ${SMTP_HOST:-}
+      QS_SMTP_PORT: ${SMTP_PORT:-587}
+      QS_SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      QS_SMTP_USERNAME: ${SMTP_USERNAME:-}
+      QS_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      QS_SMTP_FROM: ${SMTP_FROM:-QuantSim <alimazhar3005+QuantSim@gmail.com>}
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,7 +282,9 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    # default: outbound access for sending account email (SMTP); backend: database and broker
     networks:
+      - default
       - backend
     read_only: true
     tmpfs:
@@ -277,10 +310,524 @@ services:
       QS_BOOTSTRAP_ADMIN_USERNAME: admin
       QS_BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@quantsim.dev}
       QS_BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD comes from the environment's secrets}
+      # DEV and TEST only: test.admin, test.quant, test.analyst and test.viewer
+      QS_TEST_USERS_PASSWORD: ${TEST_USERS_PASSWORD:-}
+      QS_TEST_USERS_EMAIL: ${TEST_USERS_EMAIL:-alimazhar3005@gmail.com}
     networks:
       - backend
     entrypoint: ["sh", "-ec"]
-    command: ["alembic upgrade head && qs-platform bootstrap-admin"]
+    command:
+      - >-
+        alembic upgrade head && qs-platform bootstrap-admin &&
+        if [ -n "$$QS_TEST_USERS_PASSWORD" ]; then qs-platform seed-test-users; fi
+
+  # ---------------------------------------------------------------------------------
+  # M1 Market Data. One image, started as the API, a worker (executes ingestion runs), a
+  # relay (outbox to Redpanda), a scheduler (TEST only) and a one-shot migration.
+
+  market:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?MARKET_IMAGE comes from the release file}
+    environment: &market-env
+      QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
+      QS_DATABASE_URL: postgresql+asyncpg://market:${MARKET_DB_PASSWORD:?MARKET_DB_PASSWORD comes from the environment's secrets}@postgres:5432/market
+      QS_REDIS_URL: redis://redis:6379/0
+      QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      # Tokens are verified against the platform's published signing keys
+      QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
+      QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Price vendor: tiingo (real, shared hourly budget) or fixture (recorded, no network)
+      QS_VENDOR: ${MARKET_VENDOR:-fixture}
+      QS_TIINGO_API_KEY: ${TIINGO_API_KEY:-}
+      QS_TIINGO_REQUESTS_PER_HOUR: ${TIINGO_REQUESTS_PER_HOUR:-45}
+      QS_TIINGO_SCHEDULED_RESERVE: ${TIINGO_SCHEDULED_RESERVE:-40}
+      QS_INGEST_BACKFILL_START: ${INGEST_BACKFILL_START:-2015-01-02}
+      QS_INGEST_OUTLIER_LOG_RETURN: ${INGEST_OUTLIER_LOG_RETURN:-0.405}
+      QS_INGEST_OUTLIER_POLICY: ${INGEST_OUTLIER_POLICY:-flag}
+      QS_INGEST_SCHEDULER_ENABLED: ${QS_INGEST_SCHEDULER_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      platform:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.market.rule: PathPrefix(`/api/market`)
+      traefik.http.routers.market.entrypoints: web
+      traefik.http.services.market.loadbalancer.server.port: "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # Claims pending ingestion runs and executes them, one at a time. Needs the internet
+  # (default network) to reach the vendor.
+  market-worker:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?}
+    command: ["python", "-m", "qs_market", "worker"]
+    environment: *market-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  market-relay:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?}
+    command: ["python", "-m", "qs_market", "relay"]
+    environment: *market-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  # Enqueues the daily and catch-up runs. One scheduler serves all environments (the
+  # vendor budget is shared), so it runs only where QS_INGEST_SCHEDULER_ENABLED=true
+  # (TEST): deploy.sh enables the "scheduler" profile from that setting.
+  market-scheduler:
+    <<: *defaults
+    image: ${MARKET_IMAGE:?}
+    profiles: ["scheduler"]
+    command: ["python", "-m", "qs_market", "scheduler"]
+    environment: *market-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  market-migrate:
+    image: ${MARKET_IMAGE:?}
+    profiles: ["migrate"]
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *market-env
+    networks:
+      - backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+
+  # ---------------------------------------------------------------------------------
+  # Simulation (generated by scripts/new-service.sh). One image, started as the API, a job
+  # worker, an outbox relay and a one-shot migration.
+
+  simulation:
+    <<: *defaults
+    image: ${SIMULATION_IMAGE:?SIMULATION_IMAGE comes from the release file}
+    environment: &simulation-env
+      QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
+      QS_DATABASE_URL: postgresql+asyncpg://simulation:${SIMULATION_DB_PASSWORD:?SIMULATION_DB_PASSWORD comes from the environment's secrets}@postgres:5432/simulation
+      QS_REDIS_URL: redis://redis:6379/0
+      QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
+      QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
+      # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
+      OMP_NUM_THREADS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      platform:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.simulation.rule: PathPrefix(`/api/simulation`)
+      traefik.http.routers.simulation.entrypoints: web
+      traefik.http.services.simulation.loadbalancer.server.port: "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  simulation-worker:
+    <<: *defaults
+    profiles: ["workers"]
+    image: ${SIMULATION_IMAGE:?}
+    command: ["python", "-m", "qs_simulation", "worker"]
+    environment: *simulation-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  simulation-relay:
+    <<: *defaults
+    profiles: ["workers"]
+    image: ${SIMULATION_IMAGE:?}
+    command: ["python", "-m", "qs_simulation", "relay"]
+    environment: *simulation-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  simulation-migrate:
+    image: ${SIMULATION_IMAGE:?}
+    profiles: ["migrate"]
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *simulation-env
+    networks:
+      - backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+
+  # ---------------------------------------------------------------------------------
+  # Risk (generated by scripts/new-service.sh). One image, started as the API, a job
+  # worker, an outbox relay and a one-shot migration.
+
+  risk:
+    <<: *defaults
+    image: ${RISK_IMAGE:?RISK_IMAGE comes from the release file}
+    environment: &risk-env
+      QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
+      QS_DATABASE_URL: postgresql+asyncpg://risk:${RISK_DB_PASSWORD:?RISK_DB_PASSWORD comes from the environment's secrets}@postgres:5432/risk
+      QS_REDIS_URL: redis://redis:6379/0
+      QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
+      QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
+      # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
+      OMP_NUM_THREADS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      platform:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.risk.rule: PathPrefix(`/api/risk`)
+      traefik.http.routers.risk.entrypoints: web
+      traefik.http.services.risk.loadbalancer.server.port: "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  risk-worker:
+    <<: *defaults
+    profiles: ["workers"]
+    image: ${RISK_IMAGE:?}
+    command: ["python", "-m", "qs_risk", "worker"]
+    environment: *risk-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  risk-relay:
+    <<: *defaults
+    profiles: ["workers"]
+    image: ${RISK_IMAGE:?}
+    command: ["python", "-m", "qs_risk", "relay"]
+    environment: *risk-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  risk-migrate:
+    image: ${RISK_IMAGE:?}
+    profiles: ["migrate"]
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *risk-env
+    networks:
+      - backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+
+  # ---------------------------------------------------------------------------------
+  # Trading (generated by scripts/new-service.sh). One image, started as the API, a job
+  # worker, an outbox relay and a one-shot migration.
+
+  trading:
+    <<: *defaults
+    image: ${TRADING_IMAGE:?TRADING_IMAGE comes from the release file}
+    environment: &trading-env
+      QS_ENVIRONMENT: ${QS_ENV:?}
+      QS_CORS_ORIGINS: ${QS_CORS_ORIGINS:-}
+      QS_DATABASE_URL: postgresql+asyncpg://trading:${TRADING_DB_PASSWORD:?TRADING_DB_PASSWORD comes from the environment's secrets}@postgres:5432/trading
+      QS_REDIS_URL: redis://redis:6379/0
+      QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
+      QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
+      # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
+      OMP_NUM_THREADS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      platform:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.trading.rule: PathPrefix(`/api/trading`)
+      traefik.http.routers.trading.entrypoints: web
+      traefik.http.services.trading.loadbalancer.server.port: "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  trading-worker:
+    <<: *defaults
+    profiles: ["workers"]
+    image: ${TRADING_IMAGE:?}
+    command: ["python", "-m", "qs_trading", "worker"]
+    environment: *trading-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  trading-relay:
+    <<: *defaults
+    profiles: ["workers"]
+    image: ${TRADING_IMAGE:?}
+    command: ["python", "-m", "qs_trading", "relay"]
+    environment: *trading-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  trading-migrate:
+    image: ${TRADING_IMAGE:?}
+    profiles: ["migrate"]
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *trading-env
+    networks:
+      - backend
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+
+  # new-service.sh: generated services go above this line
+
+  # Public HTTPS address of this environment's API (a free Cloudflare quick tunnel to the
+  # gateway), so browsers anywhere can reach it. The address changes when the tunnel
+  # restarts; deploy.sh and host.sh publish the current one to the website's config.json.
+  api-tunnel:
+    <<: *defaults
+    image: cloudflare/cloudflared:2025.9.1@sha256:4604b477520dc8322af5427da68b44f0bf814938e9d2e4814f2249ee4b03ffdf
+    # The metrics port answers /quicktunnel with the current address
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--metrics", "0.0.0.0:2000", "--url", "http://gateway:8000"]
+    depends_on:
+      - gateway
+    networks:
+      - default
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # Optional local inbox (profile "mailpit"): catches every account email instead of
+  # sending it, for working offline. Its inbox is on the host only, at
+  # http://localhost:${MAILPIT_PORT}
+  mailpit:
+    <<: *defaults
+    image: axllent/mailpit:v1.27.11@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
+    profiles: ["mailpit"]
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data
+    deploy:
+      resources:
+        limits:
+          memory: 64M
 
   # Further backend services follow the platform pattern above: add the service to
   # ci/components.conf, a block here routed at /api/<name>, a <name>-relay and a

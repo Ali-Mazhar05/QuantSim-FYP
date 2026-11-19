@@ -40,6 +40,12 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
 
   profiles=()
   [[ "$FRONTEND_TARGET" == "compose" ]] && profiles+=(--profile frontend)
+  [[ "${MAILPIT:-false}" == "true" ]] && profiles+=(--profile mailpit)
+  # One market scheduler for all environments: only where deploy/env/<env>.env enables it
+  [[ "${QS_INGEST_SCHEDULER_ENABLED:-false}" == "true" ]] && profiles+=(--profile scheduler)
+  # Generated services run their worker and relay in their own containers unless the
+  # environment embeds them in the API (EMBEDDED_WORKERS=true, DEV on a laptop)
+  [[ "${EMBEDDED_WORKERS:-false}" == "true" ]] || profiles+=(--profile workers)
 
   compose=(docker compose -p "$QS_PROJECT" -f "$COMPOSE_FILE"
            --env-file "$(env_file "$env")" --env-file "$release" "${secrets_args[@]}")
@@ -61,6 +67,12 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
 
   log "starting $QS_PROJECT"
   "${compose[@]}" "${profiles[@]}" up -d --wait --wait-timeout 180 --remove-orphans
+
+  # The website reads this address from its config.json (pages-deploy.sh)
+  API_PUBLIC_URL="$(wait_for_api_url "$QS_PROJECT")" \
+    || die "the API of $env has no public address; check the $QS_PROJECT-api-tunnel-1 logs"
+  export API_PUBLIC_URL
+  log "public API address of $env: $API_PUBLIC_URL"
 fi
 
 if [[ "$FRONTEND_TARGET" == "pages" ]]; then

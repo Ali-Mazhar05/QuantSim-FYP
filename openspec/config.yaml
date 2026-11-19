@@ -1,0 +1,35 @@
+schema: spec-driven
+
+# Constraints every OpenSpec artifact and workflow must respect. Discoverable facts
+# about the code live in the repository and docs/, not here.
+context: |
+  QuantSim is a university final-year project (FAST-NUCES Islamabad, FYP-1 and FYP-2):
+  an AI-assisted market simulation and portfolio risk analytics platform built as
+  event-driven microservices (M0 Platform, M1 Market Data, M2 Simulation, M3 Trading,
+  M4 ML, M5 Risk & TDA, M6 Explainability, M7 Dashboard).
+  Requirements live in docs/proposal/QuantSim_Requirements_Specification.pdf with stable
+  ids (FR-MKT-002, NFR-INT-001, ...); every spec requirement must cite the ids it covers.
+  The iteration plan and task ids (I1-xx) are in docs/iteration-plan.md; the ingestion
+  design is docs/ingestion-plan.md.
+  Everything must stay free: free tiers and open-source only, no paid services.
+  Backend: Python 3.12, FastAPI, SQLAlchemy 2 async, PostgreSQL 17 + TimescaleDB, Redis,
+  Redpanda; every service builds on libs/qs_template. Frontend: React + TypeScript.
+  Prices are fixed-precision decimals, never floats.
+  Git: feature/* -> develop -> test -> acceptance -> main through pull requests, one-line
+  commit messages with no punctuation and no AI attribution
+  (.claude/skills/quantsim-git-flow).
+  Database changes follow the migration protocol in docs/ingestion-plan.md section 4.2:
+  new numbered Alembic revisions only, every revision reversible and passing
+  ci/scripts/migration-check.sh before a push.
+
+rules:
+  proposal:
+    - Cite the FR and NFR ids the change satisfies
+    - State what is out of scope and which iteration it belongs to
+  specs:
+    - Write each requirement with testable acceptance scenarios (Given, When, Then)
+    - Include failure and edge-case scenarios, not only the happy path
+  tasks:
+    - One task per pull request-sized step, in dependency order
+    - Each task names its tests and its done-when condition
+    - Schema changes are their own task and include the migration check

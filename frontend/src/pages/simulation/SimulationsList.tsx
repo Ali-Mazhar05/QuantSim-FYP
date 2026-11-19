@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/forms/Button'
+import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import DataTable, { type Column } from '../../components/tables/DataTable'
@@ -17,6 +18,7 @@ interface Row {
 
 export default function SimulationsList() {
   const navigate = useNavigate()
+  const canLaunch = useCan('launch_simulations')
   const hasReached = useDemoStore((s) => s.hasReached)
   const rows: Row[] = [
     { id: '1042', model: 'GBM', instrument: 'AAPL', paths: 10000, status: hasReached('SIMULATION_COMPLETE') ? 'Complete' : 'Configured' },
@@ -47,7 +49,7 @@ export default function SimulationsList() {
         title="Simulations"
         description="Monte Carlo simulation runs across market environments."
         action={
-          <Button icon={Plus} onClick={() => navigate('/simulation/configure')}>
+          <Button icon={Plus} disabled={!canLaunch} title={canLaunch ? undefined : "Your role cannot do this"} onClick={() => navigate('/simulation/configure')}>
             New Simulation
           </Button>
         }
