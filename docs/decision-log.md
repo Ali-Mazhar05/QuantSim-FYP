@@ -53,6 +53,9 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-032 | Replay session routes and who may use them | Adopted | Lane A |
 | DL-033 | What a replay session stands on | Adopted | Lane A |
 | DL-034 | Position over polling, not SSE | Adopted | team |
+| DL-035 | One calibration resource from queued to stored | Adopted | team |
+| DL-036 | What a calibration refuses, and where | Adopted | team |
+| DL-037 | Calibration without a price source or a fit | Adopted | team |
 
 ---
 
@@ -446,3 +449,54 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   restart and works through the Cloudflare tunnel; a long-lived stream adds reconnect state for no change in
   what the page can show. B-FR-07 stays open as a cut item.
 - **If reversed later:** a stream would only repeat the poll answer; no route changes.
+
+### DL-035 One calibration resource from queued to stored
+
+- **Asked:** the plan says `POST /calibrations` answers 202 and the job completes asynchronously, and also
+  that a refusal is "a 422". A 202 cannot carry a later 422, so where does a client see the outcome?
+- **Decided:** the calibration's id is its job's id. `POST` answers 202 with that id and a `Location`;
+  `GET /calibrations/{id}` returns one shape at every stage: `status` is `queued`, `running`, `succeeded`
+  (with the stored `calibration`), `refused` (with `refusal: {http_status: 422, code, reason}`) or `failed`
+  (with the job's `error`). A refusal is a result of the job, so the poll answers 200; the 422 is the
+  `http_status` inside the refusal. Reads are open to every signed-in role, as the plan's other reads are;
+  the list and its filters come with B18.
+- **Why:** one id for the whole life of the work needs no second lookup, survives a reload and follows the
+  K1 job table the service already has. Returning 422 from a GET of an existing resource would make a
+  finished refusal look like a broken request.
+- **Alternatives rejected:** a separate job id and calibration id (two ids to keep); 422 on the poll;
+  running the fit inside the request (breaks the 800 ms limit and K1).
+- **Affects:** `qs_simulation/calibrations.py`, `api_calibrations.py`, the Calibrations page (B20).
+
+### DL-036 What a calibration refuses, and where
+
+- **Asked:** "refuse under 60 sessions before calling K5": 60 sessions are 59 returns, and K5 refuses fewer
+  than 60 returns. Which check owns which number?
+- **Decided:** the service refuses fewer than 60 **sessions** (`insufficient_history`) before any model is
+  asked. A window of exactly 60 reaches the model, which may refuse it in its own words
+  (`fit_refused`); 61 sessions are the fewest that give a stored fit. The service also refuses a window with
+  a session twice or a close without a logarithm (`invalid_prices`), a bar without an adjusted close
+  (`missing_adjusted_prices`, never a raw price), an unknown instrument (`instrument_not_found`), and a fit
+  that cannot be stored (a parameter or the log-likelihood or AIC that is not finite, or fewer than 60
+  observations, which the table also forbids). A standard error K5 could not compute (NaN) is stored as null.
+  A refusal is returned as the job's result and is not retried; an unreachable price source raises and K1
+  retries it, then marks the job failed with the error.
+- **Why:** the plan's number is a floor on what is asked of K5, K5's own floor is on returns; stating both
+  keeps each owner's rule where it belongs and the boundary is tested, not assumed.
+- **Affects:** `domain/calibration.py`, `calibrations.py`, the `calibration` table's CHECKs.
+
+### DL-037 Calibration without a price source or a fit
+
+- **Asked:** K3 (service tokens) and K5 (fits) are not on `develop`. What does the service do now?
+- **Decided:** the market adapter reads through a one-method `Getter` (`get_json`), which K3's service
+  client has, so nothing here imports K3; wiring it into `build_app` is a small follow-up once K3 merges.
+  Until then a service built without a price source answers 503 `calibration-unavailable` instead of queueing
+  work nobody does. A model with no fitting code (Merton until K5 delivers it, or every model while
+  `qs_quant` is absent) answers 501 at submit. Tests use a reference GBM written from Lane C's formula (7.2)
+  as the stand-in for K5. Idempotency keys are the caller's own: the queue's keys are global, so the service
+  prefixes the caller's user id.
+- **Why:** faking a fit would put invented numbers in a risk model; refusing honestly keeps the contract and
+  the page work unblocked. Scoping keys stops one user's key from returning another user's job.
+- **Not covered until K3 and K5 land:** the circuit breaker and retry of the real client against a live
+  market service (tested here on the adapter's side with injected failures), a real K5 equality test, the
+  service-token path (D14).
+- **Affects:** `adapters/`, `main.build_app(price_source=, calibrator=)`.

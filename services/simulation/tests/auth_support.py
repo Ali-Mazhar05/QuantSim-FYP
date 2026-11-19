@@ -32,10 +32,10 @@ def _jwks() -> dict[str, Any]:
     return {"keys": [public]}
 
 
-def make_token(role: Role, *, forged: bool = False) -> str:
+def make_token(role: Role, *, forged: bool = False, user_id: uuid.UUID | None = None) -> str:
     now = int(time.time())
     claims = {
-        "sub": str(uuid.uuid4()),
+        "sub": str(user_id or uuid.uuid4()),
         "username": f"{role.value}.user",
         "role": role.value,
         "jti": uuid.uuid4().hex,
