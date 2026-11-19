@@ -38,10 +38,10 @@ if [[ "$COMPOSE_TARGET" == "local" ]]; then
 fi
 
 # Create the Pages project on first use
-if [[ "$(cf_pages_api GET "/$PAGES_PROJECT" | jq -r '.success')" != "true" ]]; then
+if [[ "$(cf_pages_api GET "/$PAGES_PROJECT" | json_get success)" != "true" ]]; then
   log "creating Cloudflare Pages project $PAGES_PROJECT"
   response="$(cf_pages_api POST "" "{\"name\":\"$PAGES_PROJECT\",\"production_branch\":\"$PAGES_PRODUCTION_BRANCH\"}")"
-  [[ "$(jq -r '.success' <<<"$response")" == "true" ]] || die "could not create the Pages project: $response"
+  [[ "$(json_get success <<<"$response")" == "true" ]] || die "could not create the Pages project: $response"
 fi
 
 log "publishing $FRONTEND_IMAGE to Pages project $PAGES_PROJECT, branch $PAGES_BRANCH"
