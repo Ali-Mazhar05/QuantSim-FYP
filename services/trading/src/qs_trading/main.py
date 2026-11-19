@@ -15,7 +15,7 @@ from qs_template.kafka import KafkaPublisher
 from qs_template.messaging import OutboxRelay
 from qs_template.revocation import RevocationList
 from qs_trading.api import build_routers
-from qs_trading.jobs import HANDLERS, job_queue
+from qs_trading.jobs import build_handlers, job_queue
 from qs_trading.settings import TradingSettings
 
 
@@ -24,7 +24,12 @@ def embedded_loops(settings: TradingSettings, database: Database) -> BackgroundT
     tasks = BackgroundTasks()
     if not settings.embedded_workers:
         return tasks
-    worker = Worker(database, job_queue(settings), HANDLERS, poll_seconds=settings.job_poll_seconds)
+    worker = Worker(
+        database,
+        job_queue(settings),
+        build_handlers(database),
+        poll_seconds=settings.job_poll_seconds,
+    )
     tasks.add("worker", worker.run, worker.stop)
     if settings.kafka_bootstrap_servers:
         servers = settings.kafka_bootstrap_servers
@@ -63,7 +68,7 @@ def build_app(
     return create_app(
         settings,
         database=database,
-        routers=build_routers(auth=auth, database=database),
+        routers=build_routers(auth=auth, database=database, queue=job_queue(settings)),
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],
         on_startup=[loops.start],
         on_shutdown=[loops.stop, revocations.close],
