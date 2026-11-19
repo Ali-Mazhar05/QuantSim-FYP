@@ -60,10 +60,14 @@ async def test_a_submit_is_202_and_a_repeated_key_returns_the_same_job() -> None
         assert again.json()["job_id"] == accepted["job_id"]
         assert again.json()["created"] is False
 
+        # A new key waits for the run in progress to finish
+        store.finish_runs(uuid.UUID(portfolio_id))
         other = await http.post(runs, headers={**quant, "Idempotency-Key": "run-2"})
+        assert other.status_code == 202, other.text
         assert other.json()["job_id"] != accepted["job_id"]
 
         # Without a key a portfolio has one run job
+        store.finish_runs(uuid.UUID(portfolio_id))
         plain = [(await http.post(runs, headers=quant)).json()["job_id"] for _ in range(2)]
         assert plain[0] == plain[1] and plain[0] not in {accepted["job_id"]}
 

@@ -26,7 +26,9 @@ from qs_template.auth import Authenticator, Role, StaticKeys
 from qs_trading.adapters.file_environment import FileEnvironment
 from qs_trading.api import build_routers
 from qs_trading.api_store import (
+    ACTIVE_JOB_STATUSES,
     PortfolioValues,
+    RunInProgress,
     TradingStore,
     chain_report_out,
     fill_out,
@@ -205,6 +207,9 @@ class FakeStore:
         key = engine_run_key(portfolio_id, idempotency_key)
         existing = self.jobs.get(key)
         if existing is None:
+            for other in self.jobs.values():
+                if other.portfolio_id == portfolio_id and other.status in ACTIVE_JOB_STATUSES:
+                    raise RunInProgress(portfolio_id, other.job_id)
             existing = RunOut(
                 job_id=uuid.uuid4(),
                 portfolio_id=portfolio_id,
@@ -373,6 +378,14 @@ class FakeStore:
         ]
         return log
 
+    def finish_runs(self, portfolio_id: uuid.UUID, status: str = "succeeded") -> None:
+        """Ends every queued or running run job of the portfolio, as the worker would."""
+        for key, state in self.jobs.items():
+            if state.portfolio_id == portfolio_id and state.status in ACTIVE_JOB_STATUSES:
+                self.jobs[key] = state.model_copy(
+                    update={"status": status, "progress": 1.0, "finished_at": _now()}
+                )
+
     def add_log(self, portfolio_id: uuid.UUID, count: int) -> list[EventOut]:
         start = datetime(2024, 1, 2, 21, tzinfo=UTC)
         previous: str | None = None
@@ -497,10 +510,14 @@ class Targets:
     strategy_id: str
     portfolio_id: str
     job_id: str
+    # The quant who created them; each role in the matrix acts as this user, so a route
+    # that also checks ownership (PUT /strategies/{id}) is judged on the role alone
+    owner_id: uuid.UUID
 
 
 async def seed_targets(http: httpx.AsyncClient) -> Targets:
-    quant = as_role(Role.QUANT)
+    owner_id = uuid.uuid4()
+    quant = as_role(Role.QUANT, user_id=owner_id)
     strategy = await http.post(f"{API}/strategies", json=MOMENTUM, headers=quant)
     assert strategy.status_code == 201, strategy.text
     strategy_id = strategy.json()["id"]
@@ -509,7 +526,7 @@ async def seed_targets(http: httpx.AsyncClient) -> Targets:
     portfolio_id = created.json()["id"]
     run = await http.post(f"{API}/portfolios/{portfolio_id}/runs", headers=quant)
     assert run.status_code == 202, run.text
-    return Targets(strategy_id, portfolio_id, run.json()["job_id"])
+    return Targets(strategy_id, portfolio_id, run.json()["job_id"], owner_id)
 
 
 async def check_role_matrix(
@@ -522,7 +539,7 @@ async def check_role_matrix(
         ("forged", bearer(make_token(Role.QUANT, forged=True))),
     ]
     if not unauthenticated_only:
-        callers += [(role.value, as_role(role)) for role in Role]
+        callers += [(role.value, as_role(role, user_id=targets.owner_id)) for role in Role]
     bodies: dict[tuple[str, str], Callable[[int], dict[str, Any]]] = {
         ("POST", "/strategies"): lambda n: {**MOMENTUM, "name": f"Matrix {n}"},
         ("PUT", "/strategies/{strategy_id}"): lambda n: {**MOMENTUM, "name": f"Edited {n}"},

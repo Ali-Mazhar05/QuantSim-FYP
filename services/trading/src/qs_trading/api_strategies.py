@@ -1,7 +1,8 @@
 """Strategy routes, under ``/api/trading`` (task A16, A-FR-01).
 
 Signed-in users (any role):  GET /strategies, GET /strategies/{id}
-Quants and admins (``create_strategies``):  POST /strategies, PUT /strategies/{id}
+Quants and admins (``create_strategies``):  POST /strategies
+The strategy's owner, or an admin:  PUT /strategies/{id} (another quant gets 403)
 
 A strategy is a built-in ``kind`` plus its ``params`` (ADR 05). The params are checked
 against the kind's parameter model and stored in its canonical JSON (defaults filled in,
@@ -17,12 +18,24 @@ from fastapi import APIRouter, Depends, status
 from pydantic import ValidationError
 
 from qs_template import ServiceError
-from qs_template.auth import Authenticator, Capability, Principal
+from qs_template.auth import Authenticator, Capability, Principal, Role
 from qs_trading.api_store import StoreDependency, TradingStore
 from qs_trading.domain.strategies import KINDS, validate_params
-from qs_trading.schemas import StrategyIn, StrategyOut, not_found, validation_problem
+from qs_trading.schemas import (
+    StrategyIn,
+    StrategyOut,
+    forbidden,
+    not_found,
+    validation_problem,
+)
 
 STRATEGY_NOT_FOUND = not_found("Strategy")
+
+
+def may_edit(actor: Principal, owner_id: uuid.UUID) -> bool:
+    """Whether ``actor`` may change a strategy owned by ``owner_id``: its owner or an
+    admin."""
+    return actor.role == Role.ADMIN or actor.user_id == owner_id
 
 
 def canonical_params(body: StrategyIn) -> dict[str, Any]:
@@ -81,11 +94,14 @@ def build_strategy_routers(*, auth: Authenticator, store: StoreDependency) -> li
 
     @router.put("/{strategy_id}", responses={401: {}, 403: {}, 404: {}, 409: {}, 422: {}})
     async def replace_strategy(
-        strategy_id: uuid.UUID, body: StrategyIn, _: Writer, store: Store
+        strategy_id: uuid.UUID, body: StrategyIn, actor: Writer, store: Store
     ) -> StrategyOut:
-        params = canonical_params(body)
-        if await store.get_strategy(strategy_id) is None:
+        current = await store.get_strategy(strategy_id)
+        if current is None:
             raise STRATEGY_NOT_FOUND
+        if not may_edit(actor, current.owner_id):
+            raise forbidden("Only the strategy's owner or an admin may change it.")
+        params = canonical_params(body)
         if await store.strategy_has_run(strategy_id):
             raise ServiceError(
                 409,

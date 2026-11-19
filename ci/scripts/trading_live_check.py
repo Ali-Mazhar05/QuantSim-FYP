@@ -325,6 +325,91 @@ def check_projections(
     )
 
 
+def check_one_active_run(api: Api, token: str, base: str, run_path: str, job_id: str) -> None:
+    """A run with a new idempotency key while ``job_id`` is still queued or running is
+    refused with 409 naming that job. If the first run already finished (a very fast
+    worker), the rule cannot be observed and a second run is legitimately accepted."""
+    other = {"Idempotency-Key": f"live-check-{uuid.uuid4()}"}
+    status, body = api.call("POST", f"{base}/runs", token=token, headers=other)
+    if status == 409:
+        if not isinstance(body, dict) or body.get("job_id") != job_id:
+            raise LiveCheckFailed(f"the 409 does not name the active job {job_id}: {_short(body)}")
+        log("a second run while the first is active is refused (409 run-in-progress)")
+        return
+    if status == 202:
+        current = api.expect(200, "GET", run_path, token=token)
+        if current.get("status") in ("succeeded", "failed"):
+            log("the first run had already finished, so the one-active-run rule was not observed")
+            return
+        raise LiveCheckFailed(
+            f"a second run was accepted while job {job_id} is {current.get('status')}"
+        )
+    raise LiveCheckFailed(f"a second run key answered {status}: {_short(body)}")
+
+
+BENCHMARK_LIMIT_SECONDS = 60.0
+
+
+def run_benchmark(api: Api, token: str, env_id: str, name: str) -> None:
+    """A-NFR-01: a momentum run over the 40-instrument, 252-session benchmark environment
+    must succeed with an intact log in under 60 s, from submit to success."""
+    strategy = api.expect(
+        201,
+        "POST",
+        f"{TRADING}/strategies",
+        token=token,
+        body={
+            "name": f"{name} benchmark",
+            "kind": "momentum",
+            "params": {
+                "lookback": 60,
+                "top_n": 10,
+                "rebalance_every": 5,
+                "max_position": "0.15",
+            },
+        },
+    )
+    portfolio = api.expect(
+        201,
+        "POST",
+        f"{TRADING}/portfolios",
+        token=token,
+        body={
+            "name": f"{name} benchmark",
+            "strategy_id": strategy["id"],
+            "initial_capital": "1000000",
+            "cost_model": {"fixed": "1.00", "per_share": "0.005", "pct": "0.0005"},
+            "slippage_model": {"kind": "volume", "bps": "10"},
+            "replay_environment_id": env_id,
+        },
+    )
+    base = f"{TRADING}/portfolios/{portfolio['id']}"
+    started = time.monotonic()
+    submitted = api.expect(
+        202,
+        "POST",
+        f"{base}/runs",
+        token=token,
+        headers={"Idempotency-Key": f"live-benchmark-{uuid.uuid4()}"},
+    )
+    run = wait_for_run(
+        api, token, f"{base}/runs/{submitted['job_id']}", 2 * BENCHMARK_LIMIT_SECONDS
+    )
+    elapsed = time.monotonic() - started
+    result = run.get("result") or {}
+    events = all_events(api, token, f"{base}/events")
+    check_chain(events, result.get("final_hash", ""), result.get("final_seq", -1))
+    sessions = sum(1 for e in events if e.get("type") == "TICK")
+    if elapsed >= BENCHMARK_LIMIT_SECONDS:
+        raise LiveCheckFailed(
+            f"A-NFR-01: the benchmark run took {elapsed:.1f}s, over {BENCHMARK_LIMIT_SECONDS:.0f}s"
+        )
+    log(
+        f"A-NFR-01 benchmark: {sessions} sessions, {len(events)} events, chain intact, "
+        f"{elapsed:.1f}s from submit to success (limit {BENCHMARK_LIMIT_SECONDS:.0f}s)"
+    )
+
+
 def live_check() -> None:
     api = Api(_setting("QS_LIVE_BASE_URL"))
     env_id = _setting("QS_LIVE_ENV_ID")
@@ -380,12 +465,24 @@ def live_check() -> None:
         )
     log(f"run submitted as job {job_id}; the repeated submit returned the same job")
     run_path = f"{base}/runs/{job_id}"
+    check_one_active_run(api, token, base, run_path, job_id)
 
     if viewer:
         viewer_token = sign_in(api, viewer, password)
         api.expect(200, "GET", run_path, token=viewer_token)
         api.expect(403, "POST", f"{base}/runs", token=viewer_token, headers=key)
         log(f"{viewer} may read the run but not start one (403)")
+    quant = os.environ.get("QS_LIVE_QUANT_USERNAME", "")
+    if quant:
+        quant_token = sign_in(api, quant, password)
+        api.expect(
+            403,
+            "PUT",
+            f"{TRADING}/strategies/{strategy['id']}",
+            token=quant_token,
+            body={"name": f"{name} edited", "kind": "buy_and_hold", "params": {}},
+        )
+        log(f"{quant} may not edit {username}'s strategy (403)")
 
     run = wait_for_run(api, token, run_path, timeout)
     result = run.get("result") or {}
@@ -402,6 +499,9 @@ def live_check() -> None:
             f"the run's {result.get('source_fingerprint')}"
         )
     check_projections(api, token, base, events, result)
+    benchmark = os.environ.get("QS_LIVE_BENCHMARK_ENV_ID", "")
+    if benchmark:
+        run_benchmark(api, token, benchmark, name)
 
     log("passed")
     log(f"  portfolio    {portfolio_id}")

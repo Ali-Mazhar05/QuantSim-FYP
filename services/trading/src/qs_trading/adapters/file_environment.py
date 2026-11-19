@@ -152,15 +152,17 @@ def _parse(content: bytes) -> tuple[EnvironmentRef, tuple[Tick, ...]]:
 
 
 class FileEnvironment:
-    """Serves the ticks of one fixture file. The file is read again on every call, so a
-    change to it is noticed; parsed ticks are kept per fingerprint."""
+    """Serves the ticks of one fixture file. A change to the file is noticed: before every
+    call its size and modification time are checked, and it is read, hashed and parsed
+    again only when either changed (the engine asks for the fingerprint once per session,
+    and re-hashing a large fixture each time dominated a run's time)."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self._frozen: str | None = None
-        self._parsed: dict[str, tuple[EnvironmentRef, tuple[Tick, ...]]] = {}
-        content = self._read_now()
-        self._ref = self._load(content)[0]
+        self._stat_key: tuple[int, int] | None = None
+        self._current: tuple[str, tuple[EnvironmentRef, tuple[Tick, ...]]] | None = None
+        self._ref = self._snapshot_now()[1][0]
 
     @property
     def ref(self) -> EnvironmentRef:
@@ -171,41 +173,42 @@ class FileEnvironment:
         """The fingerprint frozen by :meth:`activate`; ``None`` before activation."""
         return self._frozen
 
-    def _read_now(self) -> bytes:
+    def _snapshot_now(self) -> tuple[str, tuple[EnvironmentRef, tuple[Tick, ...]]]:
+        """The file's fingerprint and parsed content, read again only when its size or
+        modification time changed since the last read."""
         try:
-            return self.path.read_bytes()
+            stat = self.path.stat()
+            key = (stat.st_mtime_ns, stat.st_size)
+            if self._current is not None and key == self._stat_key:
+                return self._current
+            content = self.path.read_bytes()
         except OSError as exc:
             raise FixtureError(f"cannot read the fixture {self.path}: {exc}") from None
-
-    async def _read(self) -> bytes:
-        return await asyncio.to_thread(self._read_now)
-
-    def _load(self, content: bytes) -> tuple[EnvironmentRef, tuple[Tick, ...]]:
         fingerprint = fingerprint_of(content)
-        if fingerprint not in self._parsed:
-            self._parsed = {fingerprint: _parse(content)}
-        return self._parsed[fingerprint]
+        if self._current is None or self._current[0] != fingerprint:
+            self._current = (fingerprint, _parse(content))
+        self._stat_key = key
+        return self._current
+
+    async def _snapshot(self) -> tuple[str, tuple[EnvironmentRef, tuple[Tick, ...]]]:
+        return await asyncio.to_thread(self._snapshot_now)
 
     async def activate(self) -> str:
         """Freezes and returns the fingerprint of the file as it is now."""
-        content = await self._read()
-        self._load(content)
-        self._frozen = fingerprint_of(content)
+        self._frozen = (await self._snapshot())[0]
         return self._frozen
 
     async def fingerprint(self) -> str:
-        return fingerprint_of(await self._read())
+        return (await self._snapshot())[0]
 
     async def ticks(self, after_seq: int = 0, limit: int = 1000) -> TickPage:
         if after_seq < 0:
             raise ValueError(f"after_seq cannot be negative, got {after_seq}")
         if not 1 <= limit <= MAX_PAGE_SIZE:
             raise ValueError(f"limit must be between 1 and {MAX_PAGE_SIZE}, got {limit}")
-        content = await self._read()
-        fingerprint = fingerprint_of(content)
+        fingerprint, (ref, ticks) = await self._snapshot()
         if self._frozen is not None and fingerprint != self._frozen:
             raise FingerprintChanged(self._frozen, fingerprint)
-        ref, ticks = self._load(content)
         if ref != self._ref:
             raise FixtureError(f"the fixture now describes {ref}, not {self._ref}")
         # seq is gap-free from 1, so seq n is at index n - 1
