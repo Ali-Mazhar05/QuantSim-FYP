@@ -479,6 +479,8 @@ services:
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:
@@ -508,6 +510,7 @@ services:
 
   simulation-worker:
     <<: *defaults
+    profiles: ["workers"]
     image: ${SIMULATION_IMAGE:?}
     command: ["python", "-m", "qs_simulation", "worker"]
     environment: *simulation-env
@@ -531,6 +534,7 @@ services:
 
   simulation-relay:
     <<: *defaults
+    profiles: ["workers"]
     image: ${SIMULATION_IMAGE:?}
     command: ["python", "-m", "qs_simulation", "relay"]
     environment: *simulation-env
@@ -582,6 +586,8 @@ services:
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:
@@ -611,6 +617,7 @@ services:
 
   risk-worker:
     <<: *defaults
+    profiles: ["workers"]
     image: ${RISK_IMAGE:?}
     command: ["python", "-m", "qs_risk", "worker"]
     environment: *risk-env
@@ -634,6 +641,7 @@ services:
 
   risk-relay:
     <<: *defaults
+    profiles: ["workers"]
     image: ${RISK_IMAGE:?}
     command: ["python", "-m", "qs_risk", "relay"]
     environment: *risk-env
@@ -685,6 +693,8 @@ services:
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_AUTH_JWKS_URL: http://platform:8000/api/platform/.well-known/jwks.json
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
+      QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:
@@ -714,6 +724,7 @@ services:
 
   trading-worker:
     <<: *defaults
+    profiles: ["workers"]
     image: ${TRADING_IMAGE:?}
     command: ["python", "-m", "qs_trading", "worker"]
     environment: *trading-env
@@ -737,6 +748,7 @@ services:
 
   trading-relay:
     <<: *defaults
+    profiles: ["workers"]
     image: ${TRADING_IMAGE:?}
     command: ["python", "-m", "qs_trading", "relay"]
     environment: *trading-env

@@ -15,3 +15,7 @@ class SimulationSettings(ServiceSettings):
     job_lease_seconds: float = Field(default=60.0, gt=0)
     job_max_attempts: int = Field(default=3, ge=1)
     job_poll_seconds: float = Field(default=2.0, gt=0)
+
+    # DEV runs the job worker and outbox relay inside the API process (one container per
+    # service); other environments run them in their own containers
+    embedded_workers: bool = False
