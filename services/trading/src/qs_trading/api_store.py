@@ -9,6 +9,13 @@ The projection reads (A16 part 2) share their row-to-response conversions with a
 store: :func:`fill_out`, :func:`value_out`, :func:`holding_change_out` and
 :func:`holdings_out` take a row as :mod:`qs_trading.projections.fold` yields it (column
 name to value), so the fold's rows and the stored rows give the same responses.
+
+**One active run per portfolio.** :meth:`TradingStore.submit_run` refuses a new run job
+(:class:`RunInProgress`) while another ``engine.run`` job of the portfolio is queued or
+running; the same idempotency key still returns its job. The SQL store makes this race
+safe by locking the portfolio row (``SELECT ... FOR UPDATE``) before it looks: two
+submits for one portfolio take turns, and the second sees the first's job once the first
+commits. Submits for different portfolios never wait for each other.
 """
 
 import uuid
@@ -16,12 +23,12 @@ from collections.abc import Awaitable, Callable, Mapping
 from decimal import Decimal
 from typing import Any, Protocol
 
-from sqlalchemy import exists, insert, select, update
+from sqlalchemy import and_, exists, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
 from qs_template.jobs import JobQueue
-from qs_trading.jobs import ENGINE_RUN, submit_engine_run
+from qs_trading.jobs import ENGINE_RUN, engine_run_key, submit_engine_run
 from qs_trading.metrics import RunFigures
 from qs_trading.models import (
     fill,
@@ -60,7 +67,9 @@ from qs_trading.schemas import (
 )
 
 __all__ = [
+    "ACTIVE_JOB_STATUSES",
     "PortfolioValues",
+    "RunInProgress",
     "SqlTradingStore",
     "StoreDependency",
     "StoreFactory",
@@ -79,6 +88,19 @@ PortfolioValues = dict[str, Any]
 """The columns of a new portfolio row: name, strategy_id, initial_capital (Decimal),
 cost_model, slippage_model (stored JSON), env_type, replay_environment_id,
 simulation_run_id, path_index."""
+
+
+ACTIVE_JOB_STATUSES = ("queued", "running")
+"""A run job in one of these states blocks a new run of its portfolio."""
+
+
+class RunInProgress(Exception):
+    """The portfolio already has a queued or running run job, ``job_id``."""
+
+    def __init__(self, portfolio_id: uuid.UUID, job_id: uuid.UUID) -> None:
+        super().__init__(f"portfolio {portfolio_id} already has run {job_id} in progress")
+        self.portfolio_id = portfolio_id
+        self.job_id = job_id
 
 
 class TradingStore(Protocol):
@@ -106,9 +128,11 @@ class TradingStore(Protocol):
         self, values: PortfolioValues, *, owner_id: uuid.UUID
     ) -> PortfolioOut: ...
 
-    async def submit_run(
-        self, portfolio_id: uuid.UUID, idempotency_key: str | None
-    ) -> RunAccepted: ...
+    async def submit_run(self, portfolio_id: uuid.UUID, idempotency_key: str | None) -> RunAccepted:
+        """Queues a run, or returns the job of the same idempotency key. Raises
+        :class:`RunInProgress` when the key is new and another run job of the portfolio
+        is still queued or running."""
+        ...
 
     async def get_run(self, portfolio_id: uuid.UUID, job_id: uuid.UUID) -> RunOut | None:
         """The ``engine.run`` job ``job_id`` of this portfolio, or ``None``."""
@@ -414,6 +438,19 @@ class SqlTradingStore:
         return created
 
     async def submit_run(self, portfolio_id: uuid.UUID, idempotency_key: str | None) -> RunAccepted:
+        # Serialises the submits of this portfolio until the request's transaction ends
+        await self.session.execute(
+            select(portfolio.c.id).where(portfolio.c.id == portfolio_id).with_for_update()
+        )
+        repeated = await self.session.scalar(
+            select(job.c.id).where(
+                job.c.idempotency_key == engine_run_key(portfolio_id, idempotency_key)
+            )
+        )
+        if repeated is None:
+            active = await self.active_run(portfolio_id)
+            if active is not None:
+                raise RunInProgress(portfolio_id, active)
         submitted = await submit_engine_run(
             self.session, self.queue, portfolio_id, idempotency_key=idempotency_key
         )
@@ -425,6 +462,27 @@ class SqlTradingStore:
             status=state.status,
             created=submitted.created,
         )
+
+    async def active_run(self, portfolio_id: uuid.UUID) -> uuid.UUID | None:
+        """The oldest queued or running run job of the portfolio. A running job whose
+        lease ran out on its last allowed attempt only waits for a worker to mark it
+        failed, so it no longer counts."""
+        t = job.c
+        now = func.now()
+        live = or_(
+            t.lease_expires_at.is_(None), t.lease_expires_at >= now, t.attempts < t.max_attempts
+        )
+        found: uuid.UUID | None = await self.session.scalar(
+            select(t.id)
+            .where(
+                t.kind == ENGINE_RUN,
+                t.payload["portfolio_id"].astext == str(portfolio_id),
+                or_(t.status == "queued", and_(t.status == "running", live)),
+            )
+            .order_by(t.created_at, t.id)
+            .limit(1)
+        )
+        return found
 
     async def get_run(self, portfolio_id: uuid.UUID, job_id: uuid.UUID) -> RunOut | None:
         row = (
