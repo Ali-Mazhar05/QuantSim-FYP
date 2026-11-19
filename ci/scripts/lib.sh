@@ -178,9 +178,11 @@ wait_for_api_url() {
       printf '%s' "$url"
       return 0
     fi
-    if (( attempt == 30 )); then
-      log "no public API address yet; restarting the tunnel"
-      docker compose -p "$project" -f "$COMPOSE_FILE" restart api-tunnel >/dev/null 2>&1 || true
+    # A quick tunnel can expire (Cloudflare then answers "Tunnel not found"); a restart
+    # gets a new address
+    if (( attempt == 10 || attempt == 35 )); then
+      log "no working public API address; restarting the tunnel"
+      docker restart "$project-api-tunnel-1" >/dev/null
     fi
     sleep 3
   done
