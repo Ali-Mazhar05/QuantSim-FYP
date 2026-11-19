@@ -6,32 +6,32 @@ Covers A-FR-04 (the binding CHECK) and A-FR-10 (UPDATE and DELETE on the trade l
 for the service's role and for the owner, a repeated (portfolio, seq) fails, gaps fail),
 the money and order CHECKs, and migration up/down/up."""
 
-import asyncio
-import os
 import uuid
-from collections.abc import Callable, Coroutine, Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import MetaData, text
-from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+from trading_db_support import (
+    TradingDb,
+    run,
+)
+from trading_db_support import alembic_config as _alembic_config
+from trading_db_support import database_url as _database_url
+from trading_db_support import fresh_database as _fresh_database
 
 from qs_template.messaging import messaging_metadata
 from qs_trading import models
 
 pytestmark = pytest.mark.db
 
-SERVICE_ROOT = Path(__file__).resolve().parents[2]
 NEW_TABLES = {
     "strategy",
     "portfolio",
@@ -46,69 +46,6 @@ NEW_TABLES = {
 }
 NEW_FUNCTIONS = {"qs_trading_append_only", "qs_trade_event_seq_follows"}
 START = datetime(2026, 1, 5, 21, 0, tzinfo=UTC)
-
-
-def run[T](coroutine: Coroutine[Any, Any, T]) -> T:
-    """Run async database code from a synchronous test (Alembic runs its own loop)."""
-    return asyncio.run(coroutine)
-
-
-async def _execute_autocommit(url: str, statement: str) -> None:
-    engine = create_async_engine(url, isolation_level="AUTOCOMMIT")
-    try:
-        async with engine.connect() as connection:
-            await connection.execute(text(statement))
-    finally:
-        await engine.dispose()
-
-
-def _alembic_config() -> Config:
-    config = Config(str(SERVICE_ROOT / "alembic.ini"))
-    config.set_main_option("script_location", str(SERVICE_ROOT / "migrations"))
-    return config
-
-
-@contextmanager
-def _database_url(url: str) -> Iterator[None]:
-    previous = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = url
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("DATABASE_URL", None)
-        else:
-            os.environ["DATABASE_URL"] = previous
-
-
-@dataclass(frozen=True)
-class TradingDb:
-    app_url: str  # the service's own role, which owns the database and runs migrations
-    admin_url: str  # the superuser, on the same database
-    role: str
-
-
-@contextmanager
-def _fresh_database() -> Iterator[TradingDb]:
-    """An empty database owned by a new login role, with the timescaledb extension."""
-    base_url = os.environ["TEST_DATABASE_URL"]
-    suffix = uuid.uuid4().hex[:12]
-    role = f"trading_app_{suffix}"
-    name = f"trading_test_{suffix}"
-    password = uuid.uuid4().hex
-    run(_execute_autocommit(base_url, f"CREATE ROLE \"{role}\" LOGIN PASSWORD '{password}'"))
-    try:
-        run(_execute_autocommit(base_url, f'CREATE DATABASE "{name}" OWNER "{role}"'))
-        try:
-            admin = make_url(base_url).set(database=name)
-            app = admin.set(username=role, password=password)
-            admin_url = admin.render_as_string(hide_password=False)
-            run(_execute_autocommit(admin_url, "CREATE EXTENSION IF NOT EXISTS timescaledb"))
-            yield TradingDb(app.render_as_string(hide_password=False), admin_url, role)
-        finally:
-            run(_execute_autocommit(base_url, f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
-    finally:
-        run(_execute_autocommit(base_url, f'DROP ROLE IF EXISTS "{role}"'))
 
 
 @pytest.fixture(scope="module")

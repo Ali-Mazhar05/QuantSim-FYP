@@ -14,7 +14,7 @@ from qs_template.jobs import Worker
 from qs_template.kafka import KafkaPublisher
 from qs_template.logging import configure_logging
 from qs_template.messaging import OutboxRelay
-from qs_trading.jobs import HANDLERS, job_queue
+from qs_trading.jobs import build_handlers, job_queue
 from qs_trading.settings import TradingSettings
 
 
@@ -51,7 +51,12 @@ def _settings(process: str) -> TradingSettings:
 async def _worker() -> None:
     settings = _settings("worker")
     database = Database(settings)
-    worker = Worker(database, job_queue(settings), HANDLERS, poll_seconds=settings.job_poll_seconds)
+    worker = Worker(
+        database,
+        job_queue(settings),
+        build_handlers(database),
+        poll_seconds=settings.job_poll_seconds,
+    )
     _on_signals(asyncio.get_running_loop(), worker.stop)
     try:
         await worker.run()
