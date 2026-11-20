@@ -241,6 +241,9 @@ services:
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_SIGNING_KEY: ${PLATFORM_SIGNING_KEY:?PLATFORM_SIGNING_KEY comes from the environment's secrets}
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
+      # Services that may get service tokens (ADR 09): name=secret pairs, one secret per
+      # calling service in the environment's encrypted secrets
+      QS_SERVICE_CLIENT_SECRETS: trading=${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
       # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
@@ -702,6 +705,9 @@ services:
       # DEV only: runs portfolios over the demo market data bundled in the image
       # (TRADING_DEMO_ENVIRONMENTS in deploy/env); refused outside local and dev
       QS_TRADING_DEMO_ENVIRONMENTS: ${TRADING_DEMO_ENVIRONMENTS:-}
+      # Service tokens for calls to other services (ADR 09), from the Platform service
+      QS_SERVICE_TOKEN_URL: http://platform:8000/api/platform/service-tokens
+      QS_SERVICE_CLIENT_SECRET: ${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:

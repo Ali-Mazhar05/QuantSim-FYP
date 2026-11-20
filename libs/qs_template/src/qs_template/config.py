@@ -8,7 +8,7 @@ container never starts half-working.
 
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "dev", "test", "acc", "prod"]
@@ -48,9 +48,22 @@ class ServiceSettings(BaseSettings):
     # principal. Allowed in local and dev only; replaced by real service tokens before TEST.
     service_token: SecretStr | None = None
 
+    # Real service tokens (ADR 09): a service that calls others gets short-lived tokens
+    # from the Platform service with its client id (default: the service name) and
+    # secret. Set both the URL and the secret to use them instead of QS_SERVICE_TOKEN.
+    service_token_url: str | None = None
+    service_client_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
+    service_client_secret: SecretStr | None = None
+
     # Websites allowed to call this API from a browser, comma-separated exact origins
     # (scheme://host[:port]). Empty: no cross-site calls are allowed.
     cors_origins: str = ""
+
+    @field_validator("service_token_url", "service_client_secret", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # Compose passes an unset variable as an empty string
+        return None if value == "" else value
 
     @property
     def cors_origin_list(self) -> list[str]:

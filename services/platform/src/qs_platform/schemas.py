@@ -26,6 +26,20 @@ class TokenResponse(BaseModel):
     user: "UserOut"
 
 
+class ServiceTokenRequest(BaseModel):
+    """Client credentials of a calling service (ADR 09)."""
+
+    grant_type: Literal["client_credentials"] = "client_credentials"
+    client_id: str = Field(min_length=1, max_length=40, pattern=r"^[a-z][a-z0-9-]*$")
+    client_secret: str = Field(min_length=1, max_length=256)
+
+
+class ServiceTokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 - a scheme name, not a secret
+    expires_in: int
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=20, max_length=200)
 
