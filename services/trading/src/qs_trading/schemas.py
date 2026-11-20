@@ -8,7 +8,7 @@ defaults filled in), and are returned exactly as stored.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
@@ -21,6 +21,7 @@ from qs_trading.domain.strategies import KINDS
 
 __all__ = [
     "ChainReportOut",
+    "DemoEnvironmentOut",
     "EventOut",
     "EventPage",
     "FillOut",
@@ -70,6 +71,18 @@ Capital = Annotated[
 
 class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class DemoEnvironmentOut(BaseModel):
+    """A demo market environment the worker can run over (LOCAL and DEV only); bind a
+    portfolio to it with ``replay_environment_id``."""
+
+    id: uuid.UUID
+    name: str
+    env_type: EnvType
+    sessions: int = Field(ge=0, description="Trading sessions in the environment")
+    start_date: date | None
+    end_date: date | None
 
 
 class StrategyIn(_Body):

@@ -440,6 +440,7 @@ def fake_app(
     store: TradingStore,
     settings: TradingSettings | None = None,
     metrics: MetricsCalculator = PENDING,
+    demo_environments: str = "",
     ops: OpsFactory = _fake_ops,
 ) -> FastAPI:
     """The service's routes over ``store`` and ``ops``; the database is never reached."""
@@ -457,6 +458,7 @@ def fake_app(
             database=database,
             store=factory,
             metrics=metrics,
+            demo_environments=demo_environments,
             ops=ops,
         ),
     )
@@ -529,6 +531,7 @@ MATRIX: dict[tuple[str, str], frozenset[Role] | None] = {
     ("GET", "/portfolios/{portfolio_id}/verify"): ALL_ROLES,
     ("GET", "/portfolios/{portfolio_id}/metrics"): ALL_ROLES,
     ("POST", "/portfolios/{portfolio_id}/rebuild"): ADMINS,
+    ("GET", "/demo-environments"): ALL_ROLES,
     ("GET", "/ops/metrics"): ADMINS,
 }
 

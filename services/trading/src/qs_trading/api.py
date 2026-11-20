@@ -8,6 +8,7 @@ Quants and admins (``create_portfolios``):  POST /portfolios, POST /portfolios/{
     (409 ``run-in-progress`` while another run of the portfolio is queued or running)
 Projections, state, verify and metrics (any role), rebuild (admins): see
 :mod:`qs_trading.api_projections`
+Demo environments (any role):  GET /demo-environments, see :mod:`qs_trading.api_environments`
 Operational metrics (admins): GET /ops/metrics, see :mod:`qs_trading.api_ops`
 
 Errors are problem details; a bad body or parameter is a 422 whose ``errors`` name the
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from qs_template import Database
 from qs_template.auth import Authenticator
 from qs_template.jobs import JobQueue
+from qs_trading.api_environments import build_environment_routers
 from qs_trading.api_ops import OpsFactory, OpsReader, SqlOpsReader, build_ops_routers
 from qs_trading.api_portfolios import build_portfolio_routers
 from qs_trading.api_projections import build_projection_routers
@@ -40,6 +42,7 @@ def build_routers(
     queue: JobQueue | None = None,
     store: StoreFactory | None = None,
     metrics: MetricsCalculator = PENDING,
+    demo_environments: str = "",
     ops: OpsFactory = SqlOpsReader,
 ) -> list[APIRouter]:
     """Every router of the service. Add new routers here.
@@ -47,8 +50,10 @@ def build_routers(
     ``queue`` is the job queue runs are submitted to (the service's ``job`` table with the
     default lease and attempts when omitted). ``store`` replaces the trading_db store, for
     tests that run the routes without a database. ``metrics`` computes the run ratios
-    (none until the shared metrics library is wired in). ``ops`` reads the operational
-    metrics (trading_db's job and outbox tables by default)."""
+    (none until the shared metrics library is wired in). ``demo_environments`` is the
+    ``QS_TRADING_DEMO_ENVIRONMENTS`` setting, whose fixtures ``GET /demo-environments``
+    lists (none when empty). ``ops`` reads the operational metrics (trading_db's job and
+    outbox tables by default)."""
     make_store = store or sql_store(queue or JobQueue(job))
 
     # scope="function": the session commits when the route returns, before the response is
@@ -69,5 +74,6 @@ def build_routers(
         *build_portfolio_routers(auth=auth, store=request_store),
         *build_run_routers(auth=auth, store=request_store),
         *build_projection_routers(auth=auth, store=request_store, metrics=metrics),
+        *build_environment_routers(auth=auth, demo_environments=demo_environments),
         *build_ops_routers(auth=auth, ops=request_ops),
     ]
