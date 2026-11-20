@@ -13,7 +13,18 @@ only. Through the gateway it:
  6. pages the whole event log and checks the chain: ``seq`` runs 1, 2, 3 without gaps,
     every ``prev_hash`` is the previous event's ``hash`` (the first has none), the log
     starts with RUN_STARTED and ends with RUN_COMPLETED, and the last hash and seq are the
-    run result's ``final_hash`` and ``final_seq``.
+    run result's ``final_hash`` and ``final_seq``;
+ 7. checks the projections against the log, and GET /ops/metrics (A-NFR-14): the admin
+    sees queue depth, job durations and outbox backlog, the viewer is refused (403);
+ 8. A-NFR-01: runs the 40 x 252 benchmark in under 60 s (QS_LIVE_BENCHMARK_ENV_ID);
+ 9. last, the load step (QS_LIVE_LOAD): logs the queue depth, then finds (or, the first
+    time, creates) the strategy "live check load" and the 100 portfolios "live check load
+    001" to "100" on the demo environment, and submits one run for each, one after the
+    other, each with a new Idempotency-Key; the 202 must come back in under 800 ms at p95
+    (A-NFR-02). A 409 (a run from an earlier deploy still in progress) is left out of the
+    timing; more than 10 of them fail the step. Then 100 reads spread over
+    /fills, /value-series, /state, /metrics and /events of the portfolio of step 2, while
+    those runs execute, in under 2 s at p95 (A-NFR-03). The 100 runs are not waited for.
 
 Settings, from the environment (the passwords are never printed):
   QS_LIVE_BASE_URL          the gateway, e.g. http://host.docker.internal:8081
@@ -22,12 +33,16 @@ Settings, from the environment (the passwords are never printed):
   QS_LIVE_PASSWORD
   QS_LIVE_VIEWER_USERNAME   optional: a viewer account for step 4 (same password)
   QS_LIVE_TIMEOUT_SECONDS   how long the run may take (default 180)
+  QS_LIVE_BENCHMARK_ENV_ID  optional: the benchmark environment of step 8
+  QS_LIVE_LOAD              optional: non-empty runs the load step (step 9)
 
-``python trading_live_check.py --self-test`` runs the chain check's own examples.
+``python trading_live_check.py --self-test`` runs the chain check's and the percentile's
+own examples.
 Exit code 0 when every check passed, 1 otherwise, with the reason on stderr.
 """
 
 import json
+import math
 import os
 import sys
 import time
@@ -410,6 +425,240 @@ def run_benchmark(api: Api, token: str, env_id: str, name: str) -> None:
     )
 
 
+def percentile(values: Sequence[float], share: float) -> float:
+    """Nearest-rank percentile: the smallest value with at least ``share`` of the values at
+    or below it.
+
+    >>> latencies = [float(n) for n in range(1, 101)]
+    >>> percentile(latencies, 0.95), percentile(latencies, 0.5), percentile(latencies, 1.0)
+    (95.0, 50.0, 100.0)
+    >>> percentile([0.3, 0.1, 0.2], 0.5)
+    0.2
+    >>> percentile([float(n) for n in range(1, 21)], 0.95)
+    19.0
+    >>> percentile([7.0], 0.95)
+    7.0
+    >>> percentile([], 0.95)
+    Traceback (most recent call last):
+    ...
+    LiveCheckFailed: no values to take a percentile of
+    """
+    if not values:
+        raise LiveCheckFailed("no values to take a percentile of")
+    ordered = sorted(values)
+    # Rounded first, so that 20 x 0.95 is rank 19 and not 20 by a binary rounding error
+    rank = max(1, math.ceil(round(len(ordered) * share, 9)))
+    return ordered[min(rank, len(ordered)) - 1]
+
+
+def latency_summary(seconds: Sequence[float]) -> str:
+    """p50, p95 and max in milliseconds.
+
+    >>> latency_summary([0.4, 0.1, 0.3, 0.2])
+    'p50 200 ms, p95 400 ms, max 400 ms'
+    """
+    p50, p95 = percentile(seconds, 0.5), percentile(seconds, 0.95)
+    return f"p50 {p50 * 1000:.0f} ms, p95 {p95 * 1000:.0f} ms, max {max(seconds) * 1000:.0f} ms"
+
+
+def check_ops_metrics(api: Api, token: str, viewer_token: str | None) -> None:
+    """A-NFR-14: GET /ops/metrics shows the engine.run queue depth by status, the recent
+    job durations and the outbox backlog, to admins only."""
+    ops = api.expect(200, "GET", f"{TRADING}/ops/metrics", token=token)
+    queue, durations, outbox = ops.get("queue"), ops.get("durations"), ops.get("outbox")
+    if not (isinstance(queue, dict) and isinstance(durations, dict) and isinstance(outbox, dict)):
+        raise LiveCheckFailed(f"/ops/metrics lacks queue, durations or outbox: {_short(ops)}")
+    required = (
+        ("queue", queue, ("queued", "running", "succeeded", "failed")),
+        ("durations", durations, ("count",)),
+        ("outbox", outbox, ("pending",)),
+    )
+    for where, body, keys in required:
+        for key in keys:
+            if not isinstance(body.get(key), int):
+                raise LiveCheckFailed(f"/ops/metrics {where}.{key} is not a count: {_short(ops)}")
+    if queue["succeeded"] < 1 or durations["count"] < 1:
+        raise LiveCheckFailed(f"/ops/metrics does not count the finished run: {_short(ops)}")
+    refused = ""
+    if viewer_token is not None:
+        api.expect(403, "GET", f"{TRADING}/ops/metrics", token=viewer_token)
+        refused = "; the viewer is refused (403)"
+    log(
+        f"A-NFR-14 /ops/metrics: queue {queue['queued']} queued, {queue['running']} running, "
+        f"{queue['succeeded']} succeeded, {queue['failed']} failed; p95 duration "
+        f"{durations.get('p95_seconds')}s over the last {durations['count']} runs; outbox "
+        f"backlog {outbox['pending']} (oldest {outbox.get('oldest_pending_seconds')}s){refused}"
+    )
+
+
+LOAD_RUNS = 100
+LOAD_READS = 100
+SUBMIT_P95_LIMIT_SECONDS = 0.8
+READ_P95_LIMIT_SECONDS = 2.0
+READ_ROUTES = ("/fills", "/value-series", "/state", "/metrics", "/events")
+
+
+def timed_call(api: Api, status: int, method: str, path: str, **kwargs: Any) -> tuple[float, Any]:
+    """Seconds the call took and its body; any status other than ``status`` fails."""
+    started = time.perf_counter()
+    got, body = api.call(method, path, **kwargs)
+    elapsed = time.perf_counter() - started
+    if got != status:
+        raise LiveCheckFailed(f"{method} {path} answered {got}, expected {status}: {_short(body)}")
+    return elapsed, body
+
+
+LOAD_STRATEGY = "live check load"
+MAX_IN_PROGRESS = 10
+"""Load submits a run still in progress from an earlier deploy may refuse (409)."""
+
+
+def load_portfolio_names(count: int = LOAD_RUNS) -> list[str]:
+    """The fixed names of the load portfolios, reused by every deploy.
+
+    >>> names = load_portfolio_names()
+    >>> len(names), names[0], names[-1]
+    (100, 'live check load 001', 'live check load 100')
+    """
+    return [f"{LOAD_STRATEGY} {n:03d}" for n in range(1, count + 1)]
+
+
+def find_load_portfolios(
+    portfolios: Sequence[Mapping[str, Any]], names: Sequence[str], env_id: str
+) -> tuple[dict[str, str], list[str]]:
+    """The ids of the load portfolios that exist already (by name, on ``env_id``; the
+    first wins if a name repeats), and the names still missing, in order.
+
+    >>> listed = [
+    ...     {"id": "p2", "name": "live check load 002", "replay_environment_id": "env"},
+    ...     {"id": "x", "name": "live check load 001", "replay_environment_id": "other"},
+    ...     {"id": "p2b", "name": "live check load 002", "replay_environment_id": "env"},
+    ...     {"id": "y", "name": "something else", "replay_environment_id": "env"},
+    ... ]
+    >>> find_load_portfolios(listed, load_portfolio_names(3), "env")
+    ({'live check load 002': 'p2'}, ['live check load 001', 'live check load 003'])
+    """
+    wanted = set(names)
+    found: dict[str, str] = {}
+    for portfolio in portfolios:
+        name = portfolio.get("name")
+        if (
+            isinstance(name, str)
+            and name in wanted
+            and name not in found
+            and str(portfolio.get("replay_environment_id")) == env_id
+        ):
+            found[name] = str(portfolio["id"])
+    return found, [name for name in names if name not in found]
+
+
+def load_portfolios(api: Api, token: str, env_id: str) -> list[str]:
+    """The ids of the 100 load portfolios, in name order. The first deploy creates the
+    strategy and the portfolios; later deploys find them and create nothing."""
+    strategies = api.expect(200, "GET", f"{TRADING}/strategies", token=token)
+    strategy_id = next(
+        (
+            str(s["id"])
+            for s in strategies
+            if s.get("name") == LOAD_STRATEGY and s.get("kind") == "buy_and_hold"
+        ),
+        None,
+    )
+    if strategy_id is None:
+        created = api.expect(
+            201,
+            "POST",
+            f"{TRADING}/strategies",
+            token=token,
+            body={"name": LOAD_STRATEGY, "kind": "buy_and_hold", "params": {}},
+        )
+        strategy_id = str(created["id"])
+        log(f"created the load strategy '{LOAD_STRATEGY}' ({strategy_id})")
+    names = load_portfolio_names()
+    listed = api.expect(200, "GET", f"{TRADING}/portfolios", token=token)
+    found, missing = find_load_portfolios(listed, names, env_id)
+    for name in missing:
+        portfolio = api.expect(
+            201,
+            "POST",
+            f"{TRADING}/portfolios",
+            token=token,
+            body={
+                "name": name,
+                "strategy_id": strategy_id,
+                "initial_capital": "10000",
+                "replay_environment_id": env_id,
+            },
+        )
+        found[name] = str(portfolio["id"])
+    log(f"load portfolios: {len(names) - len(missing)} reused, {len(missing)} created")
+    return [found[name] for name in names]
+
+
+def run_load(api: Api, token: str, env_id: str, read_base: str) -> None:
+    """A-NFR-02 and A-NFR-03 (step 9). Runs last: the runs it queues are left to the
+    worker, so nothing after it waits behind them. It reuses the same strategy and 100
+    portfolios on every deploy; a finished portfolio accepts a new run, which finds its
+    log complete, so after the first deploy the runs clear almost at once."""
+    before = api.expect(200, "GET", f"{TRADING}/ops/metrics", token=token).get("queue") or {}
+    log(
+        f"before the load step: {before.get('queued')} engine runs queued, "
+        f"{before.get('running')} running (oldest queued {before.get('oldest_queued_seconds')}s)"
+    )
+    submits: list[float] = []
+    in_progress = 0
+    for n, portfolio_id in enumerate(load_portfolios(api, token, env_id), start=1):
+        path = f"{TRADING}/portfolios/{portfolio_id}/runs"
+        key = {"Idempotency-Key": f"live-load-{uuid.uuid4()}"}
+        started = time.perf_counter()
+        status, accepted = api.call("POST", path, token=token, headers=key)
+        elapsed = time.perf_counter() - started
+        if status == 409:
+            # A run of this portfolio from an earlier deploy is still queued or running
+            in_progress += 1
+            continue
+        if status != 202:
+            raise LiveCheckFailed(
+                f"POST {path} answered {status}, expected 202: {_short(accepted)}"
+            )
+        if accepted.get("created") is not True:
+            raise LiveCheckFailed(f"load run {n} is not a new job: {_short(accepted)}")
+        submits.append(elapsed)
+    if in_progress:
+        log(f"{in_progress} load submits refused (409 run-in-progress), left out of the timing")
+    if in_progress > MAX_IN_PROGRESS:
+        raise LiveCheckFailed(
+            f"A-NFR-02: {in_progress} of {LOAD_RUNS} load portfolios still have a run in "
+            f"progress from an earlier deploy (at most {MAX_IN_PROGRESS}); the worker is "
+            "not keeping up"
+        )
+    p95 = percentile(submits, 0.95)
+    log(f"A-NFR-02 {len(submits)} run submits: {latency_summary(submits)}")
+    if p95 >= SUBMIT_P95_LIMIT_SECONDS:
+        raise LiveCheckFailed(
+            f"A-NFR-02: the run submit p95 is {p95 * 1000:.0f} ms, over "
+            f"{SUBMIT_P95_LIMIT_SECONDS * 1000:.0f} ms ({latency_summary(submits)})"
+        )
+
+    reads: list[float] = []
+    for n in range(LOAD_READS):
+        route = READ_ROUTES[n % len(READ_ROUTES)]
+        elapsed, _ = timed_call(api, 200, "GET", f"{read_base}{route}", token=token)
+        reads.append(elapsed)
+    p95 = percentile(reads, 0.95)
+    log(f"A-NFR-03 {LOAD_READS} projection and metrics reads: {latency_summary(reads)}")
+    if p95 >= READ_P95_LIMIT_SECONDS:
+        raise LiveCheckFailed(
+            f"A-NFR-03: the projection and metrics read p95 is {p95 * 1000:.0f} ms, over "
+            f"{READ_P95_LIMIT_SECONDS * 1000:.0f} ms ({latency_summary(reads)})"
+        )
+    queue = api.expect(200, "GET", f"{TRADING}/ops/metrics", token=token).get("queue") or {}
+    log(
+        f"load runs left to the worker: {queue.get('queued')} queued, {queue.get('running')} "
+        f"running (oldest queued {queue.get('oldest_queued_seconds')}s)"
+    )
+
+
 def live_check() -> None:
     api = Api(_setting("QS_LIVE_BASE_URL"))
     env_id = _setting("QS_LIVE_ENV_ID")
@@ -467,6 +716,7 @@ def live_check() -> None:
     run_path = f"{base}/runs/{job_id}"
     check_one_active_run(api, token, base, run_path, job_id)
 
+    viewer_token: str | None = None
     if viewer:
         viewer_token = sign_in(api, viewer, password)
         api.expect(200, "GET", run_path, token=viewer_token)
@@ -499,9 +749,13 @@ def live_check() -> None:
             f"the run's {result.get('source_fingerprint')}"
         )
     check_projections(api, token, base, events, result)
+    check_ops_metrics(api, token, viewer_token)
     benchmark = os.environ.get("QS_LIVE_BENCHMARK_ENV_ID", "")
     if benchmark:
         run_benchmark(api, token, benchmark, name)
+    # Last: nothing after it waits behind the runs it queues
+    if os.environ.get("QS_LIVE_LOAD", ""):
+        run_load(api, token, env_id, base)
 
     log("passed")
     log(f"  portfolio    {portfolio_id}")

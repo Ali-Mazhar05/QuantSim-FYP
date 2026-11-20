@@ -33,6 +33,7 @@ still running); a retry resumes from the committed log (A-FR-13) and either cont
 finds the run complete, so retrying it is both safe and the way it heals.
 """
 
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -40,6 +41,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog.contextvars import bound_contextvars
 
 from qs_template import Database
 from qs_template.jobs import Handler, Job, JobQueue, ProgressReporter, Submitted
@@ -194,6 +196,20 @@ def engine_run_handler(
     jobs = queue or JobQueue(job)
 
     async def handle(claimed: Job, report: ProgressReporter) -> dict[str, object] | None:
+        # A-NFR-14: every log line of the run carries the job and the portfolio
+        portfolio = str(claimed.payload.get("portfolio_id"))
+        with bound_contextvars(job_id=str(claimed.id), portfolio_id=portfolio):
+            started, outcome = time.monotonic(), "raised"
+            log.info("engine run started", attempt=claimed.attempt)
+            try:
+                result = await run_job(claimed, report)
+                outcome = "completed" if result is not None else "failed permanently"
+                return result
+            finally:
+                seconds = round(time.monotonic() - started, 3)
+                log.info("engine run ended", outcome=outcome, duration_seconds=seconds)
+
+    async def run_job(claimed: Job, report: ProgressReporter) -> dict[str, object] | None:
         try:
             portfolio_id = uuid.UUID(str(claimed.payload["portfolio_id"]))
             store = PortfolioStore(database, portfolio_id, run_id=claimed.id)
