@@ -272,10 +272,18 @@ pipeline {
                 sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
                 sh 'ci/scripts/smoke.sh "$QS_ENV" .ci/release.env'
                 // Playwright gates: a red run fails the deploy, so the environment's
-                // verified status (required on the next promotion PR) is never set
+                // verified status (required on the next promotion PR) is never set. They
+                // sign in as test.admin, whose password the gate decrypts from the
+                // environment's secrets with the sops-age-key bound above
                 def gates = [dev: 'dev-smoke', test: 'demo-spine']
                 if (gates[env.QS_ENV]) {
                   sh "ci/scripts/playwright-gate.sh '${env.QS_ENV}' '${gates[env.QS_ENV]}'"
+                }
+                // DEV only, last: runs a portfolio through the trading API and engine on
+                // the bundled demo market data and checks its event chain. A failure
+                // fails the deploy, so DEV is not verified
+                if (env.QS_ENV == 'dev') {
+                  sh 'ci/scripts/trading-live-check.sh dev'
                 }
               } catch (err) {
                 if (env.QS_ENV in ['acc', 'prod']) {
@@ -303,6 +311,7 @@ pipeline {
       post {
         always {
           archiveArtifacts artifacts: '.ci/release.env', allowEmptyArchive: true
+          junit allowEmptyResults: true, testResults: 'frontend/reports/e2e-*.xml'
           cleanWs(deleteDirs: true, notFailBuild: true)
         }
       }

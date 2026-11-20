@@ -38,6 +38,7 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
 markers = [
   "db: needs a PostgreSQL database (TEST_DATABASE_URL)",
+  "slow: takes several seconds (deselect with -m 'not slow')",
 ]
 filterwarnings = [
   "error",
