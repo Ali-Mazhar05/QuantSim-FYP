@@ -412,6 +412,7 @@ def fake_app(
     store: TradingStore,
     settings: TradingSettings | None = None,
     metrics: MetricsCalculator = PENDING,
+    demo_environments: str = "",
 ) -> FastAPI:
     """The service's routes over ``store``; the database is never reached."""
     settings = settings or make_settings()
@@ -424,7 +425,11 @@ def fake_app(
         settings,
         database=database,
         routers=build_routers(
-            auth=authenticator(settings), database=database, store=factory, metrics=metrics
+            auth=authenticator(settings),
+            database=database,
+            store=factory,
+            metrics=metrics,
+            demo_environments=demo_environments,
         ),
     )
 
@@ -496,6 +501,7 @@ MATRIX: dict[tuple[str, str], frozenset[Role] | None] = {
     ("GET", "/portfolios/{portfolio_id}/verify"): ALL_ROLES,
     ("GET", "/portfolios/{portfolio_id}/metrics"): ALL_ROLES,
     ("POST", "/portfolios/{portfolio_id}/rebuild"): ADMINS,
+    ("GET", "/demo-environments"): ALL_ROLES,
 }
 
 # The matrix's portfolio has not run, so it has no state to read yet: a not-found problem
