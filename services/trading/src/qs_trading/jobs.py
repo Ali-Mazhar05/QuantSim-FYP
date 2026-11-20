@@ -31,7 +31,9 @@ already lost the job cannot end it. The handler then returns, and the worker's o
 
 Everything else is transient and retried up to ``max_attempts``: database and connection
 errors, timeouts, a feed that is down for now
-(:class:`~qs_trading.adapters.feed_client.FeedUnavailable`), and
+(:class:`~qs_trading.adapters.feed_client.FeedUnavailable`: K3's ``upstream-down`` once its
+own retries are spent, its ``circuit-open``, or the provider's 429 or 5xx other than 501),
+and
 :class:`~qs_trading.engine.store.ChainConflict`. A chain conflict means another writer
 appended to the log first (a reclaimed job whose old worker was still running); a retry
 resumes from the committed log (A-FR-13) and either continues or finds the run complete,
@@ -51,7 +53,8 @@ from structlog.contextvars import bound_contextvars
 from qs_template import Database
 from qs_template.jobs import Handler, Job, JobQueue, ProgressReporter, Submitted
 from qs_template.logging import get_logger
-from qs_trading.adapters.feed_client import FeedClient, HttpxFeedClient, StaticToken
+from qs_template.service_client import StaticServiceToken, TokenProvider
+from qs_trading.adapters.feed_client import FeedClient, service_client_feed
 from qs_trading.adapters.file_environment import FixtureError, file_environments
 from qs_trading.adapters.http_environment import (
     PermanentFeedError,
@@ -89,6 +92,7 @@ __all__ = [
     "is_permanent",
     "job_queue",
     "no_environments",
+    "service_tokens",
     "submit_engine_run",
 ]
 
@@ -171,14 +175,16 @@ def _local_factory(settings: TradingSettings) -> EnvironmentFactory:
     return file_environments(directory)
 
 
-def _feed_client(settings: TradingSettings, base_url: str) -> FeedClient:
-    # K3 (#85): build ServiceClientFeed (adapters/feed_client.py) here instead
-    if settings.service_token is None:
-        raise ValueError("QS_SERVICE_TOKEN must be set to read the market feeds")
-    return HttpxFeedClient(
-        base_url,
-        StaticToken(settings.service_token),
-        timeout_seconds=settings.trading_feed_timeout_seconds,
+def service_tokens(settings: TradingSettings) -> TokenProvider:
+    """The token the worker sends to the feeds: the one place to change when the Platform
+    service issues real service tokens (ADR 09). Today the DEV ``StaticServiceToken``
+    (``QS_SERVICE_TOKEN``, local and dev only)."""
+    return StaticServiceToken.from_settings(settings)
+
+
+def _feed_client(settings: TradingSettings, base_url: str, tokens: TokenProvider) -> FeedClient:
+    return service_client_feed(
+        base_url, tokens, timeout_seconds=settings.trading_feed_timeout_seconds
     )
 
 
@@ -187,20 +193,29 @@ def environment_factory(
     *,
     market: FeedClient | None = None,
     simulation: FeedClient | None = None,
+    tokens: TokenProvider | None = None,
 ) -> EnvironmentFactory:
     """The environments the worker can run over. A replay is read from the market
     service's feed when ``QS_TRADING_MARKET_URL`` is set, a simulation path from the
     simulation service's when ``QS_TRADING_SIMULATION_URL`` is set (one client each,
     shared by every run of the worker; ``market`` and ``simulation`` replace them in
-    tests). A kind with no URL falls back to the demo fixtures when
+    tests). The feeds are read through K3's ``ServiceClient`` with ``tokens`` (by default
+    :func:`service_tokens`). A kind with no URL falls back to the demo fixtures when
     ``QS_TRADING_DEMO_ENVIRONMENTS`` is set, otherwise to none. A configured directory that
     does not exist, or a feed URL without ``QS_SERVICE_TOKEN``, stops the worker from
     starting."""
     local = _local_factory(settings)
+
+    def client(base_url: str) -> FeedClient:
+        nonlocal tokens
+        if tokens is None:
+            tokens = service_tokens(settings)
+        return _feed_client(settings, base_url, tokens)
+
     if market is None and settings.trading_market_url:
-        market = _feed_client(settings, settings.trading_market_url)
+        market = client(settings.trading_market_url)
     if simulation is None and settings.trading_simulation_url:
-        simulation = _feed_client(settings, settings.trading_simulation_url)
+        simulation = client(settings.trading_simulation_url)
     if market is None and simulation is None:
         return local
     ttl = settings.trading_fingerprint_cache_seconds

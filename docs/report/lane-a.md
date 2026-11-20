@@ -104,8 +104,8 @@ symbol. This follows Lane B's pull-based tick contract (ADR 01, C1) and its page
 | Adapter | Source | Status |
 |---|---|---|
 | File adapter (`adapters/file_environment.py`) | Contract fixtures (C3), the bundled demo and benchmark environments | Implemented (A14, aligned with the tick contract in #108) |
-| Replay HTTP adapter | `market` service, historical environments (C2) | Pending, A17 (needs C2 stubs and K3) |
-| Synthetic HTTP adapter | `simulation` service, one path of a completed run | Pending, A17 |
+| Replay HTTP adapter (`adapters/http_environment.py`) | `market` service, historical environments (C2) | Implemented (A17, over K3's `ServiceClient`; contract-tested on fixtures until the live routes leave 501) |
+| Synthetic HTTP adapter (`adapters/http_environment.py`) | `simulation` service, one path of a completed run | Implemented (A17, as above) |
 
 Because the core only sees the port, the whole engine runs and is tested with no other
 service up. The runner re-reads the fingerprint before each session commits; data that
@@ -147,7 +147,7 @@ every service the same proven base in week 1, so the lanes build domain logic fr
 |---|---|---|
 | K1 Job queue (`libs/qs_template/src/qs_template/jobs.py`) | A `job` table in each service's own database. Idempotent submit (unique key returns the existing job), single claim with `FOR UPDATE SKIP LOCKED`, leases with heartbeats and reclaim after a worker dies, fencing so a worker that lost its lease cannot overwrite the new owner's result, a bounded number of attempts | #73 |
 | K2 Service scaffold (`scripts/new-service.sh`) | One command generates a service from `scripts/service-template/`: API with `/health`, job worker, outbox relay, Alembic with a first migration, tests, compose services, Traefik route, `ci/components.conf` entry, database and role in `db-init`, encrypted database password per environment. Generated simulation, trading and risk | #74, #76 |
-| K3 ServiceClient and service tokens | Timeouts, retries with jittered backoff, circuit breaker, one `ServiceCallError`; DEV static token until real client-credential tokens (ADR 09) | #85, pending review |
+| K3 ServiceClient and service tokens | Timeouts, retries with jittered backoff, circuit breaker, one `ServiceCallError`; DEV static token until real client-credential tokens (ADR 09) | Implemented (#85); real tokens in progress |
 
 The trading service itself is a K2 output: its engine run is a K1 job (`engine.run`), which
 gives idempotent run submission (`Idempotency-Key` header, 202 with the job id), progress
@@ -230,7 +230,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR-16 | Five trading pages in the prototype layout; Trade Replay at 1x, 5x, 20x | Pending (A18) | — |
 | A-FR-17 | Job library: single claim, lease reclaim, idempotent submit | Implemented | `libs/qs_template/tests/test_jobs.py::test_two_open_claims_never_take_the_same_job`, `::test_many_workers_claim_every_job_exactly_once`, `::test_a_dead_workers_job_is_reclaimed_and_the_old_owner_is_fenced`, `::test_duplicate_submit_returns_the_same_job`, `::test_concurrent_duplicate_submits_create_one_job` |
 | A-FR-18 | Scaffold generates a runnable service in one command | Implemented; database-role isolation enforced in `db-init` but not yet tested automatically | `scripts/service-template/tests/test_service.py`; `test_service.py::test_health_reports_the_build`; `ci/scripts/smoke.sh` (simulation, trading, risk `/health` through the gateway on every deploy) |
-| A-FR-19 | Workers call other services without a user token | Pending (K3, #85 in review; real tokens due 2 Dec) | — |
+| A-FR-19 | Workers call other services without a user token | Partly met: K3 merged (#85), HTTP feeds use it (A17); real tokens due 2 Dec | — |
 | A-FR-20 | Playwright DEV smoke gates promotion to TEST | Implemented | `frontend/e2e/dev-smoke/smoke.spec.ts` (3 tests); `ci/scripts/playwright-gate.sh`; `quantsim/dev-verified` required on the `develop -> test` PR |
 | A-FR-21 | pr.sh lane support; Jenkins runs both Playwright gates | Implemented; demo-spine gate active once Lane B's suite exists | pr.sh (A22, #84), verified by use; Jenkinsfile Deploy stage, `ci/scripts/playwright-gate.sh` |
 | A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: content-hash builds in place and used for v0.1.2 (#94, #95, #98); v0.2.0 release pending (A19, 23 Dec) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh` |
@@ -247,7 +247,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-NFR-06 | Same inputs give an identical log and hash | Implemented (two runs compared event by event) | `unit/test_engine.py::test_two_runs_end_on_the_same_hash`; `property/test_strategy_properties.py::test_every_kind_is_deterministic` |
 | A-NFR-07 | One transaction per session; crash-resume identical | Implemented | `db/test_engine_db.py::test_a_crash_then_resume_gives_the_identical_log` |
 | A-NFR-08 | Outbox commits with state; redelivery changes nothing | Implemented | `db/test_engine_db.py::test_a_run_persists_a_chained_log_with_its_state_and_outbox`; `libs/qs_template/tests/test_messaging.py::test_duplicate_delivery_changes_nothing`, `::test_relays_in_parallel_never_publish_an_event_twice` |
-| A-NFR-09 | Timeout, retry budget and circuit breaker on every remote call | Pending (K3, #85) | — |
+| A-NFR-09 | Timeout, retry budget and circuit breaker on every remote call | Met for the market and simulation feeds (K3 #85, A17) | — |
 | A-NFR-10 | Role checked on every route; analyst and viewer writes 403 | Implemented | `api/test_api_roles.py::test_every_route_has_a_declared_rule`, `::test_every_route_allows_exactly_the_declared_roles`; `api/test_api_db.py::test_every_route_allows_exactly_the_declared_roles`; live check (viewer 403) |
 | A-NFR-11 | Each service role reaches only its own database; static token removed before TEST | Partial: `REVOKE ALL ... FROM PUBLIC` per database in `db-init`; connection test and TEST token check pending | `deploy/compose/docker-compose.yml` (`db-init`) |
 | A-NFR-12 | OpenAPI exported on each merge for K4's type check | Pending (with K4) | — |
@@ -266,7 +266,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 
 Implemented rows include A-FR-01 and A-FR-21, whose UI or Lane B parts follow later. Still
 open on the functional side: A-FR-14's ratios (Lane C's K6), A-FR-16 (trading pages, A18),
-A-FR-19 (real service tokens, K3 #85 in review), A-FR-22's v0.2.0 release (A19), and
+A-FR-19 (real service tokens, K3 follow-up), A-FR-22's v0.2.0 release (A19), and
 A-FR-04's environment picker (A18 with C2).
 
 ## 5. Test results
