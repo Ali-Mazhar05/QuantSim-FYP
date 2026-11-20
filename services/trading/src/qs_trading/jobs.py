@@ -53,7 +53,7 @@ from structlog.contextvars import bound_contextvars
 from qs_template import Database
 from qs_template.jobs import Handler, Job, JobQueue, ProgressReporter, Submitted
 from qs_template.logging import get_logger
-from qs_template.service_client import StaticServiceToken, TokenProvider
+from qs_template.service_client import TokenProvider, service_tokens_from_settings
 from qs_trading.adapters.feed_client import FeedClient, service_client_feed
 from qs_trading.adapters.file_environment import FixtureError, file_environments
 from qs_trading.adapters.http_environment import (
@@ -176,10 +176,11 @@ def _local_factory(settings: TradingSettings) -> EnvironmentFactory:
 
 
 def service_tokens(settings: TradingSettings) -> TokenProvider:
-    """The token the worker sends to the feeds: the one place to change when the Platform
-    service issues real service tokens (ADR 09). Today the DEV ``StaticServiceToken``
-    (``QS_SERVICE_TOKEN``, local and dev only)."""
-    return StaticServiceToken.from_settings(settings)
+    """The token the worker sends to the feeds (ADR 09): short-lived tokens from the
+    Platform service when ``QS_SERVICE_TOKEN_URL`` and ``QS_SERVICE_CLIENT_SECRET`` are set
+    (every deployed environment), otherwise the DEV static token ``QS_SERVICE_TOKEN``
+    (local and dev only)."""
+    return service_tokens_from_settings(settings)
 
 
 def _feed_client(settings: TradingSettings, base_url: str, tokens: TokenProvider) -> FeedClient:
@@ -202,7 +203,7 @@ def environment_factory(
     tests). The feeds are read through K3's ``ServiceClient`` with ``tokens`` (by default
     :func:`service_tokens`). A kind with no URL falls back to the demo fixtures when
     ``QS_TRADING_DEMO_ENVIRONMENTS`` is set, otherwise to none. A configured directory that
-    does not exist, or a feed URL without ``QS_SERVICE_TOKEN``, stops the worker from
+    does not exist, or a feed URL without a service token configured, stops the worker from
     starting."""
     local = _local_factory(settings)
 

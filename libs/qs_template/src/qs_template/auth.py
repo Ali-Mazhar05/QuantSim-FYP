@@ -142,8 +142,11 @@ class Principal:
     # Millisecond issue time ("iat_ms" claim, falling back to iat), so a revocation can
     # cut off exactly the tokens issued before it
     issued_at_ms: int = 0
-    # True for another service calling with the DEV service token (no user behind it)
+    # True for another service calling (no user behind it): with a platform-issued
+    # service token, or with the DEV static token
     is_service: bool = False
+    # The calling service, when a platform-issued service token names it
+    service_name: str | None = None
 
     def __post_init__(self) -> None:
         if not self.issued_at_ms:
@@ -164,6 +167,32 @@ SERVICE_PRINCIPAL = Principal(
     issued_at=0,
     is_service=True,
 )
+
+
+# Platform-issued service tokens (ADR 09). They carry kind="service" and
+# sub="service:<name>"; user tokens carry no kind and a user id as sub, so neither can be
+# taken for the other.
+SERVICE_TOKEN_KIND = "service"  # noqa: S105 - a claim value, not a secret
+SERVICE_SUBJECT_PREFIX = "service:"
+# The services that may hold a service token
+KNOWN_SERVICES = frozenset({"platform", "market", "simulation", "trading", "risk"})
+
+
+def service_principal(
+    name: str, *, token_id: str, issued_at: int, issued_at_ms: int = 0
+) -> Principal:
+    """Who a call made with a service token of ``name`` acts as: read-only, like a
+    viewer. Its id is fixed per service, so revoking it cuts that service's tokens off."""
+    return Principal(
+        user_id=uuid.uuid5(uuid.NAMESPACE_URL, f"{_SERVICE_ID}:{name}"),
+        username=f"{SERVICE_SUBJECT_PREFIX}{name}",
+        role=Role.VIEWER,
+        token_id=token_id,
+        issued_at=issued_at,
+        issued_at_ms=issued_at_ms,
+        is_service=True,
+        service_name=name,
+    )
 
 
 def _unauthenticated(detail: str) -> ServiceError:
@@ -320,21 +349,46 @@ class Authenticator:
         except jwt.InvalidTokenError:
             raise _unauthenticated("The token is not valid.") from None
 
-        try:
-            principal = Principal(
-                user_id=uuid.UUID(str(claims["sub"])),
-                username=str(claims.get("username", "")),
-                role=Role(str(claims.get("role"))),
-                token_id=str(claims["jti"]),
-                issued_at=int(claims["iat"]),
-                issued_at_ms=int(claims.get("iat_ms") or int(claims["iat"]) * 1000),
-            )
-        except (ValueError, KeyError):
-            raise _unauthenticated("The token does not name a valid user and role.") from None
+        if "kind" in claims:
+            principal = self._service_principal(claims)
+        else:
+            try:
+                principal = Principal(
+                    user_id=uuid.UUID(str(claims["sub"])),
+                    username=str(claims.get("username", "")),
+                    role=Role(str(claims.get("role"))),
+                    token_id=str(claims["jti"]),
+                    issued_at=int(claims["iat"]),
+                    issued_at_ms=int(claims.get("iat_ms") or int(claims["iat"]) * 1000),
+                )
+            except (ValueError, KeyError):
+                raise _unauthenticated("The token does not name a valid user and role.") from None
 
         if self._is_revoked is not None and await self._is_revoked(principal):
             raise _unauthenticated("The token has been revoked.")
         return principal
+
+    @staticmethod
+    def _service_principal(claims: dict[str, Any]) -> Principal:
+        """A platform-issued service token: always the viewer role, whatever it claims."""
+        subject = str(claims["sub"])
+        name = subject.removeprefix(SERVICE_SUBJECT_PREFIX)
+        if (
+            claims.get("kind") != SERVICE_TOKEN_KIND
+            or not subject.startswith(SERVICE_SUBJECT_PREFIX)
+            or name not in KNOWN_SERVICES
+            or claims.get("role") != Role.VIEWER.value
+        ):
+            raise _unauthenticated("The token does not name a known service.")
+        try:
+            return service_principal(
+                name,
+                token_id=str(claims["jti"]),
+                issued_at=int(claims["iat"]),
+                issued_at_ms=int(claims.get("iat_ms") or int(claims["iat"]) * 1000),
+            )
+        except ValueError:
+            raise _unauthenticated("The token does not name a known service.") from None
 
     async def principal(self, authorization: Annotated[str | None, Header()] = None) -> Principal:
         """FastAPI dependency: the verified user behind the request's bearer token."""
@@ -344,7 +398,10 @@ class Authenticator:
         if scheme.lower() != "bearer" or not token:
             raise _unauthenticated("A bearer token is required.")
         principal = await self.verify(token.strip())
-        structlog.contextvars.bind_contextvars(user_id=str(principal.user_id))
+        if principal.service_name is not None:
+            structlog.contextvars.bind_contextvars(calling_service=principal.service_name)
+        else:
+            structlog.contextvars.bind_contextvars(user_id=str(principal.user_id))
         return principal
 
     def require_capability(self, *capabilities: Capability) -> Callable[..., Awaitable[Principal]]:

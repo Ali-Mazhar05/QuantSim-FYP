@@ -42,8 +42,9 @@ class TradingSettings(ServiceSettings):
     trading_feed_timeout_seconds: float = Field(default=10.0, gt=0)
     trading_fingerprint_cache_seconds: float = Field(default=30.0, ge=0)
 
-    # The DEV service token sent to the feeds (QS_SERVICE_TOKEN) is declared by the kit's
-    # ServiceSettings (K3, ADR 09) and read by qs_trading.jobs.service_tokens. Never logged.
+    # The service token settings (QS_SERVICE_TOKEN_URL, QS_SERVICE_CLIENT_SECRET, and the DEV
+    # QS_SERVICE_TOKEN) are declared by the kit's ServiceSettings (K3, ADR 09) and read by
+    # qs_trading.jobs.service_tokens. Never logged.
 
     @model_validator(mode="after")
     def _demo_environments_only_in_dev(self) -> Self:
