@@ -5,7 +5,7 @@
 import type { ApiPaths } from '../generated'
 import { apiRequest } from './client'
 
-type Method = 'get' | 'post'
+type Method = 'get' | 'post' | 'put'
 
 /** The paths that offer a method. */
 type PathsFor<M extends Method> = {
@@ -19,10 +19,23 @@ type RequestBody<O> = O extends { requestBody: { content: { 'application/json': 
 type QueryOf<O> = O extends { parameters: { query?: infer Q } } ? Exclude<Q, undefined> : never
 type PathOf<O> = O extends { parameters: { path: infer X } } ? X : never
 
+/** Extra request settings: headers such as `Idempotency-Key`, and a signal that cancels the call. */
+export interface RequestOptions {
+  headers?: Record<string, string>
+  signal?: AbortSignal
+}
+
 /** Path parameters are required when the route has any; the query is always optional. */
 type Args<O> = [PathOf<O>] extends [never]
-  ? [options?: { query?: QueryOf<O> }]
-  : [options: { path: PathOf<O>; query?: QueryOf<O> }]
+  ? [options?: { query?: QueryOf<O> } & RequestOptions]
+  : [options: { path: PathOf<O>; query?: QueryOf<O> } & RequestOptions]
+
+/** The body, then the options. An operation without a request body takes no body (or undefined). */
+type BodyArgs<O> = [RequestBody<O>] extends [never]
+  ? [PathOf<O>] extends [never]
+    ? [body?: undefined, ...Args<O>]
+    : [body: undefined, ...Args<O>]
+  : [body: RequestBody<O>, ...Args<O>]
 
 type Scalar = string | number | boolean | null | undefined
 
@@ -44,22 +57,34 @@ export function buildUrl(
   return text ? `${url}?${text}` : url
 }
 
-type Loose = { path?: Record<string, string | number>; query?: Record<string, Scalar> }
+type Loose = { path?: Record<string, string | number>; query?: Record<string, Scalar> } & RequestOptions
+
+function send<T>(method: string, path: string, body: unknown, options: Loose = {}): Promise<T> {
+  return apiRequest(buildUrl(path, options), {
+    method,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(options.headers ? { headers: options.headers } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+  })
+}
 
 export function apiGet<P extends PathsFor<'get'>>(
   path: P,
   ...args: Args<Operation<P, 'get'>>
 ): Promise<OkResponse<Operation<P, 'get'>>> {
-  return apiRequest(buildUrl(path, (args[0] ?? {}) as Loose))
+  return send('GET', path, undefined, args[0] as Loose)
 }
 
 export function apiPost<P extends PathsFor<'post'>>(
   path: P,
-  body: RequestBody<Operation<P, 'post'>>,
-  ...args: Args<Operation<P, 'post'>>
+  ...args: BodyArgs<Operation<P, 'post'>>
 ): Promise<OkResponse<Operation<P, 'post'>>> {
-  return apiRequest(buildUrl(path, (args[0] ?? {}) as Loose), {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return send('POST', path, args[0], args[1] as Loose)
+}
+
+export function apiPut<P extends PathsFor<'put'>>(
+  path: P,
+  ...args: BodyArgs<Operation<P, 'put'>>
+): Promise<OkResponse<Operation<P, 'put'>>> {
+  return send('PUT', path, args[0], args[1] as Loose)
 }

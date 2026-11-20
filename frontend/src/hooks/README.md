@@ -4,7 +4,7 @@ One hook per endpoint (or per resource), built on four things in this folder and
 
 | Piece | File | Rule |
 |---|---|---|
-| Typed call | `services/api/typed.ts` (`apiGet`, `apiPost`) | The path picks the parameters and the response from the generated types. Never hand-write an API response type. |
+| Typed call | `services/api/typed.ts` (`apiGet`, `apiPost`, `apiPut`) | The path picks the parameters and the response from the generated types. Never hand-write an API response type. The options take `headers` (e.g. `Idempotency-Key`) and a `signal`; pass the query's `signal` from `queryFn`. |
 | Query key | `hooks/queryKeys.ts` | One factory per service: `[service, resource, ...params]`. Invalidate by prefix. |
 | Hook | `hooks/useXxx.ts` | `useQuery({ queryKey, queryFn, enabled: authenticated })`; return a small view model, not the raw query. A write is a `useMutation` that invalidates the keys it changed. |
 | Error | `hooks/apiError.ts` | `classifyError(error)` gives `kind` (`unauthenticated`, `forbidden`, `not_found`, `conflict`, `invalid`, `rate_limited`, `server`, `unreachable`, `unknown`), a message, `fieldErrors` for 422 and `retryAfterSeconds` for 429. A page shows its 403 state when `kind === 'forbidden'`. |

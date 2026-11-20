@@ -18,7 +18,7 @@ export function useEnvironments(): EnvironmentsState {
   const activeId = useDemoStore((s) => s.activeEnvironmentId)
   const query = useQuery({
     queryKey: marketKeys.environments(),
-    queryFn: listEnvironments,
+    queryFn: ({ signal }) => listEnvironments({ signal }),
     enabled: authenticated,
   })
   const environments = query.data ?? null

@@ -146,8 +146,8 @@ function toEnvironment(e: ApiEnvironment): Environment {
 }
 
 /** Every environment, newest first. */
-export async function listEnvironments(): Promise<Environment[]> {
-  return (await apiGet('/api/market/environments')).map(toEnvironment)
+export async function listEnvironments(options: { signal?: AbortSignal } = {}): Promise<Environment[]> {
+  return (await apiGet('/api/market/environments', options)).map(toEnvironment)
 }
 
 export async function createEnvironment(input: {
