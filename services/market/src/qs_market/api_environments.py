@@ -56,6 +56,11 @@ class EnvironmentOut(BaseModel):
     status: Literal["draft", "ready", "active"]
     created_by: uuid.UUID
     created_at: datetime
+    source_fingerprint: str | None = Field(
+        default=None, description="Frozen at activation; null until the environment is activated"
+    )
+    activated_at: datetime | None = Field(default=None, description="Null until activated")
+    activated_by: uuid.UUID | None = Field(default=None, description="Null until activated")
 
 
 def build_environment_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]:

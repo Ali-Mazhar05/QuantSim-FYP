@@ -46,8 +46,8 @@
       "minimum": 0
     },
     "session_date": {
-      "description": "Optional. The trading date of a replay session.",
-      "type": "string",
+      "description": "Optional. The trading date of a replay session; absent or null when there is none (a synthetic step).",
+      "type": ["string", "null"],
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     },
     "ts": {

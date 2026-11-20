@@ -15,18 +15,30 @@ from typing import Any
 
 import xxhash
 
+from qs_template.errors import ServiceError
+
 PRICE_SCALE = Decimal("1E-10")  # adjusted prices are NUMERIC(23, 10)
 VOLUME_SCALE = Decimal("1E-8")  # adjusted volume is NUMERIC(28, 8)
 FINGERPRINT_PREFIX = "xxh3:"
+MISSING_ADJUSTED_PRICES = "urn:quantsim:problem:missing-adjusted-prices"
 
 
-class MissingAdjustedPrices(Exception):
-    """A bar in the window has no adjusted value; raw prices are never substituted (ADR 08)."""
+class MissingAdjustedPrices(ServiceError):
+    """A bar in the window has no adjusted value; raw prices are never substituted (ADR 08).
+
+    Raised from a route it answers 422 with ``missing``, the bar count per symbol (DL-005).
+    """
 
     def __init__(self, missing: dict[str, int]) -> None:
         self.missing = missing
         listed = ", ".join(f"{symbol} ({count})" for symbol, count in sorted(missing.items()))
-        super().__init__(f"bars without adjusted prices: {listed}")
+        super().__init__(
+            422,
+            "Missing adjusted prices",
+            f"bars without adjusted prices: {listed}",
+            type_=MISSING_ADJUSTED_PRICES,
+            extra={"missing": dict(sorted(missing.items()))},
+        )
 
 
 @dataclass(frozen=True)

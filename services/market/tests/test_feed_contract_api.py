@@ -158,6 +158,21 @@ async def test_the_page_limits_are_accepted_at_their_edges(
         assert response.status_code == 501, params  # past validation, to the not-built answer
 
 
+async def test_an_environment_carries_its_activation_null_until_activated(
+    client: httpx.AsyncClient, instrument: uuid.UUID
+) -> None:
+    environment = await make_environment(client, instrument)
+    viewer = bearer(make_token(Role.VIEWER))
+    read = await client.get(f"{API}/environments/{environment['id']}", headers=viewer)
+    assert read.status_code == 200, read.text
+    for body in (environment, read.json(), *await listed(client)):
+        assert body["source_fingerprint"] is None
+        assert body["activated_at"] is None and body["activated_by"] is None
+    model = _spec(client)["components"]["schemas"]["EnvironmentOut"]["properties"]
+    for name in ("source_fingerprint", "activated_at", "activated_by"):
+        assert {"type": "null"} in model[name]["anyOf"], name
+
+
 async def test_only_quants_and_admins_may_activate(
     client: httpx.AsyncClient, instrument: uuid.UUID
 ) -> None:

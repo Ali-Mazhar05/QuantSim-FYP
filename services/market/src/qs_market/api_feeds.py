@@ -140,6 +140,12 @@ def _not_built(what: str) -> ServiceError:
     )
 
 
+NOT_REPLAYABLE = {
+    "description": "A bad parameter, or an environment that cannot be replayed: "
+    "unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar "
+    "count per symbol in `missing`"
+}
+
 FINGERPRINT_HEADER = {
     "X-Source-Fingerprint": {
         "description": "The fingerprint of the data on this page; it equals the value frozen at "
@@ -166,7 +172,7 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
             401: {},
             403: {},
             404: {},
-            422: {},
+            422: NOT_REPLAYABLE,
             501: {},
         },
     )
@@ -188,7 +194,7 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
         "/{environment_id}/activate",
         response_model=ActivationOut,
         status_code=status.HTTP_200_OK,
-        responses={401: {}, 403: {}, 404: {}, 422: {}, 501: {}},
+        responses={401: {}, 403: {}, 404: {}, 422: NOT_REPLAYABLE, 501: {}},
     )
     async def activate_environment(
         environment_id: uuid.UUID, _: Creator, session: Session

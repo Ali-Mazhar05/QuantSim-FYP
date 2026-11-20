@@ -7,10 +7,13 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
+import httpx
 import pytest
+from fastapi import FastAPI
 
 from qs_market import feeds
 from qs_market.feeds import BarRow, MissingAdjustedPrices
+from qs_template.errors import install_error_handlers
 
 from .contract_support import tick_problems
 
@@ -136,6 +139,26 @@ def test_a_bar_without_an_adjusted_value_refuses_the_whole_environment(missing: 
     with pytest.raises(MissingAdjustedPrices):
         fp(data)
     assert feeds.missing_adjusted(rows()) == {}
+
+
+async def test_missing_adjusted_prices_answer_a_422_problem_with_the_counts() -> None:
+    gap: dict[str, Any] = {"adj_close": None}
+    data = [*rows(), bar("KO", date(2020, 1, 7), **gap), bar("AAPL", date(2020, 1, 7), **gap)]
+    app = FastAPI()
+    install_error_handlers(app)
+
+    @app.get("/ticks")
+    def ticks() -> list[dict[str, Any]]:
+        return feeds.build_ticks(data, env_id=ENV, source_fingerprint="x")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://market") as http:
+        response = await http.get("/ticks")
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/problem+json")
+    body = response.json()
+    assert body["type"] == "urn:quantsim:problem:missing-adjusted-prices"
+    assert body["missing"] == {"AAPL": 1, "KO": 1}
 
 
 def test_paging_by_after_seq_covers_every_tick_once() -> None:
