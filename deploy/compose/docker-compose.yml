@@ -695,6 +695,9 @@ services:
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
       QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
+      # DEV only: runs portfolios over the demo market data bundled in the image
+      # (TRADING_DEMO_ENVIRONMENTS in deploy/env); refused outside local and dev
+      QS_TRADING_DEMO_ENVIRONMENTS: ${TRADING_DEMO_ENVIRONMENTS:-}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:
