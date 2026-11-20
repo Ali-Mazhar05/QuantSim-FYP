@@ -9,16 +9,23 @@ backoff and a circuit breaker, and turns every failure into one controlled
     client = ServiceClient(
         "http://market:8000",
         caller="trading",
-        tokens=StaticServiceToken.from_settings(settings),
+        tokens=service_tokens_from_settings(settings),
     )
     page = await client.get_json("/api/market/environments/env-1/ticks", params={"after_seq": 0})
     await client.close()
 
-Tokens. Until real service tokens arrive (issued by the Platform service, 2 Dec), a
-DEV-only shared secret is used: :class:`StaticServiceToken`, read from
-``QS_SERVICE_TOKEN``. It refuses to load outside the ``local`` and ``dev`` environments, so
-it can never reach TEST. The receiving service accepts it through
-:class:`qs_template.auth.Authenticator` as a read-only service principal.
+Tokens (ADR 09). :func:`service_tokens_from_settings` picks the provider, so a service
+switches in one place:
+
+- :class:`ClientCredentialsToken` when ``QS_SERVICE_TOKEN_URL`` and
+  ``QS_SERVICE_CLIENT_SECRET`` are set: short-lived tokens issued by the Platform service
+  for this service (client id ``QS_SERVICE_CLIENT_ID``, default the service name), cached
+  and renewed before they expire.
+- otherwise :class:`StaticServiceToken`, the DEV-only shared secret ``QS_SERVICE_TOKEN``.
+  It refuses to load outside the ``local`` and ``dev`` environments.
+
+The receiving service accepts either through :class:`qs_template.auth.Authenticator` as a
+read-only service principal.
 
 Errors raised (all :class:`ServiceCallError`, a :class:`~qs_template.errors.ServiceError`):
 
@@ -88,6 +95,119 @@ class StaticServiceToken:
 
     async def token(self) -> str:
         return self._token.get_secret_value()
+
+
+class ClientCredentialsToken:
+    """Short-lived service tokens from the Platform service (client credentials).
+
+    The token is cached and fetched again ``refresh_margin_seconds`` before it expires
+    (at most half its lifetime), so a job that calls another service long after it
+    started always sends a valid token. Concurrent callers share one fetch. If a renewal
+    fails while the cached token is still valid, the cached token is used.
+    """
+
+    def __init__(
+        self,
+        token_url: str,
+        *,
+        client_id: str,
+        client_secret: SecretStr,
+        refresh_margin_seconds: float = 60.0,
+        timeout_seconds: float = 5.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if not client_secret.get_secret_value():
+            raise ValueError("the service client secret must not be empty")
+        self._url = token_url
+        self._client_id = client_id
+        self._secret = client_secret
+        self._margin = refresh_margin_seconds
+        self._clock = clock
+        self._client = httpx.AsyncClient(timeout=timeout_seconds, transport=transport)
+        self._lock = asyncio.Lock()
+        self._token: str | None = None
+        self._expires_at = 0.0
+        self._refresh_at = 0.0
+
+    @classmethod
+    def from_settings(cls, settings: ServiceSettings, **kwargs: Any) -> "ClientCredentialsToken":
+        if not settings.service_token_url or settings.service_client_secret is None:
+            raise ValueError("QS_SERVICE_TOKEN_URL and QS_SERVICE_CLIENT_SECRET must both be set")
+        return cls(
+            settings.service_token_url,
+            client_id=settings.service_client_id or settings.service_name,
+            client_secret=settings.service_client_secret,
+            **kwargs,
+        )
+
+    async def token(self) -> str:
+        if self._token is not None and self._clock() < self._refresh_at:
+            return self._token
+        async with self._lock:
+            # Another caller may have renewed it while this one waited
+            if self._token is not None and self._clock() < self._refresh_at:
+                return self._token
+            try:
+                return await self._fetch()
+            except ServiceCallError:
+                if self._token is not None and self._clock() < self._expires_at:
+                    log.warning("service token renewal failed; using the cached token")
+                    return self._token
+                raise
+
+    async def _fetch(self) -> str:
+        started = self._clock()
+        try:
+            response = await self._client.post(
+                self._url,
+                json={
+                    "grant_type": "client_credentials",
+                    "client_id": self._client_id,
+                    "client_secret": self._secret.get_secret_value(),
+                },
+            )
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise self._unavailable(f"{type(exc).__name__}: {exc}") from exc
+        if response.status_code != 200:
+            raise self._unavailable(f"HTTP {response.status_code}")
+        try:
+            body = response.json()
+            token = str(body["access_token"])
+            lifetime = float(body["expires_in"])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise self._unavailable("the token response is malformed") from exc
+        self._token = token
+        self._expires_at = started + lifetime
+        self._refresh_at = self._expires_at - min(self._margin, lifetime / 2)
+        return token
+
+    def _unavailable(self, cause: str) -> ServiceCallError:
+        return ServiceCallError(
+            503,
+            "Service unavailable",
+            f"No service token for {self._client_id}: {cause}",
+            type_="urn:quantsim:problem:service-token-unavailable",
+            extra={"target": self._url},
+        )
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+def service_tokens_from_settings(settings: ServiceSettings) -> TokenProvider:
+    """The token provider a calling service uses: real platform-issued tokens when
+    configured, else the DEV static token, else an error naming what to set."""
+    if settings.service_token_url and settings.service_client_secret is not None:
+        return ClientCredentialsToken.from_settings(settings)
+    if settings.service_client_secret is not None:
+        raise ValueError("QS_SERVICE_CLIENT_SECRET is set but QS_SERVICE_TOKEN_URL is not")
+    if settings.service_token is not None:
+        return StaticServiceToken.from_settings(settings)
+    raise ValueError(
+        "set QS_SERVICE_TOKEN_URL and QS_SERVICE_CLIENT_SECRET (or, in local and dev, "
+        "QS_SERVICE_TOKEN) for services that call others"
+    )
 
 
 class CircuitBreaker:
