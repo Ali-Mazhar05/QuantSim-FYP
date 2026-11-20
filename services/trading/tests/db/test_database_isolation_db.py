@@ -102,7 +102,10 @@ def test_the_db_init_sql_is_found_and_parsed() -> None:
     kinds = [(s.split()[0].upper(), gexec) for s, gexec in statements]
     assert ("REVOKE", False) in kinds and ("GRANT", False) in kinds
     assert [gexec for _, gexec in statements].count(True) == 2  # CREATE ROLE, CREATE DATABASE
-    assert all('"svc"' in s or "'svc'" in s for s, _ in statements)
+    builtin = [s for s, _ in statements if "REVOKE CONNECT ON DATABASE" in s.upper()]
+    closed = sorted(re.findall(r"REVOKE CONNECT ON DATABASE (\w+) FROM PUBLIC", " ".join(builtin)))
+    assert closed == ["postgres", "template1"]
+    assert all('"svc"' in s or "'svc'" in s for s, _ in statements if s not in builtin)
 
 
 @pytest.mark.db
@@ -112,6 +115,8 @@ def test_each_service_role_reaches_only_its_own_database() -> None:
         assert run(current_database(_url(a, a_password, a))) == a
         assert run(current_database(_url(b, b_password, b))) == b
         for role, password, other in ((a, a_password, b), (b, b_password, a)):
-            with pytest.raises(DBAPIError) as refused:
-                run(current_database(_url(role, password, other)))
-            assert "permission denied for database" in str(refused.value), refused.value
+            # Neither the other service's database nor the built-in ones
+            for database in (other, "postgres", "template1"):
+                with pytest.raises(DBAPIError) as refused:
+                    run(current_database(_url(role, password, database)))
+                assert "permission denied for database" in str(refused.value), refused.value

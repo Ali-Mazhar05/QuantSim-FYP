@@ -154,6 +154,10 @@ services:
           WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'name') \gexec
         REVOKE ALL ON DATABASE :"name" FROM PUBLIC;
         GRANT CONNECT, TEMPORARY ON DATABASE :"name" TO :"name";
+        -- Service roles reach only their own database: close the built-in ones too
+        -- (only the admin, a superuser, uses them, e.g. for backups)
+        REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+        REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
         SQL
           echo "database and role ready: $$1"
         }
