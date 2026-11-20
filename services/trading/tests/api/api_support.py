@@ -346,8 +346,8 @@ class FakeStore:
             strategy_kind=chosen.kind,
             strategy_params=chosen.params,
             initial_capital=Decimal(held.initial_capital),
-            cost_model=held.cost_model,
-            slippage_model=held.slippage_model,
+            cost_model=held.cost_model.model_dump(),
+            slippage_model=held.slippage_model.model_dump(),
             environment=EnvironmentRef("replay", ENV_ID),
         )
         sink = MemorySink()

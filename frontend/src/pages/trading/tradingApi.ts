@@ -1,12 +1,14 @@
-// Trading API calls for the five trading pages: plain typed wrappers over the app's
-// authenticated request helper, until the shared typed client (K4) replaces them. The
-// response types are written from the service's schemas (services/trading schemas.py).
-// Money, prices and fractions stay decimal strings end to end; pages turn them into
-// numbers only to format them for display.
+// Trading API calls for the five trading pages, over the typed client (K4): the paths, bodies
+// and responses come from the trading service's OpenAPI document (generated/trading), so a
+// field renamed in the API fails the type check wherever a page used it. Money, prices and
+// fractions stay decimal strings end to end; pages turn them into numbers only to format
+// them for display.
 
-import { apiRequest } from '../../services/api/client'
+import type { RequestOptions } from '../../services/api/typed'
+import { apiGet, apiPost, apiPut } from '../../services/api/typed'
+import type { TradingComponents } from '../../services/generated'
 
-const BASE = '/api/trading'
+type Schemas = TradingComponents['schemas']
 
 // ---- Strategies ----
 
@@ -24,127 +26,58 @@ export function kindLabel(kind: string): string {
 }
 
 /** Stored parameters, defaults filled in: whole numbers as numbers, fractions as strings. */
-export type StrategyParams = Record<string, unknown>
+export type StrategyParams = Schemas['StrategyOut']['params']
 
-export interface Strategy {
-  id: string
-  name: string
-  kind: string
-  params: StrategyParams
-  owner_id: string
-  created_at: string
-  updated_at: string
+export type Strategy = Schemas['StrategyOut']
+
+/** The body of a create or replace; the kind is one the pages offer. */
+export type StrategyInput = Schemas['StrategyIn'] & { kind: StrategyKind }
+
+export function listStrategies(options: RequestOptions = {}): Promise<Strategy[]> {
+  return apiGet('/api/trading/strategies', options)
 }
 
-export interface StrategyInput {
-  name: string
-  kind: StrategyKind
-  params: StrategyParams
+export function getStrategy(id: string, options: RequestOptions = {}): Promise<Strategy> {
+  return apiGet('/api/trading/strategies/{strategy_id}', { path: { strategy_id: id }, ...options })
 }
 
-export function listStrategies(): Promise<Strategy[]> {
-  return apiRequest<Strategy[]>(`${BASE}/strategies`)
+export function createStrategy(input: StrategyInput, options: RequestOptions = {}): Promise<Strategy> {
+  return apiPost('/api/trading/strategies', input, options)
 }
 
-export function getStrategy(id: string): Promise<Strategy> {
-  return apiRequest<Strategy>(`${BASE}/strategies/${encodeURIComponent(id)}`)
-}
-
-export function createStrategy(input: StrategyInput): Promise<Strategy> {
-  return apiRequest<Strategy>(`${BASE}/strategies`, { method: 'POST', body: JSON.stringify(input) })
-}
-
-export function replaceStrategy(id: string, input: StrategyInput): Promise<Strategy> {
-  return apiRequest<Strategy>(`${BASE}/strategies/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  })
+export function replaceStrategy(id: string, input: StrategyInput, options: RequestOptions = {}): Promise<Strategy> {
+  return apiPut('/api/trading/strategies/{strategy_id}', input, { path: { strategy_id: id }, ...options })
 }
 
 // ---- Portfolios ----
 
-export interface CostModel {
-  fixed: string
-  per_share: string
-  pct: string
+export type CostModel = Schemas['CostModelOut']
+
+export type SlippageModel = Schemas['SlippageModelOut']
+
+export type Portfolio = Schemas['PortfolioOut']
+
+export type PortfolioInput = Schemas['PortfolioCreate']
+
+export function listPortfolios(options: RequestOptions = {}): Promise<Portfolio[]> {
+  return apiGet('/api/trading/portfolios', options)
 }
 
-export interface SlippageModel {
-  kind: 'fixed_bps' | 'volume'
-  bps: string
+export function getPortfolio(id: string, options: RequestOptions = {}): Promise<Portfolio> {
+  return apiGet('/api/trading/portfolios/{portfolio_id}', { path: { portfolio_id: id }, ...options })
 }
 
-export interface Portfolio {
-  id: string
-  name: string
-  strategy_id: string
-  strategy_name: string
-  strategy_kind: string
-  owner_id: string
-  /** USD, 2 decimal places. */
-  initial_capital: string
-  base_currency: string
-  cost_model: CostModel
-  slippage_model: SlippageModel
-  env_type: 'replay' | 'simulation'
-  replay_environment_id: string | null
-  simulation_run_id: string | null
-  path_index: number | null
-  /** Frozen by the first run; null until the portfolio has run. */
-  source_fingerprint: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface PortfolioInput {
-  name: string
-  strategy_id: string
-  initial_capital: string
-  cost_model: CostModel
-  slippage_model: SlippageModel
-  replay_environment_id?: string
-  simulation_run_id?: string
-  path_index?: number
-}
-
-export function listPortfolios(): Promise<Portfolio[]> {
-  return apiRequest<Portfolio[]>(`${BASE}/portfolios`)
-}
-
-export function getPortfolio(id: string): Promise<Portfolio> {
-  return apiRequest<Portfolio>(`${BASE}/portfolios/${encodeURIComponent(id)}`)
-}
-
-export function createPortfolio(input: PortfolioInput): Promise<Portfolio> {
-  return apiRequest<Portfolio>(`${BASE}/portfolios`, { method: 'POST', body: JSON.stringify(input) })
+export function createPortfolio(input: PortfolioInput, options: RequestOptions = {}): Promise<Portfolio> {
+  return apiPost('/api/trading/portfolios', input, options)
 }
 
 // ---- Runs ----
 
-export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+export type RunStatus = Schemas['RunOut']['status']
 
-export interface RunAccepted {
-  job_id: string
-  portfolio_id: string
-  status: RunStatus
-  /** False when the portfolio's run job already existed. */
-  created: boolean
-}
+export type RunAccepted = Schemas['RunAccepted']
 
-export interface Run {
-  job_id: string
-  portfolio_id: string
-  status: RunStatus
-  /** Sessions committed / sessions in total, 0 to 1. */
-  progress: number
-  attempts: number
-  max_attempts: number
-  error: string | null
-  result: Record<string, unknown> | null
-  created_at: string
-  started_at: string | null
-  finished_at: string | null
-}
+export type Run = Schemas['RunOut']
 
 /** A fresh key for one attempt to start a run. */
 export function newRunKey(): string {
@@ -154,15 +87,23 @@ export function newRunKey(): string {
 /** Queues a run of the portfolio. `idempotencyKey` identifies this attempt: sending the same
  * key again (a retry) answers with the same job (`created: false`) instead of starting a
  * second run; a new key starts a new run once the previous one has finished. */
-export function startRun(portfolioId: string, idempotencyKey: string): Promise<RunAccepted> {
-  return apiRequest<RunAccepted>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/runs`, {
-    method: 'POST',
+export function startRun(
+  portfolioId: string,
+  idempotencyKey: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<RunAccepted> {
+  return apiPost('/api/trading/portfolios/{portfolio_id}/runs', undefined, {
+    path: { portfolio_id: portfolioId },
     headers: { 'Idempotency-Key': idempotencyKey },
+    ...options,
   })
 }
 
-export function getRun(portfolioId: string, jobId: string): Promise<Run> {
-  return apiRequest<Run>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/runs/${encodeURIComponent(jobId)}`)
+export function getRun(portfolioId: string, jobId: string, options: RequestOptions = {}): Promise<Run> {
+  return apiGet('/api/trading/portfolios/{portfolio_id}/runs/{job_id}', {
+    path: { portfolio_id: portfolioId, job_id: jobId },
+    ...options,
+  })
 }
 
 const RUNS_KEY = 'qs.trading.runs'
@@ -201,65 +142,34 @@ export type EventType =
   | 'VALUED'
   | 'RUN_COMPLETED'
 
-export interface TradeLogEvent {
-  seq: number
-  type: EventType | string
-  version: number
-  event_time: string
-  /** Amounts and prices as decimal strings. */
-  payload: Record<string, unknown>
-  prev_hash: string | null
-  hash: string
+/** One event of the trade log; `type` is an EventType, payload amounts are decimal strings. */
+export type TradeLogEvent = Schemas['EventOut']
+
+export type EventPage = Schemas['EventPage']
+
+export function listEvents(
+  portfolioId: string,
+  afterSeq = 0,
+  limit = 500,
+  options: RequestOptions = {},
+): Promise<EventPage> {
+  return apiGet('/api/trading/portfolios/{portfolio_id}/events', {
+    path: { portfolio_id: portfolioId },
+    query: { after_seq: afterSeq, limit },
+    ...options,
+  })
 }
 
-export interface Page<T> {
-  items: T[]
-  /** after_seq of the next page; null on the last page. */
-  next_cursor: number | null
+export type ValuePoint = Schemas['ValuePointOut']
+
+export function getValueSeries(portfolioId: string, options: RequestOptions = {}): Promise<ValuePoint[]> {
+  return apiGet('/api/trading/portfolios/{portfolio_id}/value-series', { path: { portfolio_id: portfolioId }, ...options })
 }
 
-export function listEvents(portfolioId: string, afterSeq = 0, limit = 500): Promise<Page<TradeLogEvent>> {
-  const query = new URLSearchParams({ after_seq: String(afterSeq), limit: String(limit) })
-  return apiRequest<Page<TradeLogEvent>>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/events?${query}`)
-}
+export type Metrics = Schemas['MetricsOut']
 
-export interface ValuePoint {
-  session: number
-  ts: string
-  /** The VALUED event. */
-  seq: number
-  cash: string
-  market_value: string
-  value: string
-  realised_pnl: string
-  unrealised_pnl: string
-  total_costs: string
-}
-
-export function getValueSeries(portfolioId: string): Promise<ValuePoint[]> {
-  return apiRequest<ValuePoint[]>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/value-series`)
-}
-
-export interface Metrics {
-  portfolio_id: string
-  /** The last event folded in; 0 before the first run. */
-  final_seq: number
-  final_hash: string | null
-  sessions: number
-  initial_capital: string
-  final_value: string | null
-  trades: number
-  total_costs: string
-  total_return: string | null
-  volatility: string | null
-  sharpe: string | null
-  max_drawdown: string | null
-  turnover: string | null
-  pending: string[]
-}
-
-export function getMetrics(portfolioId: string): Promise<Metrics> {
-  return apiRequest<Metrics>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/metrics`)
+export function getMetrics(portfolioId: string, options: RequestOptions = {}): Promise<Metrics> {
+  return apiGet('/api/trading/portfolios/{portfolio_id}/metrics', { path: { portfolio_id: portfolioId }, ...options })
 }
 
 // ---- Trade Replay playback ----
@@ -273,18 +183,11 @@ export const EVENT_PAGE = 500
 
 // ---- Environments a portfolio can be bound to ----
 
-export interface DemoEnvironment {
-  id: string
-  name: string
-  env_type: 'replay' | 'simulation'
-  sessions: number
-  start_date: string | null
-  end_date: string | null
-}
+export type DemoEnvironment = Schemas['DemoEnvironmentOut']
 
 /** The bundled demo environments (DEV only; empty elsewhere). */
-export function listDemoEnvironments(): Promise<DemoEnvironment[]> {
-  return apiRequest<DemoEnvironment[]>(`${BASE}/demo-environments`)
+export function listDemoEnvironments(options: RequestOptions = {}): Promise<DemoEnvironment[]> {
+  return apiGet('/api/trading/demo-environments', options)
 }
 
 // ---- Helpers ----
