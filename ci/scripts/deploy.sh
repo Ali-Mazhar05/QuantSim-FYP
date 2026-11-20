@@ -52,7 +52,10 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
 
   if [[ "$QS_LOCAL" != "1" ]]; then
     log "pulling images for $QS_PROJECT"
-    "${compose[@]}" "${profiles[@]}" pull --quiet
+    # The build host's link to the registry can time out; a pull only fetches what is
+    # missing, so retrying is cheap and safe
+    retry 4 20 "${compose[@]}" "${profiles[@]}" pull --quiet \
+      || die "could not pull the images for $QS_PROJECT"
   fi
 
   "${compose[@]}" config --quiet || die "the compose configuration for $env is invalid"

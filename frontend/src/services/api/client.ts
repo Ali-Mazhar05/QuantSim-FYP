@@ -103,12 +103,18 @@ export function storedRefreshToken(): string | null {
 async function send(path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController()
   const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  // The caller's signal (a page that left, a query TanStack cancelled) also stops the request
+  const cancel = () => controller.abort(init.signal?.reason)
+  if (init.signal?.aborted) cancel()
+  init.signal?.addEventListener('abort', cancel)
   try {
     return await fetch(`${apiBaseUrl()}${path}`, { ...init, signal: controller.signal })
-  } catch {
+  } catch (error) {
+    if (init.signal?.aborted) throw error
     throw new ApiUnreachableError('The QuantSim backend is not reachable from this browser.')
   } finally {
     window.clearTimeout(timer)
+    init.signal?.removeEventListener('abort', cancel)
   }
 }
 

@@ -19,6 +19,7 @@ dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "hypothesis>=6.100",
+  "jsonschema>=4.21",
   "httpx>=0.27",
   "ruff>=0.8",
   "mypy>=1.13",
@@ -38,6 +39,7 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
 markers = [
   "db: needs a PostgreSQL database (TEST_DATABASE_URL)",
+  "slow: takes several seconds (deselect with -m 'not slow')",
 ]
 filterwarnings = [
   "error",

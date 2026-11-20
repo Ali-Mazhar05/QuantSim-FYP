@@ -12,7 +12,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         return
     skip = pytest.mark.skip(reason="TEST_DATABASE_URL is not set")
     for item in items:
-        if "db" in item.keywords:
+        # The marker itself, not the keyword: tests/db would match every test inside it
+        if item.get_closest_marker("db") is not None:
             item.add_marker(skip)
 
 

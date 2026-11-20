@@ -90,7 +90,9 @@ def build_routers(
     ManageUsers = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_USERS))]
     ManageRoles = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_ROLES))]
     ViewAudit = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_AUDIT_LOG))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    # scope="function" on every committing yield dependency: the transaction commits when the
+    # route returns, before the response is sent, so a client reads its own writes.
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def audited(
         request: Request, actor: Principal
@@ -116,8 +118,12 @@ def build_routers(
         async for pair in audited(request, actor):
             yield pair
 
-    UsersSession = Annotated[tuple[AsyncSession, Principal], Depends(users_session)]
-    RolesSession = Annotated[tuple[AsyncSession, Principal], Depends(roles_session)]
+    UsersSession = Annotated[
+        tuple[AsyncSession, Principal], Depends(users_session, scope="function")
+    ]
+    RolesSession = Annotated[
+        tuple[AsyncSession, Principal], Depends(roles_session, scope="function")
+    ]
 
     @public.post("/auth/login", responses={401: {}, 429: {}})
     async def login(body: LoginRequest, response: Response) -> TokenResponse:
