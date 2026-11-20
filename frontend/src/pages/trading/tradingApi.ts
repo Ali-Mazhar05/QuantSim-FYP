@@ -146,11 +146,19 @@ export interface Run {
   finished_at: string | null
 }
 
-/** Queues the portfolio's run. No Idempotency-Key is sent: the API's cross-site rules do
- * not allow that header yet, and without one a portfolio has a single run job, so a
- * repeated submit answers with the same job (`created: false`). */
-export function startRun(portfolioId: string): Promise<RunAccepted> {
-  return apiRequest<RunAccepted>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/runs`, { method: 'POST' })
+/** A fresh key for one attempt to start a run. */
+export function newRunKey(): string {
+  return crypto.randomUUID()
+}
+
+/** Queues a run of the portfolio. `idempotencyKey` identifies this attempt: sending the same
+ * key again (a retry) answers with the same job (`created: false`) instead of starting a
+ * second run; a new key starts a new run once the previous one has finished. */
+export function startRun(portfolioId: string, idempotencyKey: string): Promise<RunAccepted> {
+  return apiRequest<RunAccepted>(`${BASE}/portfolios/${encodeURIComponent(portfolioId)}/runs`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+  })
 }
 
 export function getRun(portfolioId: string, jobId: string): Promise<Run> {

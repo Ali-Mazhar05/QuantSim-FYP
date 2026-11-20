@@ -24,6 +24,7 @@ import {
   listDemoEnvironments,
   listStrategies,
   rememberRun,
+  newRunKey,
   startRun,
 } from './tradingApi'
 import { type Failure, failureOf, strategyRules } from './tradingFormat'
@@ -193,7 +194,7 @@ export default function CreatePortfolio() {
     setStarting(true)
     setRunError(null)
     try {
-      const accepted = await startRun(created.id)
+      const accepted = await startRun(created.id, newRunKey())
       follow(created.id, accepted.job_id, accepted.status)
     } catch (error: unknown) {
       const inProgress = error instanceof ApiError && error.status === 409 && typeof error.body.job_id === 'string'
