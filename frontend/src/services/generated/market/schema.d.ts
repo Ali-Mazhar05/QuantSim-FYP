@@ -97,6 +97,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/market/environments/{environment_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate Environment */
+        post: operations["activate_environment_api_market_environments__environment_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/market/environments/{environment_id}/ticks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Ticks */
+        get: operations["read_ticks_api_market_environments__environment_id__ticks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/market/health": {
         parameters: {
             query?: never;
@@ -367,6 +401,49 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ActivationOut
+         * @example {
+         *       "activated_at": "2026-11-18T09:30:00Z",
+         *       "activated_by": "9d1e5c7b-2222-4b00-8000-000000000001",
+         *       "environment_id": "6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01",
+         *       "missing_session_count": 0,
+         *       "source_fingerprint": "xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1",
+         *       "status": "active"
+         *     }
+         */
+        ActivationOut: {
+            /**
+             * Activated At
+             * Format: date-time
+             */
+            activated_at: string;
+            /**
+             * Activated By
+             * Format: uuid
+             */
+            activated_by: string;
+            /**
+             * Environment Id
+             * Format: uuid
+             */
+            environment_id: string;
+            /**
+             * Missing Session Count
+             * @description Sessions where some instrument has no bar (ADR 08)
+             */
+            missing_session_count: number;
+            /**
+             * Source Fingerprint
+             * @description Frozen at activation; compare with each page
+             */
+            source_fingerprint: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "active";
+        };
         /** AuditEventOut */
         AuditEventOut: {
             /** Action */
@@ -589,6 +666,16 @@ export interface components {
         /** EnvironmentOut */
         EnvironmentOut: {
             /**
+             * Activated At
+             * @description Null until activated
+             */
+            activated_at?: string | null;
+            /**
+             * Activated By
+             * @description Null until activated
+             */
+            activated_by?: string | null;
+            /**
              * Created At
              * Format: date-time
              */
@@ -617,6 +704,11 @@ export interface components {
             instrument_ids: string[];
             /** Name */
             name: string;
+            /**
+             * Source Fingerprint
+             * @description Frozen at activation; null until the environment is activated
+             */
+            source_fingerprint?: string | null;
             /**
              * Start Date
              * Format: date
@@ -1139,6 +1231,128 @@ export interface components {
             /** Window Start */
             window_start: string | null;
         };
+        /**
+         * Tick
+         * @description One session of one instrument: the contract ``market.tick.v1`` (contracts/events).
+         * @example {
+         *       "close": "75.0875000000",
+         *       "env_id": "6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01",
+         *       "env_type": "replay",
+         *       "high": "75.1500000000",
+         *       "instrument_id": "0b6d7f3a-1111-4a00-8000-000000000001",
+         *       "low": "73.7978000000",
+         *       "open": "73.8782285800",
+         *       "seq": 1,
+         *       "session": 0,
+         *       "session_date": "2020-01-02",
+         *       "source_fingerprint": "xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1",
+         *       "symbol": "AAPL",
+         *       "ts": "2020-01-02T21:00:00Z",
+         *       "volume": "135480400.00000000"
+         *     }
+         */
+        Tick: {
+            /** Close */
+            close: string;
+            /**
+             * Env Id
+             * Format: uuid
+             * @description The environment (replay) or the run (synthetic)
+             */
+            env_id: string;
+            /**
+             * Env Type
+             * @enum {string}
+             */
+            env_type: "replay" | "synthetic";
+            /** High */
+            high: string;
+            /**
+             * Instrument Id
+             * Format: uuid
+             */
+            instrument_id: string;
+            /** Low */
+            low: string;
+            /**
+             * Open
+             * @description Adjusted, a decimal string
+             */
+            open: string;
+            /**
+             * Path Index
+             * @description Null for replay
+             */
+            path_index?: number | null;
+            /**
+             * Scenario
+             * @description Null for replay and base runs
+             */
+            scenario?: string | null;
+            /**
+             * Seq
+             * @description 1, 2, 3 without gaps, per environment and path
+             */
+            seq: number;
+            /**
+             * Session
+             * @description Zero-based index of the session in the environment
+             */
+            session: number;
+            /**
+             * Session Date
+             * @description Trading date of a replay session
+             */
+            session_date?: string | null;
+            /**
+             * Source Fingerprint
+             * @description Identifies the exact data served
+             */
+            source_fingerprint: string;
+            /** Symbol */
+            symbol: string;
+            /**
+             * Ts
+             * Format: date-time
+             * @description The session close in UTC
+             */
+            ts: string;
+            /** Volume */
+            volume: string;
+        };
+        /**
+         * TickPage
+         * @example {
+         *       "items": [
+         *         {
+         *           "close": "75.0875000000",
+         *           "env_id": "6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01",
+         *           "env_type": "replay",
+         *           "high": "75.1500000000",
+         *           "instrument_id": "0b6d7f3a-1111-4a00-8000-000000000001",
+         *           "low": "73.7978000000",
+         *           "open": "73.8782285800",
+         *           "seq": 1,
+         *           "session": 0,
+         *           "session_date": "2020-01-02",
+         *           "source_fingerprint": "xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1",
+         *           "symbol": "AAPL",
+         *           "ts": "2020-01-02T21:00:00Z",
+         *           "volume": "135480400.00000000"
+         *         }
+         *       ],
+         *       "next_after_seq": 1
+         *     }
+         */
+        TickPage: {
+            /** Items */
+            items: components["schemas"]["Tick"][];
+            /**
+             * Next After Seq
+             * @description Pass as after_seq to read the next page; null on the last page
+             */
+            next_after_seq: number | null;
+        };
         /** Unavailable */
         Unavailable: {
             /** Column */
@@ -1334,7 +1548,12 @@ export interface operations {
     };
     list_environments_api_market_environments_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only environments of this type */
+                type?: ("historical_replay" | "synthetic") | null;
+                /** @description Only environments created by this user */
+                owner?: string | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -1366,14 +1585,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Unprocessable Entity */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -1475,6 +1692,131 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    activate_environment_api_market_environments__environment_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivationOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A bad parameter, or an environment that cannot be replayed: unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar count per symbol in `missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_ticks_api_market_environments__environment_id__ticks_get: {
+        parameters: {
+            query?: {
+                /** @description Return the ticks after this seq; 0 starts at the first */
+                after_seq?: number;
+                /** @description Ticks per page */
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description The fingerprint of the data on this page; it equals the value frozen at activation while the data is unchanged */
+                    "X-Source-Fingerprint"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickPage"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A bad parameter, or an environment that cannot be replayed: unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar count per symbol in `missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
