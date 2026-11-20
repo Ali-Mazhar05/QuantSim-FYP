@@ -81,7 +81,7 @@ async def test_a_synthetic_path_is_read_with_its_path_always_sent(path_index: in
 
 
 async def test_without_a_fingerprint_in_the_detail_the_first_page_gives_it() -> None:
-    """#80 as it is today: GET /environments/{id} has no source_fingerprint."""
+    """A detail whose source_fingerprint is null: the first page gives the value."""
     feeds = ContractFeeds(detail_fingerprint=False)
     feed = ReplayFeed(feeds.market_client(), REPLAY_ID)
     assert await feed.activate() == REPLAY_FINGERPRINT

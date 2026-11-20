@@ -11,14 +11,18 @@ B's HTTP feeds (task A17; contracts C1 and C2, ADR 01 and 08).
     GET /api/simulation/runs/{id}                             the run
     GET /api/simulation/runs/{id}/ticks?path=&after_seq=&limit=
 
-Both read through a :class:`~qs_trading.adapters.feed_client.FeedClient`. A page is
+Both read through a :class:`~qs_trading.adapters.feed_client.FeedClient` (in the worker,
+K3's ``ServiceClient``, which retries and opens its circuit before an error reaches the
+adapter). A page is
 ``{"items": [tick, ...], "next_after_seq": n | null}`` with the header
 ``X-Source-Fingerprint``; ``limit`` is never above
 :data:`~qs_trading.ports.market_environment.MAX_PAGE_SIZE` (2000).
 
 **Ticks.** Each item is a ``market.tick.v1`` tick: decimals are strings (a JSON number is
 refused), ``ts`` is ISO 8601 with a zone and is kept in UTC, unknown fields are ignored,
-``env_type`` ``synthetic`` is the port's ``simulation``. Every page is checked: ``seq``
+``env_type`` ``synthetic`` is the port's ``simulation``. The fields the port does not keep
+are still checked: ``session_date`` is a ``YYYY-MM-DD`` date or null (or absent),
+``instrument_id`` a string, ``scenario`` a string or null. Every page is checked: ``seq``
 continues from ``after_seq`` without a gap (so across pages too), ticks are ordered by
 ``(session, symbol)`` (also against the last tick of the previous page), prices are above
 zero with ``high >= low``, a tick's ``env_id``, ``env_type``, ``path_index`` and
@@ -29,10 +33,12 @@ breaks these rules raises :class:`FeedContractViolation`.
 **Activation.** :meth:`activate` reads the environment (or run) first: it must exist, a
 replay must be ``active`` (activated in the market service, which froze its fingerprint),
 a run must be ``completed`` and hold the path. The frozen fingerprint is the detail's
-``source_fingerprint`` when the provider gives it (asked for in the review of the
-contract, #80), otherwise the ``X-Source-Fingerprint`` of the first page (the contract as
-it is in #80 today). The adapter never calls ``POST .../activate``: activating an
-environment is a quant's decision in the market service, not a worker's.
+``source_fingerprint`` when the provider gives it (C2, ``EnvironmentOut``), otherwise the
+``X-Source-Fingerprint`` of the first page (a detail whose ``source_fingerprint`` is null
+or absent). A replay detail's ``activated_at`` (a time with a zone) and ``activated_by``
+(a user id) are null until activation and kept on :attr:`ReplayFeed.activated_at` and
+:attr:`ReplayFeed.activated_by`. The adapter never calls ``POST .../activate``:
+activating an environment is a quant's decision in the market service, not a worker's.
 
 **Fingerprint cache.** The engine reads :meth:`fingerprint` before committing every
 session (:func:`~qs_trading.engine.runner.run_portfolio`), so a 252-session run would
@@ -49,12 +55,14 @@ in that time; the engine still refuses to mix two fingerprints within one page l
 :class:`PermanentFeedError`, or already there): 404 :class:`EnvironmentNotFound`; 401 and
 403 :class:`FeedUnauthorized`; 409 or a non-active environment or a run that is not
 completed :class:`EnvironmentNotActive`; 422 ``missing-adjusted-prices``
-:class:`~qs_trading.ports.market_environment.MissingAdjustedPrices`; any other 4xx
+:class:`~qs_trading.ports.market_environment.MissingAdjustedPrices` (with the problem's
+``missing`` bar counts per symbol); any other 4xx
 :class:`FeedRefused`; 501 :class:`FeedNotImplemented` (the route is not built yet: a retry
 in seconds cannot change that); a response that breaks the contract
 :class:`FeedContractViolation`; a fingerprint other than the frozen one
 :class:`~qs_trading.ports.market_environment.FingerprintChanged`. Transient (retried by
-the job queue): 429 and every other 5xx, timeouts and connection errors, all
+the job queue): 429 and every other 5xx, timeouts and connection errors, and K3's
+``upstream-down`` and ``circuit-open``, all
 :class:`~qs_trading.adapters.feed_client.FeedUnavailable`.
 """
 
@@ -62,7 +70,7 @@ import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from itertools import pairwise
 from typing import Any
@@ -104,6 +112,7 @@ MISSING_ADJUSTED_PRICES = "missing-adjusted-prices"
 in the #80 review; DL-005 writes it ``missing_adjusted_prices``, so both spellings match)."""
 
 _DECIMAL = re.compile(r"^(0|[1-9][0-9]*)(\.[0-9]+)?$")
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ENV_TYPES: Mapping[str, EnvType] = {
     "replay": "replay",
     "historical_replay": "replay",
@@ -157,6 +166,20 @@ def _problem(response: FeedResponse) -> tuple[str, str]:
     return kind, text
 
 
+def _missing(response: FeedResponse) -> dict[str, int]:
+    """The ``missing`` bar counts per symbol of a ``missing-adjusted-prices`` problem;
+    entries that are not ``symbol: count`` are left out."""
+    body = response.body if isinstance(response.body, Mapping) else {}
+    missing = body.get("missing")
+    if not isinstance(missing, Mapping):
+        return {}
+    return {
+        str(symbol): count
+        for symbol, count in missing.items()
+        if isinstance(count, int) and not isinstance(count, bool) and count >= 0
+    }
+
+
 def _check(response: FeedResponse, what: str) -> None:
     """Raises the error a non-200 answer means (see the module docstring)."""
     status = response.status
@@ -174,7 +197,7 @@ def _check(response: FeedResponse, what: str) -> None:
     if status == 409:
         raise EnvironmentNotActive(message)
     if status == 422 and kind.rsplit(":", 1)[-1].replace("_", "-") == MISSING_ADJUSTED_PRICES:
-        raise MissingAdjustedPrices(message)
+        raise MissingAdjustedPrices(message, _missing(response))
     if status == 501:
         raise FeedNotImplemented(message)
     if status == 429 or status >= 500:
@@ -201,6 +224,31 @@ def _whole(item: Mapping[str, Any], name: str, seq: object, minimum: int) -> int
     return value
 
 
+def _session_date(value: object, seq: object) -> date | None:
+    """``session_date``: a ``YYYY-MM-DD`` date, or null (or absent) for a synthetic step."""
+    if value is None:
+        return None
+    if isinstance(value, str) and _DATE.match(value):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            pass
+    raise FeedContractViolation(f"tick {seq}: session_date must be a date or null, got {value!r}")
+
+
+def _time_or_null(detail: Mapping[str, Any], name: str, what: str) -> datetime | None:
+    value = detail.get(name)
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.utcoffset() is None:
+        raise FeedContractViolation(f"{what}: {name} must be a time with a zone or null")
+    return parsed.astimezone(UTC)
+
+
 def parse_tick(item: Any, ref: EnvironmentRef, fingerprint: str) -> Tick:
     """One ``market.tick.v1`` item as a port :class:`Tick`, checked against the
     environment it was served for and the page's fingerprint."""
@@ -215,7 +263,9 @@ def parse_tick(item: Any, ref: EnvironmentRef, fingerprint: str) -> Tick:
         raise FeedContractViolation(f"tick {seq} is {env_type!r}, not a {ref.env_type} tick")
     path_index = item.get("path_index")
     if ref.env_type == "simulation":
-        if path_index is not None and path_index != ref.path_index:
+        if path_index is None:
+            raise FeedContractViolation(f"synthetic tick {seq} has no path_index")
+        if path_index != ref.path_index:
             raise FeedContractViolation(f"tick {seq} is on path {path_index}, not {ref.path_index}")
     elif path_index is not None:
         raise FeedContractViolation(f"replay tick {seq} carries path_index {path_index}")
@@ -228,6 +278,13 @@ def parse_tick(item: Any, ref: EnvironmentRef, fingerprint: str) -> Tick:
     symbol = item.get("symbol")
     if not isinstance(symbol, str) or not symbol:
         raise FeedContractViolation(f"tick {seq}: symbol is missing")
+    instrument_id = item.get("instrument_id")
+    if instrument_id is not None and not isinstance(instrument_id, str):
+        raise FeedContractViolation(f"tick {seq}: instrument_id must be a string")
+    _session_date(item.get("session_date"), seq)
+    scenario = item.get("scenario")
+    if scenario is not None and not isinstance(scenario, str):
+        raise FeedContractViolation(f"tick {seq}: scenario must be a string or null")
     raw_ts = item.get("ts")
     try:
         ts = datetime.fromisoformat(raw_ts) if isinstance(raw_ts, str) else None
@@ -428,6 +485,8 @@ class ReplayFeed(_HttpFeed):
             fingerprint_ttl_seconds=fingerprint_ttl_seconds,
             clock=clock,
         )
+        self.activated_at: datetime | None = None
+        self.activated_by: str | None = None
 
     def _detail_path(self) -> str:
         return f"{self.PREFIX}/{quote(self._ref.env_id, safe='')}"
@@ -436,6 +495,11 @@ class ReplayFeed(_HttpFeed):
         return f"{self._detail_path()}/ticks"
 
     def _check_detail(self, detail: Mapping[str, Any]) -> None:
+        activated_at = _time_or_null(detail, "activated_at", self._what())
+        activated_by = detail.get("activated_by")
+        if activated_by is not None and (not isinstance(activated_by, str) or not activated_by):
+            raise FeedContractViolation(f"{self._what()}: activated_by must be a user id or null")
+        self.activated_at, self.activated_by = activated_at, activated_by
         kind = detail.get("type")
         if kind is not None and _ENV_TYPES.get(str(kind)) != "replay":
             raise FeedRefused(f"{self._what()} is {kind!r}, not a historical replay")
