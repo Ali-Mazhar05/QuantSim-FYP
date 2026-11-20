@@ -162,7 +162,7 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     Creator = Annotated[
         Principal, Depends(auth.require_capability(Capability.CREATE_MARKET_ENVIRONMENTS))
     ]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     @router.get(
         "/{environment_id}/ticks",
