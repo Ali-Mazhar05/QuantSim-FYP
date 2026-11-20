@@ -112,6 +112,8 @@ pipeline {
         stage('Prepare') {
           steps {
             script { qsCheckout() }
+            // A-NFR-15: free space on the host (WARNING under 20 GB); advisory, never fails
+            sh 'ci/scripts/disk-check.sh || true'
             script {
               def qsMode = sh(script: "ci/scripts/env-for-branch.sh '${env.BRANCH_NAME}'", returnStdout: true).trim().tokenize(' ')[1]
               if (qsMode != 'ci') {
