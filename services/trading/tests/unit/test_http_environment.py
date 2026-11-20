@@ -1,6 +1,7 @@
 """The HTTP market adapters (A17) on hand-made answers: status mapping (permanent or
-transient), the page checks, the page-size cap, the fingerprint cache, the client's token
-header, and the worker's environment factory."""
+transient), the page checks, the page-size cap, the fingerprint cache, the client over K3's
+``ServiceClient`` (token header, retries, circuit breaker, the mapping of
+``ServiceCallError``), and the worker's environment factory."""
 
 import uuid
 from collections.abc import Callable
@@ -10,11 +11,16 @@ import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
+from qs_template.service_client import (
+    CircuitBreaker,
+    ClientCredentialsToken,
+    StaticServiceToken,
+)
 from qs_trading.adapters.feed_client import (
     FeedResponse,
     FeedUnavailable,
-    HttpxFeedClient,
-    StaticToken,
+    ServiceClientFeed,
+    service_client_feed,
 )
 from qs_trading.adapters.http_environment import (
     EnvironmentNotActive,
@@ -26,7 +32,13 @@ from qs_trading.adapters.http_environment import (
     ReplayFeed,
     SimulationPathFeed,
 )
-from qs_trading.jobs import PERMANENT_ERRORS, environment_factory, is_permanent, no_environments
+from qs_trading.jobs import (
+    PERMANENT_ERRORS,
+    environment_factory,
+    is_permanent,
+    no_environments,
+    service_tokens,
+)
 from qs_trading.ports.market_environment import (
     MAX_PAGE_SIZE,
     EnvironmentRef,
@@ -355,32 +367,116 @@ async def test_a_tick_on_another_path_is_refused() -> None:
         await SimulationPathFeed(_page([item]), RUN, 0).ticks(0, 1)
 
 
-# --- the httpx client -----------------------------------------------------------------------
+# --- the client over K3's ServiceClient -----------------------------------------------------
 
 
-async def test_the_client_sends_the_bearer_token_and_reads_any_status() -> None:
+async def _no_wait(seconds: float) -> None:
+    return None
+
+
+def _client(
+    handler: Callable[[httpx.Request], httpx.Response], **options: Any
+) -> ServiceClientFeed:
+    tokens = StaticServiceToken(SecretStr(TOKEN), environment="dev")
+    return service_client_feed(
+        "http://market.test/",
+        tokens,
+        transport=httpx.MockTransport(handler),
+        sleep=_no_wait,
+        **options,
+    )
+
+
+async def test_the_client_sends_the_bearer_token_and_returns_the_page() -> None:
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         return httpx.Response(
-            404,
-            json={"type": "urn:quantsim:problem:not-found"},
+            200,
+            json={"items": [], "next_after_seq": None},
             headers={"X-Source-Fingerprint": FP},
         )
 
-    client = HttpxFeedClient(
-        "http://market.test/", StaticToken(SecretStr(TOKEN)), transport=httpx.MockTransport(handler)
-    )
+    client = _client(handler)
     response = await client.get("/api/market/environments/x/ticks", {"after_seq": 0})
     await client.aclose()
-    assert response.status == 404
+    assert response.status == 200
     assert response.header("X-Source-Fingerprint") == FP
-    assert response.body == {"type": "urn:quantsim:problem:not-found"}
+    assert response.body == {"items": [], "next_after_seq": None}
     request = seen[0]
     assert request.headers["Authorization"] == f"Bearer {TOKEN}"
     assert request.headers["X-Calling-Service"] == "trading"
     assert str(request.url) == "http://market.test/api/market/environments/x/ticks?after_seq=0"
+
+
+@pytest.mark.parametrize(
+    ("status", "kind", "error"),
+    [
+        (401, "unauthorized", FeedUnauthorized),
+        (404, "not-found", EnvironmentNotFound),
+        (409, "environment-not-active", EnvironmentNotActive),
+        (422, "missing-adjusted-prices", MissingAdjustedPrices),
+        (422, "unsupported-frequency", FeedRefused),
+        (501, "not-implemented", FeedNotImplemented),
+    ],
+)
+async def test_an_upstream_error_keeps_the_providers_status_and_is_not_retried(
+    status: int, kind: str, error: type[Exception]
+) -> None:
+    """K3's upstream-error (502) carries the provider's 4xx or 501 and its problem body:
+    the adapter maps that status, and the job fails without a retry."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        body = {"type": f"urn:quantsim:problem:{kind}", "title": kind, "status": status}
+        return httpx.Response(status, json={**body, "detail": "no", "missing": {"AAPL": 2}})
+
+    with pytest.raises(error) as raised:
+        await ReplayFeed(_client(handler), ENV).ticks(0, 10)
+    assert is_permanent(raised.value)
+    assert len(seen) == 1
+    if isinstance(raised.value, MissingAdjustedPrices):
+        assert raised.value.missing == {"AAPL": 2}
+
+
+async def test_a_500_is_transient_and_not_retried_by_the_client() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(500, text="<html>oops")
+
+    with pytest.raises(FeedUnavailable) as raised:
+        await ReplayFeed(_client(handler), ENV).ticks(0, 1)
+    assert not is_permanent(raised.value)
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize("status", [429, 502, 503, 504])
+async def test_a_busy_provider_is_retried_then_transient(status: int) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(status)
+
+    with pytest.raises(FeedUnavailable, match="did not answer") as raised:
+        await ReplayFeed(_client(handler, retries=2), ENV).ticks(0, 1)
+    assert not is_permanent(raised.value)
+    assert len(seen) == 3
+
+
+async def test_a_retry_that_succeeds_reads_the_page() -> None:
+    answers = iter([httpx.Response(503), httpx.Response(503)])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = {"items": [_tick(1)], "next_after_seq": None}
+        return next(answers, httpx.Response(200, json=body, headers={"X-Source-Fingerprint": FP}))
+
+    page = await ReplayFeed(_client(handler), ENV).ticks(0, 1)
+    assert [t.seq for t in page.items] == [1]
 
 
 @pytest.mark.parametrize(
@@ -390,28 +486,38 @@ async def test_connection_errors_and_timeouts_are_transient(error: Exception) ->
     def handler(request: httpx.Request) -> httpx.Response:
         raise error
 
-    client = HttpxFeedClient(
-        "http://market.test", StaticToken(SecretStr(TOKEN)), transport=httpx.MockTransport(handler)
-    )
     with pytest.raises(FeedUnavailable) as raised:
-        await ReplayFeed(client, ENV).ticks(0, 1)
+        await ReplayFeed(_client(handler, retries=1), ENV).ticks(0, 1)
     assert not is_permanent(raised.value)
 
 
-async def test_a_body_that_is_not_json_is_read_as_none() -> None:
-    client = HttpxFeedClient(
-        "http://market.test",
-        StaticToken(SecretStr(TOKEN)),
-        transport=httpx.MockTransport(lambda r: httpx.Response(502, text="<html>bad gateway")),
-    )
-    assert (await client.get("/x")).body is None
+async def test_an_open_circuit_is_transient_and_sends_nothing() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(503)
+
+    breaker = CircuitBreaker(failure_threshold=2, reset_after_seconds=60)
+    feed = ReplayFeed(_client(handler, retries=1, breaker=breaker), ENV)
+    with pytest.raises(FeedUnavailable, match="did not answer"):
+        await feed.ticks(0, 1)
+    assert breaker.state == "open"
+    sent = len(seen)
+    with pytest.raises(FeedUnavailable, match="failed too often") as raised:
+        await feed.ticks(0, 1)
+    assert not is_permanent(raised.value)
+    assert len(seen) == sent
 
 
-def test_the_token_is_never_shown() -> None:
-    token = StaticToken(SecretStr(TOKEN))
-    assert TOKEN not in repr(token)
-    with pytest.raises(ValueError, match="empty"):
-        StaticToken(SecretStr(""))
+async def test_the_token_is_never_in_an_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"type": "urn:quantsim:problem:unauthorized"})
+
+    with pytest.raises(FeedUnauthorized) as raised:
+        await ReplayFeed(_client(handler), ENV).activate()
+    assert TOKEN not in str(raised.value)
+    assert TOKEN not in repr(raised.value)
 
 
 # --- settings and the factory ---------------------------------------------------------------
@@ -456,6 +562,42 @@ def test_a_kind_without_a_url_falls_back_to_the_demo_or_none() -> None:
 def test_a_feed_url_needs_the_service_token() -> None:
     with pytest.raises(ValueError, match="QS_SERVICE_TOKEN"):
         environment_factory(_settings(trading_simulation_url="http://simulation:8000"))
+
+
+def test_the_factory_reads_through_the_service_client_with_the_given_tokens() -> None:
+    class Tokens:
+        async def token(self) -> str:
+            return TOKEN
+
+    settings = _settings(trading_market_url="http://market:8000")
+    open_environment = environment_factory(settings, tokens=Tokens())
+    replay = open_environment(EnvironmentRef("replay", ENV))
+    assert isinstance(replay, ReplayFeed)
+    assert isinstance(replay._client, ServiceClientFeed)
+
+
+async def test_without_a_client_secret_the_tokens_are_the_static_dev_token() -> None:
+    tokens = service_tokens(_settings(service_token=SecretStr(TOKEN)))
+    assert isinstance(tokens, StaticServiceToken)
+    assert await tokens.token() == TOKEN
+
+
+@pytest.mark.parametrize("environment", ["dev", "test", "acc", "prod"])
+async def test_with_a_client_secret_the_tokens_come_from_the_platform(environment: str) -> None:
+    tokens = service_tokens(
+        _settings(
+            environment,
+            service_token_url="http://platform:8000/api/platform/service-tokens",
+            service_client_secret=SecretStr("s" * 64),
+        )
+    )
+    assert isinstance(tokens, ClientCredentialsToken)
+    await tokens.close()
+
+
+def test_without_any_service_token_a_feed_url_stops_the_worker() -> None:
+    with pytest.raises(ValueError, match="QS_SERVICE_CLIENT_SECRET"):
+        environment_factory(_settings("test", trading_market_url="http://market:8000"))
 
 
 def test_injected_clients_need_no_url() -> None:

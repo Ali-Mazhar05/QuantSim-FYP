@@ -21,6 +21,7 @@ from qs_trading.domain.strategies import KINDS
 
 __all__ = [
     "ChainReportOut",
+    "CostModelOut",
     "DemoEnvironmentOut",
     "EventOut",
     "EventPage",
@@ -41,6 +42,7 @@ __all__ = [
     "RebuildOut",
     "RunAccepted",
     "RunOut",
+    "SlippageModelOut",
     "StateOut",
     "StrategyIn",
     "StrategyOut",
@@ -145,6 +147,21 @@ class PortfolioCreate(_Body):
         return "replay" if self.replay_environment_id is not None else "simulation"
 
 
+class CostModelOut(BaseModel):
+    """A portfolio's stored cost model: every parameter as a decimal string."""
+
+    fixed: str
+    per_share: str
+    pct: str
+
+
+class SlippageModelOut(BaseModel):
+    """A portfolio's stored slippage model: its kind and basis points as a decimal string."""
+
+    kind: Literal["fixed_bps", "volume"]
+    bps: str
+
+
 class PortfolioOut(BaseModel):
     id: uuid.UUID
     name: str
@@ -154,8 +171,8 @@ class PortfolioOut(BaseModel):
     owner_id: uuid.UUID
     initial_capital: str = Field(description="USD, 2 decimal places")
     base_currency: str
-    cost_model: dict[str, Any]
-    slippage_model: dict[str, Any]
+    cost_model: CostModelOut
+    slippage_model: SlippageModelOut
     env_type: EnvType
     replay_environment_id: uuid.UUID | None
     simulation_run_id: uuid.UUID | None

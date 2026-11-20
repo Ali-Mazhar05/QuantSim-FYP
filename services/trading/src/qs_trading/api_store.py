@@ -50,6 +50,7 @@ from qs_trading.projections.rebuild import (
 from qs_trading.projections.verify import ChainReport
 from qs_trading.schemas import (
     ChainReportOut,
+    CostModelOut,
     EventOut,
     FillOut,
     HoldingChangeOut,
@@ -59,6 +60,7 @@ from qs_trading.schemas import (
     RebuildOut,
     RunAccepted,
     RunOut,
+    SlippageModelOut,
     StateOut,
     StrategyOut,
     TableDifferenceOut,
@@ -211,8 +213,8 @@ def _portfolio_out(row: Any) -> PortfolioOut:
         owner_id=row.owner_id,
         initial_capital=money_text(capital),
         base_currency=row.base_currency,
-        cost_model=dict(row.cost_model),
-        slippage_model=dict(row.slippage_model),
+        cost_model=CostModelOut.model_validate(row.cost_model),
+        slippage_model=SlippageModelOut.model_validate(row.slippage_model),
         env_type=row.env_type,
         replay_environment_id=row.replay_environment_id,
         simulation_run_id=row.simulation_run_id,
