@@ -11,7 +11,11 @@ import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from qs_template.service_client import CircuitBreaker, StaticServiceToken
+from qs_template.service_client import (
+    CircuitBreaker,
+    ClientCredentialsToken,
+    StaticServiceToken,
+)
 from qs_trading.adapters.feed_client import (
     FeedResponse,
     FeedUnavailable,
@@ -572,10 +576,28 @@ def test_the_factory_reads_through_the_service_client_with_the_given_tokens() ->
     assert isinstance(replay._client, ServiceClientFeed)
 
 
-async def test_the_default_tokens_are_the_static_dev_token() -> None:
+async def test_without_a_client_secret_the_tokens_are_the_static_dev_token() -> None:
     tokens = service_tokens(_settings(service_token=SecretStr(TOKEN)))
     assert isinstance(tokens, StaticServiceToken)
     assert await tokens.token() == TOKEN
+
+
+@pytest.mark.parametrize("environment", ["dev", "test", "acc", "prod"])
+async def test_with_a_client_secret_the_tokens_come_from_the_platform(environment: str) -> None:
+    tokens = service_tokens(
+        _settings(
+            environment,
+            service_token_url="http://platform:8000/api/platform/service-tokens",
+            service_client_secret=SecretStr("s" * 64),
+        )
+    )
+    assert isinstance(tokens, ClientCredentialsToken)
+    await tokens.close()
+
+
+def test_without_any_service_token_a_feed_url_stops_the_worker() -> None:
+    with pytest.raises(ValueError, match="QS_SERVICE_CLIENT_SECRET"):
+        environment_factory(_settings("test", trading_market_url="http://market:8000"))
 
 
 def test_injected_clients_need_no_url() -> None:

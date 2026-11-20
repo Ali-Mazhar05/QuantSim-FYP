@@ -190,7 +190,7 @@ def _check(response: FeedResponse, what: str) -> None:
     if status in (401, 403):
         raise FeedUnauthorized(
             f"{what}: the provider refused the trading service's token ({text}); "
-            "check QS_SERVICE_TOKEN"
+            "check QS_SERVICE_CLIENT_SECRET (or QS_SERVICE_TOKEN in dev)"
         )
     if status == 404:
         raise EnvironmentNotFound(message)
