@@ -154,7 +154,9 @@ def _allow_cross_site_calls(app: FastAPI, origins: list[str]) -> None:
         CORSMiddleware,
         allow_origins=origins,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        # Idempotency-Key lets a page retry a write (e.g. submitting a run) without doing
+        # it twice; the server keys the write on it
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
         allow_private_network=True,
         max_age=600,
     )

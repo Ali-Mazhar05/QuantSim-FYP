@@ -30,6 +30,7 @@ interface Call {
   path: string
   query: URLSearchParams
   body: Record<string, unknown> | undefined
+  headers: Headers
 }
 
 type Handler = (call: Call) => Response | Promise<Response>
@@ -162,7 +163,7 @@ function tradingBackend(routes: Record<string, Handler> = {}) {
     const method = init?.method ?? 'GET'
     const path = url.pathname.replace(/^\/api\/trading/, '')
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
-    const call = { method, path, query: url.searchParams, body }
+    const call = { method, path, query: url.searchParams, body, headers: new Headers(init?.headers) }
     calls.push(call)
     const handler = routes[`${method} ${path}`] ?? DEFAULTS[`${method} ${path}`]
     return handler ? handler(call) : json(404, { detail: 'Not found' })
@@ -433,6 +434,9 @@ describe('the Create Portfolio page', () => {
       slippage_model: { kind: 'fixed_bps', bps: '2' },
       replay_environment_id: DEMO,
     })
+    // Each click sends its own key, so a retry of that click can't start a second run
+    const submit = await waitFor(() => calls.find((c) => c.method === 'POST' && c.path === `/portfolios/${P1}/runs`)!)
+    expect(submit.headers.get('Idempotency-Key')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     await waitFor(() => expect(screen.getByTestId('run-status')).toHaveAttribute('data-status', 'running'))
     expect(screen.getByTestId('run-status')).toHaveTextContent('Running · 50%')
     await waitFor(() => expect(screen.getByTestId('run-status')).toHaveAttribute('data-status', 'succeeded'), { timeout: 5000 })
