@@ -10,9 +10,11 @@ environment, reported (and the lease extended) after every session. A retried or
 reclaimed job resumes from the committed log (A-FR-13). The result is the run's final
 ``seq``, hash and value.
 
-Which market environments a run can open comes from :func:`environment_factory`: none
-until the HTTP adapters (A17) exist, or, on LOCAL and DEV with
-``QS_TRADING_DEMO_ENVIRONMENTS`` set, the fixture files of a directory.
+Which market environments a run can open comes from :func:`environment_factory`: a
+replay over the market service's feed when ``QS_TRADING_MARKET_URL`` is set, a simulation
+path over the simulation service's feed when ``QS_TRADING_SIMULATION_URL`` is set (the
+HTTP adapters, A17); otherwise, on LOCAL and DEV with ``QS_TRADING_DEMO_ENVIRONMENTS`` set,
+the fixture files of a directory, or none.
 
 **Permanent and transient failures.** The K1 worker queues a job whose handler raised
 again while attempts remain. That suits a lost database connection or a timeout, but a
@@ -20,17 +22,20 @@ run that failed because of what it runs on fails the same way every time, so the
 records those failures as final itself, with K1's own ``JobQueue.fail(..., retry=False)``:
 :data:`PERMANENT_ERRORS` lists them (no portfolio, the engine refusing the spec or the
 ticks, a resume that does not reproduce the log, a source fingerprint that changed, a
-fixture that is missing or invalid, no market adapter, a log that does not fold). The
+fixture that is missing or invalid, no market adapter, a log that does not fold, a feed
+that refuses the environment or breaks the contract). The
 fail is fenced by the claim: it only applies while the job is still ``running`` on the
 attempt this handler was given, under the lease owner that holds it, so a worker that
 already lost the job cannot end it. The handler then returns, and the worker's own
 ``complete`` finds the job no longer running and leaves it failed.
 
 Everything else is transient and retried up to ``max_attempts``: database and connection
-errors, timeouts, and :class:`~qs_trading.engine.store.ChainConflict`. A chain conflict
-means another writer appended to the log first (a reclaimed job whose old worker was
-still running); a retry resumes from the committed log (A-FR-13) and either continues or
-finds the run complete, so retrying it is both safe and the way it heals.
+errors, timeouts, a feed that is down for now
+(:class:`~qs_trading.adapters.feed_client.FeedUnavailable`), and
+:class:`~qs_trading.engine.store.ChainConflict`. A chain conflict means another writer
+appended to the log first (a reclaimed job whose old worker was still running); a retry
+resumes from the committed log (A-FR-13) and either continues or finds the run complete,
+so retrying it is both safe and the way it heals.
 """
 
 import uuid
@@ -44,7 +49,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from qs_template import Database
 from qs_template.jobs import Handler, Job, JobQueue, ProgressReporter, Submitted
 from qs_template.logging import get_logger
+from qs_trading.adapters.feed_client import FeedClient, HttpxFeedClient, StaticToken
 from qs_trading.adapters.file_environment import FixtureError, file_environments
+from qs_trading.adapters.http_environment import (
+    PermanentFeedError,
+    ReplayFeed,
+    SimulationPathFeed,
+)
 from qs_trading.domain.accounting import AccountingError
 from qs_trading.domain.strategies import UnknownStrategyKind
 from qs_trading.domain.strategy import LookAheadError
@@ -103,6 +114,7 @@ PERMANENT_ERRORS: tuple[type[Exception], ...] = (
     MissingAdjustedPrices,
     FixtureError,
     NoMarketAdapter,
+    PermanentFeedError,  # 401/403/404/409/501, other 4xx, a contract violation
     ProjectionError,
     UnknownStrategyKind,
     ValidationError,
@@ -112,7 +124,8 @@ PERMANENT_ERRORS: tuple[type[Exception], ...] = (
 """Failures of an ``engine.run`` job that a retry cannot fix: they follow from the stored
 spec, the portfolio's bound fingerprint or the environment's data, which a retry reads
 again unchanged. Deliberately not listed: :class:`MarketEnvironmentError` as a whole (the
-HTTP adapters may raise it for a feed that is only down for now), plain ``ValueError`` and
+HTTP adapters raise ``FeedUnavailable``, one of them, for a feed that is only down for now:
+429, 5xx other than 501, timeouts and connection errors), plain ``ValueError`` and
 ``RuntimeError``, and :class:`~qs_trading.engine.store.ChainConflict`."""
 
 
@@ -144,10 +157,9 @@ BUNDLED_DEMO_ENVIRONMENTS = Path(__file__).resolve().parent / "demo" / "environm
 """The demo fixtures shipped inside the package (and so inside the image)."""
 
 
-def environment_factory(settings: TradingSettings) -> EnvironmentFactory:
-    """The environments the worker can run over: the demo fixtures when
-    ``QS_TRADING_DEMO_ENVIRONMENTS`` is set (``bundled`` = the package's own), otherwise
-    none. A configured directory that does not exist stops the worker from starting."""
+def _local_factory(settings: TradingSettings) -> EnvironmentFactory:
+    """The demo fixtures when ``QS_TRADING_DEMO_ENVIRONMENTS`` is set (``bundled`` = the
+    package's own), otherwise none."""
     configured = settings.trading_demo_environments
     if not configured:
         return no_environments
@@ -155,6 +167,52 @@ def environment_factory(settings: TradingSettings) -> EnvironmentFactory:
     if not directory.is_dir():
         raise ValueError(f"QS_TRADING_DEMO_ENVIRONMENTS: {directory} is not a directory")
     return file_environments(directory)
+
+
+def _feed_client(settings: TradingSettings, base_url: str) -> FeedClient:
+    # K3 (#85): build ServiceClientFeed (adapters/feed_client.py) here instead
+    if settings.service_token is None:
+        raise ValueError("QS_SERVICE_TOKEN must be set to read the market feeds")
+    return HttpxFeedClient(
+        base_url,
+        StaticToken(settings.service_token),
+        timeout_seconds=settings.trading_feed_timeout_seconds,
+    )
+
+
+def environment_factory(
+    settings: TradingSettings,
+    *,
+    market: FeedClient | None = None,
+    simulation: FeedClient | None = None,
+) -> EnvironmentFactory:
+    """The environments the worker can run over. A replay is read from the market
+    service's feed when ``QS_TRADING_MARKET_URL`` is set, a simulation path from the
+    simulation service's when ``QS_TRADING_SIMULATION_URL`` is set (one client each,
+    shared by every run of the worker; ``market`` and ``simulation`` replace them in
+    tests). A kind with no URL falls back to the demo fixtures when
+    ``QS_TRADING_DEMO_ENVIRONMENTS`` is set, otherwise to none. A configured directory that
+    does not exist, or a feed URL without ``QS_SERVICE_TOKEN``, stops the worker from
+    starting."""
+    local = _local_factory(settings)
+    if market is None and settings.trading_market_url:
+        market = _feed_client(settings, settings.trading_market_url)
+    if simulation is None and settings.trading_simulation_url:
+        simulation = _feed_client(settings, settings.trading_simulation_url)
+    if market is None and simulation is None:
+        return local
+    ttl = settings.trading_fingerprint_cache_seconds
+
+    def open_environment(ref: EnvironmentRef) -> MarketEnvironment:
+        if ref.env_type == "replay" and market is not None:
+            return ReplayFeed(market, ref.env_id, fingerprint_ttl_seconds=ttl)
+        if ref.env_type == "simulation" and simulation is not None and ref.path_index is not None:
+            return SimulationPathFeed(
+                simulation, ref.env_id, ref.path_index, fingerprint_ttl_seconds=ttl
+            )
+        return local(ref)
+
+    return open_environment
 
 
 def job_queue(settings: TradingSettings) -> JobQueue:
