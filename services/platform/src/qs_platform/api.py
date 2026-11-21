@@ -3,6 +3,7 @@
 Public:  POST /auth/login, /auth/refresh, /auth/logout, /auth/signup, /auth/verify-email,
          /auth/resend-verification, /auth/forgot-password, /auth/reset-password,
          GET /.well-known/jwks.json
+Calling services:  POST /service-tokens (client credentials, ADR 09)
 Signed-in users:  GET /auth/me (with the role's capabilities), POST /auth/change-password
 manage_users:  list, invite, read, deactivate and reactivate users; approve or reject
                sign-ups waiting for approval; resend an invitation
@@ -33,6 +34,8 @@ from qs_platform.schemas import (
     PasswordSetOut,
     RefreshRequest,
     ResetPasswordRequest,
+    ServiceTokenRequest,
+    ServiceTokenResponse,
     SignUpRequest,
     TokenResponse,
     UserList,
@@ -40,6 +43,7 @@ from qs_platform.schemas import (
     VerifyEmailOut,
 )
 from qs_platform.service import INVALID_CREDENTIALS, INVALID_REFRESH, UserService
+from qs_platform.service_tokens import ServiceTokenIssuer
 from qs_template import Database, ServiceError
 from qs_template.audit import set_audit_context
 from qs_template.audit_feed import FEED_DEFAULT_LIMIT, FEED_MAX_LIMIT, AuditEventOut
@@ -83,6 +87,7 @@ def build_routers(
     database: Database,
     keys: SigningKeys,
     signup_enabled: bool,
+    service_tokens: ServiceTokenIssuer,
 ) -> list[APIRouter]:
     public = APIRouter(tags=["auth"])
     users = APIRouter(prefix="/users", tags=["users"])
@@ -90,7 +95,9 @@ def build_routers(
     ManageUsers = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_USERS))]
     ManageRoles = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_ROLES))]
     ViewAudit = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_AUDIT_LOG))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    # scope="function" on every committing yield dependency: the transaction commits when the
+    # route returns, before the response is sent, so a client reads its own writes.
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def audited(
         request: Request, actor: Principal
@@ -116,8 +123,12 @@ def build_routers(
         async for pair in audited(request, actor):
             yield pair
 
-    UsersSession = Annotated[tuple[AsyncSession, Principal], Depends(users_session)]
-    RolesSession = Annotated[tuple[AsyncSession, Principal], Depends(roles_session)]
+    UsersSession = Annotated[
+        tuple[AsyncSession, Principal], Depends(users_session, scope="function")
+    ]
+    RolesSession = Annotated[
+        tuple[AsyncSession, Principal], Depends(roles_session, scope="function")
+    ]
 
     @public.post("/auth/login", responses={401: {}, 429: {}})
     async def login(body: LoginRequest, response: Response) -> TokenResponse:
@@ -235,6 +246,17 @@ def build_routers(
                 "The current password is incorrect.",
                 type_="urn:quantsim:problem:wrong-password",
             )
+        response.headers["Cache-Control"] = "no-store"
+        return token
+
+    @public.post("/service-tokens", tags=["service-tokens"], responses={401: {}, 429: {}, 503: {}})
+    async def issue_service_token(
+        body: ServiceTokenRequest, request: Request, response: Response
+    ) -> ServiceTokenResponse:
+        """A short-lived token for a calling service (client credentials, ADR 09)."""
+        token = await service_tokens.issue(
+            body.client_id, body.client_secret, client_address(request)
+        )
         response.headers["Cache-Control"] = "no-store"
         return token
 
