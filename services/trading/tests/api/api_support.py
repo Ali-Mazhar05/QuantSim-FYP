@@ -25,6 +25,7 @@ from qs_template import Database, create_app
 from qs_template.auth import Authenticator, Role, StaticKeys
 from qs_trading.adapters.file_environment import FileEnvironment
 from qs_trading.api import build_routers
+from qs_trading.api_ops import OpsFactory, OpsReader, durations_out
 from qs_trading.api_store import (
     ACTIVE_JOB_STATUSES,
     PortfolioValues,
@@ -60,6 +61,9 @@ from qs_trading.schemas import (
     FillOut,
     HoldingChangeOut,
     HoldingsOut,
+    JobQueueOut,
+    OpsMetricsOut,
+    OutboxBacklogOut,
     PortfolioOut,
     RebuildOut,
     RunAccepted,
@@ -342,8 +346,8 @@ class FakeStore:
             strategy_kind=chosen.kind,
             strategy_params=chosen.params,
             initial_capital=Decimal(held.initial_capital),
-            cost_model=held.cost_model,
-            slippage_model=held.slippage_model,
+            cost_model=held.cost_model.model_dump(),
+            slippage_model=held.slippage_model.model_dump(),
             environment=EnvironmentRef("replay", ENV_ID),
         )
         sink = MemorySink()
@@ -408,12 +412,38 @@ class FakeStore:
         return log
 
 
+@dataclass
+class FakeOps:
+    """Fixed operational figures: an idle queue and an empty outbox."""
+
+    async def ops_metrics(self, recent: int) -> OpsMetricsOut:
+        return OpsMetricsOut(
+            generated_at=_now(),
+            queue=JobQueueOut(
+                kind="engine.run",
+                queued=0,
+                running=0,
+                succeeded=0,
+                failed=0,
+                oldest_queued_seconds=None,
+            ),
+            durations=durations_out([], recent),
+            outbox=OutboxBacklogOut(pending=0, oldest_pending_seconds=None),
+        )
+
+
+def _fake_ops(_: AsyncSession) -> OpsReader:
+    return FakeOps()
+
+
 def fake_app(
     store: TradingStore,
     settings: TradingSettings | None = None,
     metrics: MetricsCalculator = PENDING,
+    demo_environments: str = "",
+    ops: OpsFactory = _fake_ops,
 ) -> FastAPI:
-    """The service's routes over ``store``; the database is never reached."""
+    """The service's routes over ``store`` and ``ops``; the database is never reached."""
     settings = settings or make_settings()
     database = Database(settings)
 
@@ -424,7 +454,12 @@ def fake_app(
         settings,
         database=database,
         routers=build_routers(
-            auth=authenticator(settings), database=database, store=factory, metrics=metrics
+            auth=authenticator(settings),
+            database=database,
+            store=factory,
+            metrics=metrics,
+            demo_environments=demo_environments,
+            ops=ops,
         ),
     )
 
@@ -496,6 +531,8 @@ MATRIX: dict[tuple[str, str], frozenset[Role] | None] = {
     ("GET", "/portfolios/{portfolio_id}/verify"): ALL_ROLES,
     ("GET", "/portfolios/{portfolio_id}/metrics"): ALL_ROLES,
     ("POST", "/portfolios/{portfolio_id}/rebuild"): ADMINS,
+    ("GET", "/demo-environments"): ALL_ROLES,
+    ("GET", "/ops/metrics"): ADMINS,
 }
 
 # The matrix's portfolio has not run, so it has no state to read yet: a not-found problem

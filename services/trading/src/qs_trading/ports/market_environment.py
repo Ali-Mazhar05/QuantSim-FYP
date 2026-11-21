@@ -25,7 +25,7 @@ provider. A consumer cannot recompute it (the bar revision is not served); it on
 the value it reads with the one frozen at activation.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -53,7 +53,14 @@ class FingerprintChanged(MarketEnvironmentError):
 
 
 class MissingAdjustedPrices(MarketEnvironmentError):
-    """The window holds bars without adjusted prices (feed 422 ``missing_adjusted_prices``)."""
+    """The window holds bars without adjusted prices (feed 422
+    ``urn:quantsim:problem:missing-adjusted-prices``). ``missing`` is the number of such
+    bars per symbol, as the problem's ``missing`` member gives it (empty when it gave
+    none)."""
+
+    def __init__(self, message: str, missing: Mapping[str, int] | None = None) -> None:
+        super().__init__(message)
+        self.missing: dict[str, int] = dict(missing or {})
 
 
 @dataclass(frozen=True, slots=True)

@@ -70,7 +70,12 @@ def build_app(
     return create_app(
         settings,
         database=database,
-        routers=build_routers(auth=auth, database=database, queue=job_queue(settings)),
+        routers=build_routers(
+            auth=auth,
+            database=database,
+            queue=job_queue(settings),
+            demo_environments=settings.trading_demo_environments,
+        ),
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],
         on_startup=[loops.start],
         on_shutdown=[loops.stop, revocations.close],

@@ -11,6 +11,7 @@ from qs_platform.api import build_routers
 from qs_platform.keys import SigningKeys
 from qs_platform.limits import RateLimiter
 from qs_platform.service import UserService
+from qs_platform.service_tokens import ServiceTokenIssuer
 from qs_platform.settings import PlatformSettings
 from qs_template import Database, ReadinessCheck, create_app
 from qs_template.auth import Authenticator, StaticKeys
@@ -47,6 +48,7 @@ def build_app(
             database=database,
             keys=keys,
             signup_enabled=settings.signup_enabled,
+            service_tokens=ServiceTokenIssuer(settings, keys, limiter),
         ),
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],
         on_shutdown=[revocations.close, limiter.close],
