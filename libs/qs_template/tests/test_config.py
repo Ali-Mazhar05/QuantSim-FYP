@@ -18,12 +18,12 @@ def test_reads_prefixed_environment_variables(monkeypatch: pytest.MonkeyPatch) -
 
 def test_hides_the_database_password(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("QS_SERVICE_NAME", "market")
-    monkeypatch.setenv("QS_DATABASE_URL", "postgresql+asyncpg://u:secret@db/market")
+    monkeypatch.setenv("QS_DATABASE_URL", "postgresql+asyncpg://u:pw-hunter2@db/market")
 
     settings = ServiceSettings()
 
-    assert "secret" not in repr(settings)
-    assert "secret" in settings.database_url.get_secret_value()
+    assert "pw-hunter2" not in repr(settings)
+    assert "pw-hunter2" in settings.database_url.get_secret_value()
 
 
 def test_refuses_to_start_without_required_settings(monkeypatch: pytest.MonkeyPatch) -> None:

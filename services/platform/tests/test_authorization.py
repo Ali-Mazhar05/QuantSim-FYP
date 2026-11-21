@@ -42,6 +42,7 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("POST", "/auth/resend-verification"): EVERYONE,
     ("POST", "/auth/forgot-password"): EVERYONE,
     ("POST", "/auth/reset-password"): EVERYONE,
+    ("POST", "/service-tokens"): EVERYONE,  # a service's client secret, not a user token
     ("GET", "/.well-known/jwks.json"): EVERYONE,
     ("GET", "/health"): EVERYONE,
     ("GET", "/ready"): EVERYONE,
@@ -99,6 +100,12 @@ def body_for(method: str, path: str, username: str) -> dict[str, Any] | None:
         }
     if path in ("/auth/resend-verification", "/auth/forgot-password"):
         return {"email": "nobody@quantsim.dev"}
+    if path == "/service-tokens":
+        return {
+            "grant_type": "client_credentials",
+            "client_id": "trading",
+            "client_secret": "x" * 32,
+        }
     if path == "/auth/verify-email":
         return {"token": "x" * 43}
     if path == "/auth/change-password":

@@ -4,7 +4,9 @@
 // and metrics routes) but the prototype has no control for them, so no page asks for them.
 
 import type { MarketEnvironment } from '../../types'
+import type { MarketComponents } from '../generated'
 import { apiRequest } from './client'
+import { apiGet, apiPost } from './typed'
 
 const BASE = '/api/market'
 
@@ -96,20 +98,8 @@ function toCandle(c: ApiCandle): Candle {
 
 // ---- Market environments (the prototype's Market Environments pages, field for field) ----
 
-export interface ApiEnvironment {
-  id: string
-  name: string
-  type: 'historical_replay' | 'synthetic'
-  universe: string
-  instrument_ids: string[]
-  symbols: string[]
-  start_date: string
-  end_date: string
-  frequency: 'daily' | 'hourly' | 'tick'
-  status: 'draft' | 'ready' | 'active'
-  created_by: string
-  created_at: string
-}
+/** The API's environment, straight from the generated schema: a renamed field fails the type check. */
+export type ApiEnvironment = MarketComponents['schemas']['EnvironmentOut']
 
 const TYPE_NAMES: Record<ApiEnvironment['type'], MarketEnvironment['type']> = {
   historical_replay: 'Historical Replay',
@@ -123,6 +113,11 @@ const FREQUENCY_NAMES: Record<ApiEnvironment['frequency'], MarketEnvironment['fr
   daily: 'Daily',
   hourly: 'Hourly',
   tick: 'Tick',
+}
+const FREQUENCY_VALUES: Record<MarketEnvironment['frequency'], ApiEnvironment['frequency']> = {
+  Daily: 'daily',
+  Hourly: 'hourly',
+  Tick: 'tick',
 }
 const STATUS_NAMES: Record<ApiEnvironment['status'], MarketEnvironment['status']> = {
   draft: 'Draft',
@@ -151,8 +146,8 @@ function toEnvironment(e: ApiEnvironment): Environment {
 }
 
 /** Every environment, newest first. */
-export async function listEnvironments(): Promise<Environment[]> {
-  return (await apiRequest<ApiEnvironment[]>(`${BASE}/environments`)).map(toEnvironment)
+export async function listEnvironments(options: { signal?: AbortSignal } = {}): Promise<Environment[]> {
+  return (await apiGet('/api/market/environments', options)).map(toEnvironment)
 }
 
 export async function createEnvironment(input: {
@@ -164,17 +159,14 @@ export async function createEnvironment(input: {
   end: string
   frequency?: MarketEnvironment['frequency']
 }): Promise<Environment> {
-  const created = await apiRequest<ApiEnvironment>(`${BASE}/environments`, {
-    method: 'POST',
-    body: JSON.stringify({
-      name: input.name,
-      type: TYPE_VALUES[input.type],
-      universe: input.universe,
-      instrument_ids: input.instrumentIds,
-      start_date: input.start,
-      end_date: input.end,
-      frequency: (input.frequency ?? 'Daily').toLowerCase(),
-    }),
+  const created = await apiPost('/api/market/environments', {
+    name: input.name,
+    type: TYPE_VALUES[input.type],
+    universe: input.universe,
+    instrument_ids: input.instrumentIds,
+    start_date: input.start,
+    end_date: input.end,
+    frequency: FREQUENCY_VALUES[input.frequency ?? 'Daily'],
   })
   return toEnvironment(created)
 }

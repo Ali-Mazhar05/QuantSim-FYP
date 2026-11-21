@@ -40,11 +40,17 @@ class EnvironmentService:
         self._session = session
         self._actor = actor_id
 
-    async def list_all(self) -> list[dict[str, Any]]:
+    async def list_all(
+        self, *, env_type: str | None = None, owner: uuid.UUID | None = None
+    ) -> list[dict[str, Any]]:
+        """Newest first; optionally only one type and only the ones a user created."""
+        query = select(market_environment)
+        if env_type is not None:
+            query = query.where(market_environment.c.type == env_type)
+        if owner is not None:
+            query = query.where(market_environment.c.created_by == owner)
         rows = await self._session.execute(
-            select(market_environment).order_by(
-                market_environment.c.created_at.desc(), market_environment.c.id
-            )
+            query.order_by(market_environment.c.created_at.desc(), market_environment.c.id)
         )
         return await self._with_symbols([dict(row._mapping) for row in rows.all()])
 

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout'
 import { useDemoStore } from './demo/demoState'
 import { canOpen } from './demo/permissions'
+import QueryProvider from './hooks/QueryProvider'
 import { storedRefreshToken } from './services/api/client'
 import { resumeSession } from './services/api/platform'
 import CheckEmail from './pages/auth/CheckEmail'
@@ -102,6 +103,14 @@ function PublicOnly({ children }: { children: React.ReactElement }) {
 }
 
 export default function App() {
+  return (
+    <QueryProvider>
+      <AppRoutes />
+    </QueryProvider>
+  )
+}
+
+function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />

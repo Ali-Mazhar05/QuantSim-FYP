@@ -9,13 +9,8 @@ import PageHeader from '../../components/layout/PageHeader'
 import EmptyState from '../../components/status/EmptyState'
 import { useDemoStore } from '../../demo/demoState'
 import { useNotifications } from '../../demo/notifications'
-import {
-  type Candle,
-  type MarketInstrument,
-  createEnvironment,
-  getCandles,
-  listInstruments,
-} from '../../services/api/market'
+import { useCreateEnvironment } from '../../hooks/useCreateEnvironment'
+import { type Candle, type MarketInstrument, getCandles, listInstruments } from '../../services/api/market'
 import type { MarketEnvironment } from '../../types'
 import { errorMessage } from '../auth/authShared'
 
@@ -33,6 +28,7 @@ export default function CreateMarketEnvironment() {
   const advanceTo = useDemoStore((s) => s.advanceTo)
   const setActiveEnvironment = useDemoStore((s) => s.setActiveEnvironment)
   const push = useNotifications((s) => s.push)
+  const { mutateAsync: createEnvironment } = useCreateEnvironment()
   const [type, setType] = useState<MarketEnvironment['type']>('Synthetic Market')
   const [instruments, setInstruments] = useState<MarketInstrument[] | null>(null)
   const [failure, setFailure] = useState<string | null>(null)

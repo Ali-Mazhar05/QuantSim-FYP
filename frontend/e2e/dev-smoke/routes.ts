@@ -39,9 +39,12 @@ export const APP_ROUTES: PageRoute[] = [
 
   { path: '/trading/strategies', heading: 'Strategies' },
   { path: '/trading/strategies/new', heading: 'New Strategy' },
-  { path: '/trading/strategies/strat-momentum-1', heading: 'Configure — Momentum Strategy' },
+  // The prototype's strategy id names no real strategy: the page says so (a real one opens
+  // as "Configure — <name>", which trading-flow.spec.ts covers)
+  { path: '/trading/strategies/strat-momentum-1', heading: 'Strategy not found' },
   { path: '/trading/portfolios', heading: 'Portfolios' },
   { path: '/trading/portfolios/new', heading: 'Create Portfolio' },
+  // Without a portfolio id the page offers the run picker under the prototype's heading
   { path: '/trading/replay/1042', heading: 'Trade Replay — Simulation #1042' },
 
   { path: '/risk/overview', heading: 'Risk Analysis' },
