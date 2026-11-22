@@ -406,6 +406,58 @@
         "title": "InstrumentStatistics",
         "type": "object"
       },
+      "KindDepth": {
+        "properties": {
+          "expired_leases": {
+            "description": "Running jobs whose worker's lease has run out",
+            "title": "Expired Leases",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "oldest_queued_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long the longest waiting job has waited; null when none waits",
+            "title": "Oldest Queued Seconds"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "oldest_queued_seconds",
+          "expired_leases"
+        ],
+        "title": "KindDepth",
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": true,
         "description": "RFC 9457 problem details; some problems add fields, such as job_id",
@@ -554,6 +606,49 @@
           "instruments"
         ],
         "title": "QuantilesOut",
+        "type": "object"
+      },
+      "QueueDepth": {
+        "examples": [
+          {
+            "kinds": [
+              {
+                "expired_leases": 0,
+                "failed": 0,
+                "kind": "monte_carlo",
+                "oldest_queued_seconds": 12.4,
+                "queued": 2,
+                "running": 1,
+                "succeeded": 14
+              }
+            ],
+            "queued": 2,
+            "running": 1
+          }
+        ],
+        "properties": {
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/KindDepth"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queued",
+          "running",
+          "kinds"
+        ],
+        "title": "QueueDepth",
         "type": "object"
       },
       "Refusal": {
@@ -1314,6 +1409,75 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/simulation/admin/queue": {
+      "get": {
+        "operationId": "queue_depth_api_simulation_admin_queue_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueDepth"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Queue Depth",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/simulation/calibrations": {
       "get": {
         "description": "The stored fits, newest first. A queued or refused calibration has no fit to choose, so\nit is not listed; read it by its id.",

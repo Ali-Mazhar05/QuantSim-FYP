@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/simulation/admin/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Queue Depth */
+        get: operations["queue_depth_api_simulation_admin_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/simulation/calibrations": {
         parameters: {
             query?: never;
@@ -402,6 +419,29 @@ export interface components {
              */
             var95: string;
         };
+        /** KindDepth */
+        KindDepth: {
+            /**
+             * Expired Leases
+             * @description Running jobs whose worker's lease has run out
+             */
+            expired_leases: number;
+            /** Failed */
+            failed: number;
+            /** Kind */
+            kind: string;
+            /**
+             * Oldest Queued Seconds
+             * @description How long the longest waiting job has waited; null when none waits
+             */
+            oldest_queued_seconds: number | null;
+            /** Queued */
+            queued: number;
+            /** Running */
+            running: number;
+            /** Succeeded */
+            succeeded: number;
+        };
         /**
          * Problem
          * @description RFC 9457 problem details; some problems add fields, such as job_id
@@ -466,6 +506,32 @@ export interface components {
              * Format: uuid
              */
             run_id: string;
+        };
+        /**
+         * QueueDepth
+         * @example {
+         *       "kinds": [
+         *         {
+         *           "expired_leases": 0,
+         *           "failed": 0,
+         *           "kind": "monte_carlo",
+         *           "oldest_queued_seconds": 12.4,
+         *           "queued": 2,
+         *           "running": 1,
+         *           "succeeded": 14
+         *         }
+         *       ],
+         *       "queued": 2,
+         *       "running": 1
+         *     }
+         */
+        QueueDepth: {
+            /** Kinds */
+            kinds: components["schemas"]["KindDepth"][];
+            /** Queued */
+            queued: number;
+            /** Running */
+            running: number;
         };
         /** Refusal */
         Refusal: {
@@ -893,6 +959,55 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    queue_depth_api_simulation_admin_queue_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueDepth"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     list_calibrations_api_simulation_calibrations_get: {
         parameters: {
             query?: {
