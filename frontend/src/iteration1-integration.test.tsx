@@ -173,7 +173,7 @@ describe('the top bar and Replay', () => {
 
     expect(await screen.findByText('Chosen Env — Historical Replay')).toBeInTheDocument()
     expect(screen.getByText('2025-01-01 → 2026-06-30 · Daily')).toBeInTheDocument()
-    expect(await screen.findByText(/Session 42 / 100/)).toBeInTheDocument()
+    expect(await screen.findByText('Session 42 / 100', { exact: false })).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByText('Chosen Env').length).toBeGreaterThan(0))
     const request = calls.find((c) => c.path.endsWith('/candles'))
     expect(request).toBeDefined()
