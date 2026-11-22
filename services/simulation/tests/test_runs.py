@@ -749,13 +749,6 @@ async def test_an_unknown_run_is_404_and_a_bad_id_is_422(run_world: RunWorld) ->
     assert (await run_world.client.get(f"{RUNS}/nope", headers=viewer)).status_code == 422
 
 
-async def test_the_routes_the_read_api_builds_later_still_say_so(run_world: RunWorld) -> None:
-    viewer = bearer(make_token(Role.VIEWER))
-    assert (await run_world.client.get(RUNS, headers=viewer)).status_code == 501
-    ticks = await run_world.client.get(f"{RUNS}/{uuid.uuid4()}/ticks?path=0", headers=viewer)
-    assert ticks.status_code == 501
-
-
 async def test_the_run_creation_is_in_the_openapi_document(run_world: RunWorld) -> None:
     spec = (await run_world.client.get("/api/simulation/openapi.json")).json()
     post = spec["paths"]["/api/simulation/runs"]["post"]

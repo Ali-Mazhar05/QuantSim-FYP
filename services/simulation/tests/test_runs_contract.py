@@ -1,7 +1,5 @@
-"""C2 for simulation: the run list and the path tick feed are fixed in OpenAPI now and answer 501
-until B18 builds them (the run detail and creation are built: tests/test_runs.py). What is final is
-tested: who may call, the parameters, the models and how they relate to the tick contract C1
-(B-FR-05, B-US-09)."""
+"""C2 for simulation: who may call the run routes, the parameters, the models and how they relate to
+the tick contract C1 (B-FR-05, B-US-09). The database-backed behaviour is in tests/test_reads.py."""
 
 import uuid
 from datetime import UTC, date, datetime
@@ -15,9 +13,9 @@ from qs_simulation.api_runs import (
     RunSummary,
     Tick,
     TickPage,
-    require_path,
 )
 from qs_simulation.main import build_app
+from qs_simulation.reads import require_path
 from qs_simulation.settings import SimulationSettings
 from qs_template.auth import Role
 from qs_template.errors import ServiceError
@@ -28,18 +26,6 @@ from tests.contract_support import TICK_SCHEMA, tick_problems
 client = support.client
 RUN = uuid.uuid4()
 ROUTES = [f"{API}/runs", f"{API}/runs/{RUN}", f"{API}/runs/{RUN}/ticks?path=0"]
-NOT_BUILT = [f"{API}/runs", f"{API}/runs/{RUN}/ticks?path=0"]  # the detail route is built (B16)
-
-
-@pytest.mark.parametrize("role", list(Role))
-@pytest.mark.parametrize("path", NOT_BUILT)
-async def test_every_signed_in_role_reaches_the_routes_and_is_told_it_is_not_built_yet(
-    client: httpx.AsyncClient, role: Role, path: str
-) -> None:
-    response = await client.get(path, headers=bearer(make_token(role)))
-    assert response.status_code == 501
-    assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json()["type"] == "urn:quantsim:problem:not-implemented"
 
 
 @pytest.mark.parametrize("path", ROUTES)
@@ -72,17 +58,6 @@ async def test_bad_parameters_are_422_before_anything_else(
     assert response.status_code == 422, response.text
 
 
-async def test_valid_filters_are_accepted(client: httpx.AsyncClient) -> None:
-    headers = bearer(make_token(Role.ANALYST))
-    for status in ("queued", "running", "completed", "failed"):
-        response = await client.get(f"{API}/runs", params={"status": status}, headers=headers)
-        assert response.status_code == 501, status  # past validation, to the not-built answer
-    response = await client.get(
-        f"{API}/runs", params={"instrument": str(uuid.uuid4())}, headers=headers
-    )
-    assert response.status_code == 501
-
-
 def test_the_routes_are_in_the_openapi_document(settings: SimulationSettings) -> None:
     spec = build_app(settings).openapi()
     assert {f"{API}/runs", f"{API}/runs/{{run_id}}", f"{API}/runs/{{run_id}}/ticks"} <= set(
@@ -96,7 +71,7 @@ def test_the_routes_are_in_the_openapi_document(settings: SimulationSettings) ->
     assert path["required"] is True and "default" not in path["schema"]
     listed = spec["paths"][f"{API}/runs"]["get"]
     filters = {p["name"] for p in listed["parameters"] if p["in"] != "header"}
-    assert filters == {"status", "instrument"}
+    assert filters == {"status", "instrument", "limit", "cursor"}
 
 
 def test_the_tick_model_is_the_tick_contract(settings: SimulationSettings) -> None:

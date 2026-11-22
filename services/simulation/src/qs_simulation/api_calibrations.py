@@ -1,13 +1,14 @@
 """HTTP API of calibrations, under ``/api/simulation/calibrations`` (B15, B-FR-08, B-FR-09).
 
 Quants and admins (``calibrate_models``):  POST /calibrations              answers 202 at once
-Every signed-in role:                      GET  /calibrations/{id}         the outcome, at any stage
+Every signed-in role:                      GET  /calibrations              the stored fits
+                                           GET  /calibrations/{id}         the outcome, at any stage
 
 The POST only validates and queues a job (K1); the fit runs in a worker. The calibration's id is the
 job's id, so the id in the 202 is the id to poll. ``Idempotency-Key`` makes a repeat return
 the calibration already made. A window the data or the model refuses is a ``refused`` outcome with
-the reason and a 422 status inside it, not an error of the poll (DL-035). The list and filters come
-with the read API (B18).
+the reason and a 422 status inside it, not an error of the poll (DL-035).
+
 """
 
 import uuid
@@ -15,12 +16,14 @@ from collections.abc import AsyncIterator
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_simulation.calibrations import CalibrationRequest, CalibrationService
+from qs_simulation.paging import DEFAULT_PAGE, MAX_PAGE
 from qs_simulation.ports import Calibrator
+from qs_simulation.reads import Reads
 from qs_template import Database
 from qs_template.audit import set_audit_context
 from qs_template.auth import Authenticator, Capability, Principal
@@ -113,6 +116,13 @@ class CalibrationOut(BaseModel):
     error: str | None = Field(description="Set when status is failed: the job could not finish")
 
 
+class CalibrationPage(BaseModel):
+    items: list[CalibrationOut]
+    next_cursor: str | None = Field(
+        description="Pass as `cursor` to read the next page; null on the last page"
+    )
+
+
 def build_calibration_routers(
     *,
     auth: Authenticator,
@@ -183,6 +193,33 @@ def build_calibration_routers(
             ) from conflict
         response.headers["Location"] = f"/api/simulation/calibrations/{calibration_id}"
         return CalibrationOut.model_validate(await service.get(calibration_id))
+
+    @router.get("", response_model=CalibrationPage, responses={401: {}, 422: {}})
+    async def list_calibrations(
+        _: Reader,
+        session: Session,
+        instrument: Annotated[
+            uuid.UUID | None, Query(description="Only calibrations of this instrument")
+        ] = None,
+        model: Annotated[ModelName | None, Query(description="Only this model")] = None,
+        converged: Annotated[
+            bool | None, Query(description="Only fits that did (true) or did not (false) converge")
+        ] = None,
+        limit: Annotated[
+            int, Query(ge=1, le=MAX_PAGE, description="Items per page")
+        ] = DEFAULT_PAGE,
+        cursor: Annotated[
+            str | None, Query(description="`next_cursor` of the previous page")
+        ] = None,
+    ) -> CalibrationPage:
+        """The stored fits, newest first. A queued or refused calibration has no fit to choose, so
+        it is not listed; read it by its id."""
+        items, next_cursor = await Reads(session).calibrations(
+            instrument=instrument, model=model, converged=converged, limit=limit, cursor=cursor
+        )
+        return CalibrationPage(
+            items=[CalibrationOut.model_validate(i) for i in items], next_cursor=next_cursor
+        )
 
     @router.get("/{calibration_id}", responses={401: {}, 404: {}})
     async def get_calibration(

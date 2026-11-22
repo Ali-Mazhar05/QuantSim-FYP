@@ -1,12 +1,12 @@
 """HTTP API of simulation runs, under ``/api/simulation/runs`` (contract C2).
 
 Quants and admins (``launch_simulations``):  POST /runs          answers 202 at once (B16)
-Every signed-in role:                        GET  /runs/{id}     state, progress, statistics (B16)
-                                             GET  /runs, /runs/{id}/ticks     the read API (B18)
+Every signed-in role:                        GET  /runs          the list, newest first (B18)
+                                             GET  /runs/{id}     state, progress, statistics (B16)
+                                             GET  /runs/{id}/quantiles, /runs/{id}/ticks   (B18)
 
 A run's id is its job's id: the 202 carries the id to poll. ``Idempotency-Key`` returns the run
-that already exists. The list and the path ticks answer 501 with a problem body until B18, so the
-contract (paths, parameters, models and errors) is fixed and testable now (ADR 01, ADR 03).
+that already exists. Lists page by cursor (``items`` and ``next_cursor``, as the market bars do).
 """
 
 import uuid
@@ -20,20 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_simulation.domain.runs import MAX_INSTRUMENTS, MIN_PATHS
 from qs_simulation.models import MAX_PATHS, MAX_STEPS
+from qs_simulation.paging import DEFAULT_PAGE, MAX_PAGE
 from qs_simulation.ports import RiskCalculator
+from qs_simulation.reads import Reads
 from qs_simulation.runs import RunInstrument, RunRequest, RunService
 from qs_template import Database
 from qs_template.audit import set_audit_context
 from qs_template.auth import Authenticator, Capability, Principal
 from qs_template.errors import ServiceError
 from qs_template.jobs import IdempotencyConflict, JobQueue
-
-NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
-NOT_FOUND = "urn:quantsim:problem:not-found"
-
-# the same paging convention as the market service (api_data.py)
-DEFAULT_PAGE = 500
-MAX_PAGE = 2000
 
 TICK_EXAMPLE: dict[str, Any] = {
     "env_id": "a4d3c2b1-7e6f-4a5b-8c9d-0e1f2a3b4c5d",
@@ -211,24 +206,53 @@ class RunCreate(BaseModel):
     )
 
 
-def _not_built(what: str) -> ServiceError:
-    return ServiceError(
-        501,
-        "Not implemented yet",
-        f"{what} is part of the Monte Carlo and read API tasks (B16, B18); the contract is final.",
-        type_=NOT_IMPLEMENTED,
+class RunPage(BaseModel):
+    items: list[RunSummary]
+    next_cursor: str | None = Field(
+        description="Pass as `cursor` to read the next page; null on the last page"
     )
 
 
-def require_path(path: int, n_paths: int) -> None:
-    """A path outside the run (``path >= n_paths``) is 404, like an unknown run."""
-    if path >= n_paths:
-        raise ServiceError(
-            404,
-            "Path not found",
-            f"This run has {n_paths} paths, numbered 0 to {n_paths - 1}; there is no path {path}.",
-            type_=NOT_FOUND,
-        )
+class QuantileStep(BaseModel):
+    step: int = Field(ge=1, description="1 is the first simulated step, tick `session` 0")
+    q01: str
+    q05: str
+    q25: str
+    q50: str
+    q75: str
+    q95: str
+    q99: str
+
+
+class InstrumentQuantiles(BaseModel):
+    instrument_id: uuid.UUID
+    symbol: str
+    start_price: str = Field(description="The price every path started from")
+    steps: list[QuantileStep]
+
+
+class QuantilesOut(BaseModel):
+    """The price at each quantile of the run's paths, per step: the fan chart."""
+
+    run_id: uuid.UUID
+    n_steps: int
+    levels: dict[str, str] = Field(description="The probability each column stands for")
+    instruments: list[InstrumentQuantiles]
+
+
+NOT_AUTHENTICATED: dict[str, Any] = {
+    "description": "No token, or a bad or expired one",
+    "content": {
+        "application/problem+json": {
+            "example": {
+                "type": "urn:quantsim:problem:not-authenticated",
+                "title": "Not authenticated",
+                "status": 401,
+                "detail": "A valid access token is required.",
+            }
+        }
+    },
+}
 
 
 def build_run_routers(
@@ -318,17 +342,40 @@ def build_run_routers(
         response.headers["Location"] = f"/api/simulation/runs/{run_id}"
         return RunOut.model_validate(await runs.describe(run_id))
 
-    @router.get("", response_model=list[RunSummary], responses={401: {}, 422: {}, 501: {}})
+    @router.get("", response_model=RunPage, responses={401: NOT_AUTHENTICATED, 422: {}})
     async def list_runs(
         _: Reader,
+        session: Session,
         run_status: Annotated[
             RunStatus | None, Query(alias="status", description="Only runs in this state")
         ] = None,
         instrument: Annotated[
             uuid.UUID | None, Query(description="Only runs that include this instrument")
         ] = None,
-    ) -> list[RunSummary]:
-        raise _not_built("The run list")
+        limit: Annotated[int, Query(ge=1, le=MAX_PAGE, description="Runs per page")] = DEFAULT_PAGE,
+        cursor: Annotated[
+            str | None, Query(description="`next_cursor` of the previous page")
+        ] = None,
+    ) -> RunPage:
+        items, next_cursor = await Reads(session).runs(
+            status=run_status, instrument=instrument, limit=limit, cursor=cursor
+        )
+        return RunPage(items=[RunSummary.model_validate(i) for i in items], next_cursor=next_cursor)
+
+    @router.get(
+        "/{run_id}/quantiles",
+        response_model=QuantilesOut,
+        responses={401: NOT_AUTHENTICATED, 404: {}, 409: {}, 422: {}},
+    )
+    async def read_quantiles(
+        run_id: uuid.UUID,
+        _: Reader,
+        session: Session,
+        instrument: Annotated[
+            uuid.UUID | None, Query(description="Only this instrument (a long run is large)")
+        ] = None,
+    ) -> QuantilesOut:
+        return QuantilesOut.model_validate(await Reads(session).quantiles(run_id, instrument))
 
     @router.get("/{run_id}", response_model=RunOut, responses={401: {}, 404: {}, 422: {}})
     async def get_run(run_id: uuid.UUID, _: Reader, session: Session) -> RunOut:
@@ -346,15 +393,17 @@ def build_run_routers(
                     }
                 }
             },
-            401: {},
+            401: NOT_AUTHENTICATED,
             404: {"description": "No such run, or no such path in it (path >= n_paths)"},
+            409: {"description": "The run has not completed yet, so it has no paths"},
             422: {},
-            501: {},
         },
     )
     async def read_path_ticks(
         run_id: uuid.UUID,
         _: Reader,
+        session: Session,
+        response: Response,
         path: Annotated[
             int, Query(ge=0, description="Which simulated path, 0 to n_paths - 1; required")
         ],
@@ -363,6 +412,12 @@ def build_run_routers(
             int, Query(ge=1, le=MAX_PAGE, description="Ticks per page")
         ] = DEFAULT_PAGE,
     ) -> TickPage:
-        raise _not_built("The path tick feed")
+        items, next_after_seq, fingerprint = await Reads(session).ticks(
+            run_id, path, after_seq, limit
+        )
+        response.headers["X-Source-Fingerprint"] = fingerprint
+        return TickPage(
+            items=[Tick.model_validate(i) for i in items], next_after_seq=next_after_seq
+        )
 
     return [router]

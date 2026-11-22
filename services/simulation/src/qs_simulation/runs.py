@@ -352,8 +352,8 @@ class RunService:
 # ---- regenerating a stored run ----
 
 
-async def regenerate(session: AsyncSession, run_id: uuid.UUID) -> tuple[Array, RepairRecord]:
-    """The run's paths again, from what is stored: bit for bit what the job generated."""
+async def load_request(session: AsyncSession, run_id: uuid.UUID) -> tuple[Any, PathRequest]:
+    """The run's row and everything that defines its paths, read from what is stored."""
     row = (await session.execute(select(run).where(run.c.id == run_id))).first()
     if row is None:
         raise NOT_FOUND
@@ -393,6 +393,12 @@ async def regenerate(session: AsyncSession, run_id: uuid.UUID) -> tuple[Array, R
         n_steps=row.n_steps,
         seed=row.seed,
     )
+    return row, request
+
+
+async def regenerate(session: AsyncSession, run_id: uuid.UUID) -> tuple[Array, RepairRecord]:
+    """The run's paths again, from what is stored: bit for bit what the job generated."""
+    _, request = await load_request(session, run_id)
     return await asyncio.to_thread(generate, request, 1)
 
 
