@@ -26,3 +26,8 @@ class SimulationSettings(ServiceSettings):
     # The most prices (paths x steps x instruments) a run may hold in memory while it is generated:
     # 60 million is about 480 MB of float64, which a laptop-hosted worker can take
     max_run_values: int = Field(default=60_000_000, ge=1)
+
+    # Where calibration and runs read the market (task K3): the market service's base URL, for
+    # example "http://market:8000". Empty means no market is configured: the calibration and run
+    # routes answer 503 and their jobs are not registered.
+    simulation_market_url: str = ""
