@@ -1,7 +1,7 @@
 # Lane A: Trading Engine and Platform
 
 Chapter, Iteration 2 (window 16 Nov to 23 Dec 2026). State of the code: `develop` at
-`f49661c` (after lane PR #140 and the spine fixes #141, #142), 22 Nov 2026; `v0.1.4` is the release on PROD. Two items still depend on
+`c3ca693` (after K6 #145, A16b #147 and lane PR #148), 22 Nov 2026; `v0.1.5` is the release on PROD. Two items still depend on
 other lanes or on the release date and are marked **partial** with the reason: the live J2
 check on DEV (Lane B's feed routes) and the `v0.2.0` release (23 Dec). The run metrics'
 risk ratios use the K6 metrics library (`qs_quant.metrics`) since 22 Nov.
@@ -217,7 +217,7 @@ frontend's (#139). The Trading API is fuzzed against its own OpenAPI document by
 Schemathesis on every build (`api/test_openapi_fuzz.py`), and the committed OpenAPI exports
 must match the running code, or the frontend's generated types fail the build (#130).
 
-**Releases.** The same pipeline promoted `v0.1.2`, `v0.1.3` and `v0.1.4` from `develop`
+**Releases.** The same pipeline promoted `v0.1.2`, `v0.1.3`, `v0.1.4` and `v0.1.5` from `develop`
 through TEST and ACC to PROD, each with an ACC sign-off and a PROD approval in Jenkins and a
 tag on `main`.
 
@@ -252,7 +252,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR-19 | Workers call other services without a user token | Implemented (#129, #131): platform-issued service tokens in every deployed environment | `libs/qs_template/tests/test_service_tokens.py::test_a_job_calling_thirty_minutes_later_gets_a_valid_token`, `::test_refuses_a_forged_service_token`, `::test_refuses_bad_service_tokens`, `::test_factory_prefers_real_tokens`; `unit/test_http_environment.py::test_with_a_client_secret_the_tokens_come_from_the_platform` |
 | A-FR-20 | Playwright DEV smoke gates promotion to TEST | Implemented | `frontend/e2e/dev-smoke/` (`smoke.spec.ts`, `trading-flow.spec.ts`, `lane-a-spine.spec.ts`); `ci/scripts/playwright-gate.sh`; `quantsim/dev-verified` required on the `develop -> test` PR |
 | A-FR-21 | pr.sh lane support; Jenkins runs both Playwright gates | Implemented; the TEST `demo-spine` gate is wired and switches on with real replay environments on TEST | pr.sh (A22, #84), verified by use; Jenkinsfile Deploy stage, `ci/scripts/playwright-gate.sh` |
-| A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: content-hash builds used for `v0.1.2`, `v0.1.3` and `v0.1.4` (#94, #95, #98); `v0.2.0` release on 23 Dec (A19) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh`; tags `v0.1.2` to `v0.1.4` on `main` |
+| A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: content-hash builds used for `v0.1.2`, `v0.1.3`, `v0.1.4` and `v0.1.5` (#94, #95, #98, #149 to #152); `v0.2.0` release on 23 Dec (A19) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh`; tags `v0.1.2` to `v0.1.4` on `main` |
 
 ### 4.2 Non-functional requirements
 
@@ -414,7 +414,7 @@ Lane A rows, from the merged pull requests (to be confirmed by Ali before submis
 | Trading engine | Accounting core, execution, strategies, `trading_db`, engine job, projections and rebuild, trading API, HTTP feed adapters | #75, #87, #88, #89, #92, #96, #97, #100, #128 |
 | Trading pages | Five trading pages on the generated API client | #130 |
 | Quality | Trading live check, Playwright DEV gate and Lane A spine, contract tests, coverage | #91, #101, #106, #110, #137, #139, #141, #142 |
-| Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, releases `v0.1.2` to `v0.1.4` | #84, #93, #94, #95, #98, #111, #126, #127 |
+| Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, releases `v0.1.2` to `v0.1.5` | #84, #93, #94, #95, #98, #111, #126, #127, #149 to #152 |
 
 ## 8. Tool use disclosure
 
