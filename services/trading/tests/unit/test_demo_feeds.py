@@ -63,11 +63,26 @@ def _settings(environment: str, **values: Any) -> TradingSettings:
     )
 
 
-def _spec(ref: EnvironmentRef) -> RunSpec:
+PORTFOLIO = uuid.UUID("0a170000-0000-4000-8000-000000000003")
+# The DEV live check runs its two portfolios under their own ids, and so does this test
+OTHER_PORTFOLIO = uuid.UUID("0a170000-0000-4000-8000-000000000004")
+# The live check's momentum strategy (ci/scripts/trading_live_check.py check_j2), which
+# trades through the year rather than once
+LIVE_CHECK_MOMENTUM = {"lookback": 20, "top_n": 2, "rebalance_every": 5, "max_position": "0.5"}
+# What the live check leaves out when it compares two runs (ENVIRONMENT_KEYS there)
+ENVIRONMENT_KEYS = frozenset({"spec", "environment", "env_id", "portfolio_id", "order_id"})
+
+
+def _spec(
+    ref: EnvironmentRef,
+    portfolio_id: uuid.UUID = PORTFOLIO,
+    kind: str = "buy_and_hold",
+    params: dict[str, Any] | None = None,
+) -> RunSpec:
     return RunSpec(
-        portfolio_id=uuid.UUID("0a170000-0000-4000-8000-000000000003"),
-        strategy_kind="buy_and_hold",
-        strategy_params={},
+        portfolio_id=portfolio_id,
+        strategy_kind=kind,
+        strategy_params=params or {},
         initial_capital=Decimal("100000"),
         cost_model={"fixed": "1.00", "per_share": "0", "pct": "0.0005"},
         slippage_model={"kind": "fixed_bps", "bps": "10"},
@@ -75,8 +90,12 @@ def _spec(ref: EnvironmentRef) -> RunSpec:
     )
 
 
-async def _run(environment: MarketEnvironment, ref: EnvironmentRef) -> tuple[RunResult, MemorySink]:
+async def _run(
+    environment: MarketEnvironment, ref: EnvironmentRef, spec: RunSpec | None = None
+) -> tuple[RunResult, MemorySink]:
     sink = MemorySink()
+    if spec is not None:
+        return await run_portfolio(spec, environment, sink), sink
     return await run_portfolio(_spec(ref), environment, sink), sink
 
 
@@ -85,11 +104,7 @@ def _payloads(sink: MemorySink) -> list[tuple[str, str]]:
 
     def scrub(value: Any) -> Any:
         if isinstance(value, dict):
-            return {
-                k: scrub(v)
-                for k, v in value.items()
-                if k not in {"spec", "environment", "env_id", "portfolio_id"}
-            }
+            return {k: scrub(v) for k, v in value.items() if k not in ENVIRONMENT_KEYS}
         if isinstance(value, list):
             return [scrub(v) for v in value]
         return value
@@ -101,8 +116,13 @@ def _payloads(sink: MemorySink) -> list[tuple[str, str]]:
 
 
 def test_the_bundled_feeds_are_the_contract_fixtures() -> None:
-    assert REPLAY_FILE.read_bytes() == (CONTRACTS / "replay_ticks_2020.json").read_bytes()
-    assert RUN_FILE.read_bytes() == (CONTRACTS / "synthetic_ticks.json").read_bytes()
+    # Parsed, so a checkout's line endings do not matter (the fixtures declare their
+    # fingerprints, which the file adapter uses instead of the bytes)
+    for bundled, fixture in (
+        (REPLAY_FILE, "replay_ticks_2020.json"),
+        (RUN_FILE, "synthetic_ticks.json"),
+    ):
+        assert json.loads(bundled.read_bytes()) == json.loads((CONTRACTS / fixture).read_bytes())
 
 
 def test_the_file_copy_differs_from_the_replay_only_in_its_id_and_name() -> None:
@@ -128,13 +148,23 @@ async def test_j2_a_replay_over_the_stand_in_equals_the_same_replay_from_its_fil
 
 
 async def test_j2_the_file_copy_gives_the_same_run_under_its_own_id() -> None:
-    """What the DEV live check compares: the hashes differ only because the spec names
-    another environment; the fingerprint, value, fills and every event otherwise match."""
+    """What the DEV live check compares, the way it runs: two portfolios, each under its own
+    id, with the live check's momentum strategy. The hashes differ only because each spec
+    names its own portfolio and environment; the fingerprint, value, fills and every event
+    otherwise match."""
+    http_ref = EnvironmentRef("replay", REPLAY_ID)
     over_http, http_log = await _run(
-        ReplayFeed(_client(), REPLAY_ID), EnvironmentRef("replay", REPLAY_ID)
+        ReplayFeed(_client(), REPLAY_ID),
+        http_ref,
+        _spec(http_ref, PORTFOLIO, "momentum", LIVE_CHECK_MOMENTUM),
     )
     copy_ref = EnvironmentRef("replay", FILE_COPY_ID)
-    over_copy, copy_log = await _run(FileEnvironment(FILE_COPY), copy_ref)
+    over_copy, copy_log = await _run(
+        FileEnvironment(FILE_COPY),
+        copy_ref,
+        _spec(copy_ref, OTHER_PORTFOLIO, "momentum", LIVE_CHECK_MOMENTUM),
+    )
+    assert sum(1 for e in http_log.events if e.type == "ORDER_PLACED") > 1
     assert over_copy.source_fingerprint == over_http.source_fingerprint
     assert over_copy.final_value == over_http.final_value
     assert over_copy.final_seq == over_http.final_seq

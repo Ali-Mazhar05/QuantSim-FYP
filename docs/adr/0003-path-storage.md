@@ -1,6 +1,6 @@
 # ADR 03: Path storage
 
-Status: Proposed. Date: 2026-11-17. Owner: Lane B. Consumer: Lane A (path tick feed).
+Status: Accepted. Date: 2026-11-17. Owner: Lane B. Consumer: Lane A (path tick feed).
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 06: Prototype UI additions only
 
-Status: Proposed. Date: 2026-11-17. Owner: Lane B.
+Status: Accepted. Date: 2026-11-17. Owner: Lane B.
 
 ## Context
 

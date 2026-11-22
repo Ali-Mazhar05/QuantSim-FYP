@@ -1,6 +1,6 @@
 # ADR 02: Correlated synthetic market
 
-Status: Proposed. Date: 2026-11-17. Owner: Lane B. Maths from Lane C (K5 calibration).
+Status: Accepted. Date: 2026-11-17. Owner: Lane B. Maths from Lane C (K5 calibration).
 
 ## Context
 
