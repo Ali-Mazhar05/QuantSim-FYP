@@ -72,3 +72,45 @@ class Getter(Protocol):
     with its timeouts, retries and circuit breaker."""
 
     async def get_json(self, path: str, *, params: Mapping[str, Any] | None = None) -> Any: ...
+
+
+class CorrelationUnavailable(Exception):
+    """The correlation matrix could not be read now (the market service is down or slow). The job is
+    retried. A matrix with undefined cells is not this: that refuses the run (DL-012)."""
+
+
+@dataclass(frozen=True)
+class CorrelationMatrix:
+    """Pearson correlations of adjusted log returns over a window, in the order that was asked for.
+    ``unavailable`` lists the cells that are undefined, with the pair and the reason; the values of
+    those cells are NaN."""
+
+    instrument_ids: tuple[UUID, ...]
+    values: Any  # numpy array, shape (n, n)
+    n_obs: int
+    unavailable: tuple[tuple[str, str, str], ...] = ()  # (row symbol, column symbol, reason)
+
+
+class CorrelationSource(Protocol):
+    async def matrix(self, instrument_ids: list[UUID], start: date, end: date) -> CorrelationMatrix:
+        """The matrix of two or more instruments over ``[start, end]``, in the order given; raises
+        ``CorrelationUnavailable`` or ``InstrumentNotFound``."""
+        ...
+
+
+class RiskCalculator(Protocol):
+    """VaR and CVaR of a sample of returns (K6, Lane C section 7.6)."""
+
+    @property
+    def version(self) -> str: ...
+
+    def var_cvar(self, returns: Any, alpha: float = 0.95) -> tuple[float, float]:
+        """(VaR, CVaR), both positive losses; needs at least 20 returns."""
+        ...
+
+
+class Poster(Protocol):
+    """A JSON POST that returns the body and raises when the answer is an error. The service client
+    (K3) needs a one-line wrapper to offer it (tracker I-02)."""
+
+    async def post_json(self, path: str, *, json: Any) -> Any: ...

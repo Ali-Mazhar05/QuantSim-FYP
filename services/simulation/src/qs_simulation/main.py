@@ -9,12 +9,10 @@ from collections.abc import Mapping
 
 from fastapi import FastAPI
 
-from qs_simulation.adapters.calibrators import QuantCalibrator
 from qs_simulation.api import build_routers
-from qs_simulation.calibrations import KIND as CALIBRATE
-from qs_simulation.calibrations import make_handler
+from qs_simulation.composition import Dependencies, build_handlers, default_dependencies
 from qs_simulation.jobs import HANDLERS, job_queue
-from qs_simulation.ports import Calibrator, PriceWindowSource
+from qs_simulation.ports import Calibrator, CorrelationSource, PriceWindowSource, RiskCalculator
 from qs_simulation.settings import SimulationSettings
 from qs_template import Database, ReadinessCheck, create_app
 from qs_template.auth import Authenticator
@@ -64,20 +62,24 @@ def build_app(
     revocations: RevocationList | None = None,
     authenticator: Authenticator | None = None,
     price_source: PriceWindowSource | None = None,
+    correlation_source: CorrelationSource | None = None,
     calibrator: Calibrator | None = None,
+    risk: RiskCalculator | None = None,
 ) -> FastAPI:
-    """``price_source`` is where calibration reads prices from; without one the calibrate job is not
-    registered and the route answers 503 (the market client needs K3's service tokens)."""
+    """The sources say where calibration and runs read the market from; any left out comes from
+    :func:`default_dependencies`. Without a price source the calibrate job is not registered and its
+    route answers 503; without a correlation source too, the run job and its route likewise."""
     database = database or Database(settings)
     revocations = revocations or RevocationList.from_url(settings.redis_url.get_secret_value())
     auth = authenticator or Authenticator(settings, is_revoked=revocations.is_revoked)
-    calibrator = calibrator or QuantCalibrator()
-    handlers: dict[str, Handler] = dict(HANDLERS)
-    if price_source is not None:
-        handlers[CALIBRATE] = make_handler(
-            database=database, source=price_source, calibrator=calibrator
-        )
-    loops = embedded_loops(settings, database, handlers)
+    defaults = default_dependencies(settings)
+    deps = Dependencies(
+        price_source=price_source or defaults.price_source,
+        correlation_source=correlation_source or defaults.correlation_source,
+        calibrator=calibrator or defaults.calibrator,
+        risk=risk or defaults.risk,
+    )
+    loops = embedded_loops(settings, database, build_handlers(settings, database, deps))
     return create_app(
         settings,
         database=database,
@@ -85,8 +87,8 @@ def build_app(
             auth=auth,
             database=database,
             queue=job_queue(settings),
-            calibrator=calibrator,
-            can_calibrate=price_source is not None,
+            deps=deps,
+            max_run_values=settings.max_run_values,
         ),
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],
         on_startup=[loops.start],
