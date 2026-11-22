@@ -40,7 +40,7 @@ repository or in Jenkins.
 - **Decided:** DL-042 (read API) and DL-043 (stress scenarios); DL-015 resolved by ADR 09 (service
   tokens). Report chapter: `docs/report/lane-b.md`.
 - **Not yet:** the Lane B demo spine has not run on TEST (needs the simulation service deployed); the
-  real-data market tests await a final local run.
+  real-data market tests passed locally (601 of 601 with the corpus).
 
 ## 2026-11-20
 

@@ -166,7 +166,7 @@ Counts are from CI runs of 22 Nov 2026 on the stacked branches.
 
 | Level | Result |
 |---|---|
-| Market service (with B12, B13) | 481 passed, 120 real-data tests skipped without the corpus |
+| Market service (with B12, B13) | 481 passed in CI; with the recorded corpus added, 601 passed and none skipped (the 120 real-data tests included), run locally on the B16 tip on 22 Nov |
 | Simulation service (with B10 to B17) | 417 passed |
 | Frontend | 21 test files, all passing |
 | Migrations | market 0001 to 0005 and simulation 0001 to 0003 apply from empty, reverse fully and apply again |
@@ -189,8 +189,8 @@ stressed run reads its inputs from its parent, nothing from the market (DL-043).
 
 ## 7. What is not proved or not built
 
-- **The 119 real-data market tests** need the recorded corpus and are skipped in CI; they ran locally on
-  the B12 branch before the merges. A final run on the finished stack is still to do.
+- **The real-data market tests** need the recorded corpus and are skipped in CI; all 120 passed in a local run on the finished stack (601 of 601 market tests); they also ran on
+  the B12 branch before the merges. CI itself still skips them.
 - **The spine (B22)** is written and type-checked but has not run: TEST needs the simulation service, its
   market URL and service credentials in compose (Lane A's files), and the recorded data (Lane C).
 - **B-FR-07** (live stream) was cut by design. **The admin queue-depth route** (B-NFR-13) and the
