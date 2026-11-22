@@ -105,7 +105,7 @@ def build_replay_routers(
     Creator = Annotated[
         Principal, Depends(auth.require_capability(Capability.CREATE_MARKET_ENVIRONMENTS))
     ]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def writer(request: Request, actor: Creator) -> AsyncIterator[ReplaySessionService]:
         async with database.transaction() as session:
@@ -116,7 +116,7 @@ def build_replay_routers(
             )
             yield ReplaySessionService(session, actor_id=actor.user_id, clock=clock)
 
-    Writer = Annotated[ReplaySessionService, Depends(writer)]
+    Writer = Annotated[ReplaySessionService, Depends(writer, scope="function")]
 
     @router.get("", responses={401: {}, 403: {}})
     async def list_sessions(
