@@ -207,7 +207,9 @@ class Reads:
                 (
                     await self._session.execute(
                         select(instrument_ref.c.instrument_id, instrument_ref.c.symbol).where(
-                            instrument_ref.c.instrument_id.in_({i for v in wanted.values() for i in v})
+                            instrument_ref.c.instrument_id.in_(
+                                {i for v in wanted.values() for i in v}
+                            )
                         )
                     )
                 ).all()

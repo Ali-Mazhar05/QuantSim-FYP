@@ -121,9 +121,9 @@ async def test_the_demo_run_of_five_names_1000_paths_252_steps_completes_and_is_
     assert done["status"] == "completed" and done["storage_mode"] == "full"
     [rows] = await run_world.sql("SELECT count(*) AS n FROM path_value")
     assert rows.n == 1_260_000
-    # measured on the development machine (generation, statistics, COPY of 1.26 million rows);
-    # about 75 s here and 150 s on a loaded machine (PostgreSQL checks path_value's foreign key row by
-    # row, DL-041); the bound catches a regression of several times, not a busy host
+    # measured on the development machine (generation, statistics, COPY of 1.26 million rows):
+    # about 75 s here and 150 s on a loaded machine (PostgreSQL checks the foreign key of
+    # path_value row by row, DL-041); the bound catches a regression of several times
     assert submitted < 0.8, f"submit took {submitted:.2f}s"
     assert ran < 300, f"the demo run took {ran:.1f}s"
     print(f"\nDEMO submit={submitted * 1000:.0f} ms, run={ran:.1f} s, rows={rows.n}")
