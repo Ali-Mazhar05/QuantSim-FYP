@@ -1,8 +1,13 @@
 """C1: the tick contract. Valid samples pass and every invalid sample fails, each for the reason
 its name says (B-US-01). The fixtures that follow the contract are checked in test_fixtures.py."""
 
+import uuid
+from datetime import UTC, date, datetime
+
 import pytest
 from jsonschema import Draft202012Validator
+
+from qs_market.api_feeds import Tick
 
 from .contract_support import CONTRACTS, TICK_SCHEMA, load, tick_problems
 
@@ -58,3 +63,31 @@ def test_consumers_ignore_fields_they_do_not_know() -> None:
     sample = load(SAMPLES / "valid" / "replay_class_share_with_extra_field.json")
     assert "a_field_added_in_a_later_version" in sample
     assert tick_problems(sample) == []
+
+
+@pytest.mark.parametrize(
+    ("env_type", "session_date", "path_index"),
+    [("replay", date(2020, 1, 2), None), ("replay", None, None), ("synthetic", None, 0)],
+)
+def test_a_serialised_tick_model_follows_the_contract(
+    env_type: str, session_date: date | None, path_index: int | None
+) -> None:
+    tick = Tick(
+        env_id=uuid.uuid4(),
+        env_type=env_type,
+        source_fingerprint="xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1",
+        seq=1,
+        session=0,
+        session_date=session_date,
+        ts=datetime(2020, 1, 2, 21, 0, tzinfo=UTC),
+        instrument_id=uuid.uuid4(),
+        symbol="AAPL",
+        open="73.8782285800",
+        high="75.1500000000",
+        low="73.7978000000",
+        close="75.0875000000",
+        volume="135480400.00000000",
+        path_index=path_index,
+    ).model_dump(mode="json")
+    assert tick["session_date"] == (session_date.isoformat() if session_date else None)
+    assert tick_problems(tick) == []

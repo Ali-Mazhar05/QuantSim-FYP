@@ -56,6 +56,11 @@ class EnvironmentOut(BaseModel):
     status: Literal["draft", "ready", "active"]
     created_by: uuid.UUID
     created_at: datetime
+    source_fingerprint: str | None = Field(
+        default=None, description="Frozen at activation; null until the environment is activated"
+    )
+    activated_at: datetime | None = Field(default=None, description="Null until activated")
+    activated_by: uuid.UUID | None = Field(default=None, description="Null until activated")
 
 
 def build_environment_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]:
@@ -65,7 +70,7 @@ def build_environment_routers(*, auth: Authenticator, database: Database) -> lis
     Creator = Annotated[
         Principal, Depends(auth.require_capability(Capability.CREATE_MARKET_ENVIRONMENTS))
     ]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def writer(request: Request, actor: Creator) -> AsyncIterator[EnvironmentService]:
         async with database.transaction() as session:
@@ -76,7 +81,7 @@ def build_environment_routers(*, auth: Authenticator, database: Database) -> lis
             )
             yield EnvironmentService(session, actor_id=actor.user_id)
 
-    Writer = Annotated[EnvironmentService, Depends(writer)]
+    Writer = Annotated[EnvironmentService, Depends(writer, scope="function")]
 
     @router.get("", responses={401: {}, 403: {}, 422: {}})
     async def list_environments(

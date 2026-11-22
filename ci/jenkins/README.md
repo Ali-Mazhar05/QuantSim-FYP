@@ -19,7 +19,8 @@ on clicks in the UI.
 | `init-env.sh` | Prepares a host: agent SSH key, `.env`, secret check |
 | `bootstrap-server.sh` | Turns a fresh Ubuntu server into the CI server |
 | `host.sh`, `lease.sh` | Taking turns hosting: state hand-over through R2 and the host lease |
-| `backup.sh` | Nightly backup of Jenkins and the agent's recorded releases |
+| `backup.sh`, `backup-databases.sh` | Nightly backup of Jenkins, the agent's recorded releases and the ACC/PROD databases |
+| `install-backup-timer.sh` | Schedules `backup.sh` nightly on a machine hosting Jenkins with `host.sh` |
 | `secrets/` | Credential files, never committed (see `secrets/README.md`) |
 
 ## How it works
@@ -62,6 +63,9 @@ ci/jenkins/host.sh stop      # hand over: stop Jenkins here and upload its state
 - `start` fetches the latest state if someone else hosted since, opens a free public
   link (`https://<random>.trycloudflare.com`, shown by `status`), and rebuilds `develop`
   and `test` so DEV and TEST come up on this laptop from the same images.
+- `start` also points the `quantsim-jenkins` GitHub App's webhook at the new link
+  (`github-webhook.sh`, signed with `secrets/github_app_key`), so merges build at once.
+  If the tunnel restarts on its own and gets a new link, run `host.sh webhook`.
 - Always `stop` before closing the laptop for the day, so the next person gets your
   latest state.
 - Everyone signs in with their own account from `secrets/team_users` (below); the
@@ -184,9 +188,87 @@ laptops.
 
 `backup.sh` archives the `jenkins_home` and `agent_home` volumes (without workspaces,
 caches and plugins, which come back by themselves) into `/var/backups/quantsim`,
-keeping 14 of each. The CI server runs it nightly; with R2 credentials in
-`/etc/quantsim-backup.env` it also copies them off-site. Restore instructions are at
-the top of the script.
+keeping 14 of each, then runs `backup-databases.sh` (below). The CI server runs it
+nightly from cron; a machine hosting Jenkins with `host.sh` runs it from a systemd timer
+(below). With R2 credentials in `/etc/quantsim-backup.env` it also copies everything
+off-site. Volume restore instructions are at the top of the script.
+
+### Database backups
+
+`backup-databases.sh` dumps every database of the ACC and PROD stacks (compose projects
+`qs-acc` and `qs-prod`: `platform`, `market`, `simulation`, `risk`, `trading`, and any
+added later) with `pg_dump -Fc`, run inside each stack's postgres container as
+`qs_admin`. An environment that is not running is skipped. Every dump is checked
+(`pg_restore --list` and a full read of the archive); a failed or unreadable dump makes
+the run exit non-zero and is never mistaken for a good one.
+
+| What | Where |
+|---|---|
+| Dumps | `/var/backups/quantsim/db/<env>-<db>-<UTC stamp>.dump`, newest 14 per env and db, root only |
+| Off-site | R2 `<bucket>/db/` (dumps, kept 15 days) and `<bucket>/jenkins/` (volume archives) |
+| Schedule | 03:30 nightly; if the machine was off, shortly after it next boots |
+| Log | `/var/log/quantsim-backup.log` (and `journalctl -u quantsim-backup`) |
+
+**One-time setup on the machine running ACC and PROD** (as a sudoer, from the clone):
+
+```bash
+# 1. R2 credentials, readable by root only (values from ci/jenkins/secrets/)
+sudo install -m 600 /dev/null /etc/quantsim-backup.env
+sudo tee /etc/quantsim-backup.env >/dev/null <<EOF
+R2_ACCOUNT_ID=$(cat ci/jenkins/secrets/cloudflare_account_id)
+R2_ACCESS_KEY_ID=$(cat ci/jenkins/secrets/r2_access_key_id)
+R2_SECRET_ACCESS_KEY=$(cat ci/jenkins/secrets/r2_secret_access_key)
+R2_BUCKET=quantsim-ci
+EOF
+# 2. Nightly timer (idempotent; re-run after moving the clone)
+sudo ci/jenkins/install-backup-timer.sh
+# 3. One backup now, and its result
+sudo systemctl start quantsim-backup.service
+systemctl status quantsim-backup.service --no-pager; tail -n 30 /var/log/quantsim-backup.log
+```
+
+**Check it works:** `sudo ls -lh /var/backups/quantsim/db` shows ten fresh `.dump` files
+when both environments run; `systemctl list-timers quantsim-backup.timer` shows the next
+run; the R2 copy is listed in the Cloudflare dashboard under R2 → `quantsim-ci` → `db/`,
+or with:
+
+```bash
+sudo bash -c 'source /etc/quantsim-backup.env
+  export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+  docker run --rm -e RCLONE_CONFIG_R2_TYPE=s3 -e RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+    -e RCLONE_CONFIG_R2_ACCESS_KEY_ID -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY \
+    -e RCLONE_CONFIG_R2_ENDPOINT="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" \
+    rclone/rclone:1.71@sha256:3103526c506266a9ecdf064efe99bf3677d92ef6407af124d8c56b4f49cbaa51 \
+    lsl "r2:$R2_BUCKET/db"'
+```
+
+**Restore one database** (here `market` of ACC; use `qs-prod` for PROD). The commands
+stop the rest of that stack (postgres keeps running) and start it again afterwards; a
+redeploy from Jenkins works too and also re-runs `db-init`. Every database has the TimescaleDB
+extension, so the restore is wrapped in `timescaledb_pre_restore()` /
+`timescaledb_post_restore()`, and the stack must run the same TimescaleDB version as
+when the dump was taken.
+
+```bash
+env=acc db=market file=/var/backups/quantsim/db/acc-market-<stamp>.dump
+c="$(docker ps -q --filter label=com.docker.compose.project=qs-$env \
+      --filter label=com.docker.compose.service=postgres)"
+# Stop the rest of the stack so nothing writes during the restore
+others="$(docker ps --filter label=com.docker.compose.project=qs-$env --format '{{.Names}}' | grep -v -- -postgres-)"
+docker stop $others
+docker exec -i "$c" psql -U qs_admin -d postgres -v ON_ERROR_STOP=1 \
+  -c "DROP DATABASE IF EXISTS $db WITH (FORCE)" -c "CREATE DATABASE $db OWNER $db" \
+  -c "REVOKE ALL ON DATABASE $db FROM PUBLIC" -c "GRANT CONNECT, TEMPORARY ON DATABASE $db TO $db"
+docker exec -i "$c" psql -U qs_admin -d "$db" -v ON_ERROR_STOP=1 \
+  -c 'CREATE EXTENSION IF NOT EXISTS timescaledb' -c 'SELECT timescaledb_pre_restore()'
+sudo cat "$file" | docker exec -i "$c" pg_restore -U qs_admin -d "$db" --exit-on-error
+docker exec -i "$c" psql -U qs_admin -d "$db" -c 'SELECT timescaledb_post_restore()'
+docker start $others
+```
+
+A dump fetched from R2 restores the same way (`rclone copy r2:quantsim-ci/db/<file> .`
+with the environment above). To look inside a dump without restoring it:
+`sudo cat "$file" | docker exec -i "$c" pg_restore --list`.
 
 ## Security notes
 

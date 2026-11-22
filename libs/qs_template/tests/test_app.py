@@ -191,6 +191,22 @@ def test_a_listed_website_may_call_the_api_including_on_localhost() -> None:
     )
 
 
+def test_a_listed_website_may_send_an_idempotency_key() -> None:
+    response = cors_client(SITE).options(
+        "/api/sample/items/1",
+        headers={
+            "Origin": SITE,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization, content-type, idempotency-key",
+        },
+    )
+    assert response.status_code == 200
+    allowed = {
+        h.strip().lower() for h in response.headers["access-control-allow-headers"].split(",")
+    }
+    assert {"authorization", "content-type", "idempotency-key"} <= allowed
+
+
 def test_other_websites_are_not_allowed() -> None:
     response = preflight(cors_client(SITE), "https://evil.example")
     # Refused, and without an allow-origin header the browser blocks the call

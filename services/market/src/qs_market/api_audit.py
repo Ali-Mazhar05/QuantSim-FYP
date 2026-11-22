@@ -229,7 +229,7 @@ async def market_audit_feed(session: AsyncSession, limit: int) -> list[AuditEven
 def build_audit_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]:
     router = APIRouter(tags=["audit"])
     Auditor = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_AUDIT_LOG))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     @router.get("/audit", responses={401: {}, 403: {}})
     async def audit_feed(

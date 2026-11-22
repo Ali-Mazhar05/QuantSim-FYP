@@ -29,6 +29,7 @@ from qs_template.errors import ServiceError
 from qs_template.jobs import IdempotencyConflict, JobQueue
 
 NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
+NOT_FOUND = "urn:quantsim:problem:not-found"
 
 # the same paging convention as the market service (api_data.py)
 DEFAULT_PAGE = 500
@@ -219,6 +220,18 @@ def _not_built(what: str) -> ServiceError:
     )
 
 
+def require_path(path: int, n_paths: int) -> None:
+    """A path outside the run (``path >= n_paths``) is 404, like an unknown run."""
+    if path >= n_paths:
+        raise ServiceError(
+            404,
+            "Path not found",
+            f"This run has {n_paths} paths, numbered 0 to {n_paths - 1}; there is no path {path}.",
+            type_=NOT_FOUND,
+        )
+
+
+
 def build_run_routers(
     *,
     auth: Authenticator,
@@ -233,7 +246,7 @@ def build_run_routers(
     router = APIRouter(prefix="/runs", tags=["runs"])
     Reader = Annotated[Principal, Depends(auth.principal)]
     Launcher = Annotated[Principal, Depends(auth.require_capability(Capability.LAUNCH_SIMULATIONS))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     def service(session: AsyncSession) -> RunService:
         return RunService(session, queue, max_run_values=max_run_values, risk=risk)
@@ -249,7 +262,7 @@ def build_run_routers(
             )
             yield session, actor
 
-    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer)]
+    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer, scope="function")]
 
     @router.post(
         "",
@@ -335,7 +348,7 @@ def build_run_routers(
                 }
             },
             401: {},
-            404: {},
+            404: {"description": "No such run, or no such path in it (path >= n_paths)"},
             422: {},
             501: {},
         },
@@ -343,7 +356,9 @@ def build_run_routers(
     async def read_path_ticks(
         run_id: uuid.UUID,
         _: Reader,
-        path: Annotated[int, Query(ge=0, description="Which simulated path")] = 0,
+        path: Annotated[
+            int, Query(ge=0, description="Which simulated path, 0 to n_paths - 1; required")
+        ],
         after_seq: Annotated[int, Query(ge=0, description="Return the ticks after this seq")] = 0,
         limit: Annotated[
             int, Query(ge=1, le=MAX_PAGE, description="Ticks per page")

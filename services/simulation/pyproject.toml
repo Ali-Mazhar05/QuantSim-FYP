@@ -5,6 +5,7 @@ description = "QuantSim Simulation service"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "qs-template",
+  "qs-quant[calibration]",
   "alembic>=1.14",
   "numpy>=2.0",
   "xxhash>=3.4",
@@ -15,6 +16,7 @@ qs-simulation = "qs_simulation.cli:main"
 
 [tool.uv.sources]
 qs-template = { workspace = true }
+qs-quant = { workspace = true }
 
 [dependency-groups]
 dev = [

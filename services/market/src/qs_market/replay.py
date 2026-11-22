@@ -26,7 +26,6 @@ from qs_template.errors import ServiceError
 NOT_A_REPLAY = "urn:quantsim:problem:not-a-replay-environment"
 UNSUPPORTED_FREQUENCY = "urn:quantsim:problem:unsupported-frequency"
 NOT_READY = "urn:quantsim:problem:environment-not-ready"
-MISSING_ADJUSTED = "urn:quantsim:problem:missing-adjusted-prices"
 
 ADJUSTED = (bar.c.adj_open, bar.c.adj_high, bar.c.adj_low, bar.c.adj_close, bar.c.adj_volume)
 # Symbols compare by code point ("C" collation), exactly as feeds.ordered does in Python, so the
@@ -61,17 +60,6 @@ def check_replayable(environment: dict[str, Any]) -> None:
             "replay; ingest the data, then create or recheck the environment.",
             type_=NOT_READY,
         )
-
-
-def _missing(missing: dict[str, int]) -> ServiceError:
-    error = feeds.MissingAdjustedPrices(missing)
-    return ServiceError(
-        422,
-        "Adjusted prices are missing",
-        f"{error}. Raw prices are never substituted for adjusted ones.",
-        type_=MISSING_ADJUSTED,
-        extra={"missing": missing},
-    )
 
 
 @dataclass(frozen=True)
@@ -147,7 +135,7 @@ class ReplayService:
                     feed_order=False,
                 ).group_by(instrument.c.symbol)
             )
-            raise _missing({symbol: count for symbol, count in counted})
+            raise feeds.MissingAdjustedPrices({symbol: count for symbol, count in counted})
         sessions = {day: index for index, day in enumerate(per_session)}
         return Window(
             feeds.fingerprint_of_blocks(blocks), sum(per_session.values()), sessions, per_session
