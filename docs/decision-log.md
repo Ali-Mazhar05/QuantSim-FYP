@@ -61,6 +61,7 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-040 | VaR and CVaR before K6 is installed | Adopted | team |
 | DL-041 | What the demo-size run costs, and why | Adopted | team |
 | DL-042 | The read API: ticks, dates, fingerprint, lists, quantiles | Adopted | team |
+| DL-043 | Stress scenarios: what they change and how a stressed run is made | Adopted | team |
 
 ---
 
@@ -615,3 +616,32 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 - **Affects:** `reads.py`, `api_runs.py`, `api_calibrations.py`, `domain/calendar.py`; Lane A's synthetic
   adapter; the Results, Simulations and Create Portfolio pages (B20).
 - **If changed:** the order or the fingerprint is part of the C1 contract: change it with Lane A.
+
+### DL-043 Stress scenarios: what they change and how a stressed run is made
+
+- **Asked:** what exactly do a price shock and a volatility multiplier do to a run, and what is a stressed run?
+- **Decided:**
+  - **Scenarios are rows** (`scenario`: `code`, `name`, `type`, `params`). Two types. They can be added with
+    `POST /scenarios` (quants and admins) or inserted with SQL; no code changes. Two are seeded as examples
+    (migration 0003): `flash_crash` (20% at step 21) and `vol_spike` (three times normal over steps 21 to 63).
+  - **`price_shock`** `{drop, at_step, recovery_steps = 0}`: from step `at_step` every price of every instrument
+    is multiplied by `1 - drop`. With `recovery_steps` above 0 the fall heals in a straight line and is gone at
+    `at_step + recovery_steps`. Steps count from 1 (the first generated step, tick `session` 0).
+  - **`vol_multiplier`** `{multiplier, from_step, to_step}`: the diffusion volatility is `multiplier` times its
+    calibrated value over those steps, both included. It is applied inside the generators (an optional
+    per-step scale), so the Ito correction of GBM and the noise of OU follow the stressed value; Merton's jumps are
+    not scaled. Output with no scale is bit for bit what it was.
+  - **A stressed run** is a derived run: the same model, seed, paths, steps, instruments, start prices, parameters
+    and stored correlation as its parent, read from the parent, with the scenario on top. So it uses the parent's
+    shocks and differs from it only by the stress, and nothing is read from the market. It has `parent_run_id`
+    and `scenario`, its own statistics, quantiles, paths (by the storage rule) and median path, and its ticks
+    carry `scenario`. The parent is never written to (tested byte for byte).
+  - **Refusals:** a parameter out of its bounds is 422 naming the field (`errors: [{field, message}]`); a step
+    beyond the run's length is 422 naming `at_step` or `to_step`; an unknown scenario or parent is 404; a parent
+    that has not completed is 409; viewers and analysts are 403.
+- **Why:** reusing the parent's shocks makes "what did the crash do" a clean difference; scaling sigma where it
+  enters (not by multiplying shocks afterwards) keeps the stressed model a real GBM or OU with a larger sigma.
+- **Affects:** `domain/scenarios.py`, the generators, `stress.py`, `api_scenarios.py`, `reads.py` (ticks and the
+  fingerprint include the scenario), Lane A's stressed portfolio (demo step 4).
+- **If changed:** a new type is a new `type` value, a Pydantic model, a CHECK in the database and an overlay
+  function; the API and the tick feed do not change.

@@ -3,7 +3,12 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from qs_simulation.domain.generators.checks import Array, check_param, check_shocks
+from qs_simulation.domain.generators.checks import (
+    Array,
+    check_param,
+    check_shocks,
+    check_vol_scale,
+)
 
 Counts = NDArray[np.int64]
 
@@ -19,6 +24,7 @@ def simulate_merton(
     shocks: Array,
     counts: Counts,
     jump_normals: Array,
+    vol_scale: Array | None = None,
 ) -> Array:
     """Prices at steps 1..steps for every path and instrument.
 
@@ -27,12 +33,14 @@ def simulate_merton(
     sigma_j^2)``. Given ``N`` that sum is exactly ``N mu_j + sigma_j sqrt(N) Z`` with ``Z`` a
     standard normal (``jump_normals``). ``k = exp(mu_j + sigma_j^2/2) - 1`` is the mean relative
     jump, so subtracting ``lam k`` keeps ``E[S(t)] = S(0) e^(mu t)``. Jumps are independent
-    across instruments; only the diffusion shocks are correlated.
+    across instruments; only the diffusion shocks are correlated. ``vol_scale``, when given,
+    multiplies the diffusion sigma at each step (a stress scenario); the jumps are unchanged.
     """
     n = check_shocks(shocks, dt)
     check_param("s0", s0, n, positive=True)
     check_param("mu", mu, n)
     check_param("sigma", sigma, n, positive=True)
+    check_vol_scale(vol_scale, shocks.shape[1])
     check_param("lam", lam, n, non_negative=True)
     check_param("mu_j", mu_j, n)
     check_param("sigma_j", sigma_j, n, non_negative=True)
@@ -44,6 +52,7 @@ def simulate_merton(
         raise ValueError("jump_normals must be finite")
     k = np.expm1(mu_j + 0.5 * sigma_j**2)
     jumps = counts * mu_j + sigma_j * np.sqrt(counts) * jump_normals
-    log_steps = (mu - 0.5 * sigma**2 - lam * k) * dt + sigma * np.sqrt(dt) * shocks + jumps
+    sig = sigma if vol_scale is None else sigma * vol_scale[:, None]  # the diffusion only
+    log_steps = (mu - 0.5 * sig**2 - lam * k) * dt + sig * np.sqrt(dt) * shocks + jumps
     out: Array = s0 * np.exp(np.cumsum(log_steps, axis=1))
     return out

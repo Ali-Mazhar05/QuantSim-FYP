@@ -26,6 +26,8 @@ from qs_simulation.runs import KIND as MONTE_CARLO
 from qs_simulation.runs import make_handler as make_run_handler
 from qs_simulation.runs import shard_workers
 from qs_simulation.settings import SimulationSettings
+from qs_simulation.stress import KIND as STRESS
+from qs_simulation.stress import make_handler as make_stress_handler
 from qs_template import Database
 from qs_template.jobs import Handler
 from qs_template.service_client import ServiceClient, service_tokens_from_settings
@@ -81,6 +83,13 @@ def build_handlers(
 ) -> Mapping[str, Handler]:
     """The handlers a worker can run: those whose dependencies exist."""
     handlers: dict[str, Handler] = dict(HANDLERS)
+    # a stressed run reads its parent from the database, so it needs no market source
+    handlers[STRESS] = make_stress_handler(
+        database=database,
+        risk=deps.risk,
+        workers=shard_workers(settings.shard_workers),
+        max_attempts=settings.job_max_attempts,
+    )
     if deps.price_source is not None:
         handlers[CALIBRATE] = make_calibration_handler(
             database=database, source=deps.price_source, calibrator=deps.calibrator

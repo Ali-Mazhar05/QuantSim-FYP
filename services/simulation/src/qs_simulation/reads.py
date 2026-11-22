@@ -236,7 +236,12 @@ class Reads:
     async def _completed(self, run_id: uuid.UUID) -> Any:
         row = (
             await self._session.execute(
-                select(run, scenario.c.code.label("scenario_code"))
+                select(
+                    run,
+                    scenario.c.code.label("scenario_code"),
+                    scenario.c.type.label("scenario_type"),
+                    scenario.c.params.label("scenario_params"),
+                )
                 .select_from(run.outerjoin(scenario, scenario.c.id == run.c.scenario_id))
                 .where(run.c.id == run_id)
             )
@@ -345,7 +350,8 @@ class Reads:
             f"seed={row.seed}",
             f"paths={row.n_paths}",
             f"steps={row.n_steps}",
-            f"scenario={row.scenario_code or '-'}",
+            f"scenario={row.scenario_code or '-'}:{row.scenario_type}:"
+            f"{json.dumps(row.scenario_params, sort_keys=True)}",
             json.dumps(matrix, separators=(",", ":")),
             *(
                 f"{m.instrument_id}:{m.s0}:{json.dumps(m.params, sort_keys=True)}"
