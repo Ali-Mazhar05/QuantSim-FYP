@@ -92,12 +92,14 @@ export function fanOf(q: Quantiles, instrumentId?: string) {
 
 /** A calibration the model refused (too little history, not mean-reverting ...), with its reason. */
 export class CalibrationRefusedError extends Error {
-  constructor(
-    readonly symbol: string,
-    readonly reason: string,
-  ) {
+  readonly symbol: string
+  readonly reason: string
+
+  constructor(symbol: string, reason: string) {
     super(`${symbol}: ${reason}`)
     this.name = 'CalibrationRefusedError'
+    this.symbol = symbol
+    this.reason = reason
   }
 }
 

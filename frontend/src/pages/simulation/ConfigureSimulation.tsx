@@ -44,14 +44,14 @@ export default function ConfigureSimulation() {
   const runKey = useRef(crypto.randomUUID())
 
   const chosen = MODELS.find((m) => m.id === model)
-  const symbols = active?.symbols ?? []
+  const symbols = active?.instruments ?? []
   const fitted = active
     ? calibrations?.find(
         (c) =>
           c.calibration?.model === model &&
-          c.calibration.instrument_id === active.instrument_ids[0] &&
-          c.calibration.window_start === active.start_date &&
-          c.calibration.window_end === active.end_date,
+          c.calibration.instrument_id === active.instrumentIds[0] &&
+          c.calibration.window_start === active.start &&
+          c.calibration.window_end === active.end,
       )
     : undefined
   const busy = phase !== 'idle'
@@ -61,13 +61,13 @@ export default function ConfigureSimulation() {
     setProblem(null)
     setPhase('fitting')
     try {
-      const instruments = active.instrument_ids.map((id, i) => ({ id, symbol: active.symbols[i] ?? id }))
+      const instruments = active.instrumentIds.map((id, i) => ({ id, symbol: active.instruments[i] ?? id }))
       const existing = calibrations ?? []
       const ids = await ensureCalibrations({
         model,
         instruments,
-        start: active.start_date,
-        end: active.end_date,
+        start: active.start,
+        end: active.end,
         existing,
       })
       await queryClient.invalidateQueries({ queryKey: simulationKeys.calibrations() })
@@ -157,7 +157,7 @@ export default function ConfigureSimulation() {
 
         <Panel
           title="Calibration Summary"
-          subtitle={active ? `${chosen?.name} on ${active.start_date} to ${active.end_date}` : undefined}
+          subtitle={active ? `${chosen?.name} on ${active.start} to ${active.end}` : undefined}
           action={
             <StatusPill tone={fitted ? 'success' : 'neutral'}>{fitted ? 'Fitted' : 'Fitted when the run starts'}</StatusPill>
           }
