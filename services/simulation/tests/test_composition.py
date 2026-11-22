@@ -60,6 +60,7 @@ async def test_the_sources_read_the_market_with_the_service_token() -> None:
                 "end": "2020-12-31",
                 "symbols": ["AAPL", "KO"],
                 "matrix": [["1", "0.4"], ["0.4", "1"]],
+                "n_obs": 250,
             }
             return httpx.Response(200, json={"windows": [window]})
         return httpx.Response(404, json={"title": "not found"})
