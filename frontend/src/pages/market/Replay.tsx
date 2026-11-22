@@ -43,7 +43,7 @@ export default function Replay() {
 
   let body
   if (error) {
-    body = <p role="alert" className="text-sm text-[var(--color-risk-severe)]">{error}</p>
+    body = <p role="alert" className="text-sm text-[var(--color-risk-severe)]">{error.message}</p>
   } else if (environments === null || (active && !current)) {
     body = <p className="text-sm text-[var(--color-text-muted)]">Loading…</p>
   } else if (!active) {
