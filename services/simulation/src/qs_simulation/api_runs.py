@@ -231,7 +231,6 @@ def require_path(path: int, n_paths: int) -> None:
         )
 
 
-
 def build_run_routers(
     *,
     auth: Authenticator,
