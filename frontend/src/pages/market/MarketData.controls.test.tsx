@@ -156,9 +156,14 @@ describe('Market Data controls', () => {
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2023-01-03' } })
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2023-01-10' } })
     expect(await screen.findByText('Daily · 2023-01-03 to 2023-01-10')).toBeInTheDocument()
-    // the label changes first; the request follows, so wait for it
-    await waitFor(() => expect(lastOf(seen.candles).searchParams.get('to')).toBe('2023-01-10'), { timeout: 5000 })
-    expect(lastOf(seen.candles).searchParams.get('from')).toBe('2023-01-03')
+    // the label changes first; the requests follow in no fixed order, so look for the exact one
+    await waitFor(() =>
+      expect(
+        seen.candles.some(
+          (u) => u.searchParams.get('from') === '2023-01-03' && u.searchParams.get('to') === '2023-01-10',
+        ),
+      ).toBe(true),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Reset window' }))
     expect(await screen.findByText('Daily · last 90 sessions')).toBeInTheDocument()
   })
