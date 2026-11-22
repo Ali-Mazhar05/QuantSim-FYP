@@ -4,6 +4,17 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-11-22
+
+**Delivered (Iteration 2, contract K6, into `develop` by #145)**
+- **Metrics library (K6, #145):** `libs/qs_quant` with total return, annualised volatility,
+  Sharpe, max drawdown, turnover and historical VaR/CVaR (Lane C guide §7.6). Fixture
+  values match an exact rational reference to 1e-12; 200-example property tests (scale
+  invariance, max drawdown in [0, 1], CVaR >= VaR, determinism); each function under
+  50 ms on 10,000 points; purity check; 100% line coverage. Consumers: A16 run metrics
+  (Lane A) and B16 Monte Carlo VaR/CVaR (Lane B). The trading, simulation and risk images
+  now rebuild when the library changes (`ci/components.conf`).
+
 ## 2026-11-20
 
 **Delivered (Iteration 2, Lane A, through `lane/a-trading` into `develop` by #99 and #102)**

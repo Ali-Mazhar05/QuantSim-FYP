@@ -20,12 +20,14 @@ import uuid
 from collections.abc import Callable
 
 from qs_template import Database
+from qs_template.instrument_ref import instrument_consumer
 from qs_template.jobs import Worker
 from qs_template.kafka import KafkaPublisher
 from qs_template.logging import configure_logging
 from qs_template.messaging import OutboxRelay
 from qs_trading.engine.store import PortfolioNotFound
 from qs_trading.jobs import build_handlers, environment_factory, job_queue
+from qs_trading.models import instrument_ref
 from qs_trading.projections.rebuild import ChainBroken, rebuild_portfolio, verify_portfolio
 from qs_trading.settings import TradingSettings
 
@@ -99,10 +101,24 @@ async def _relay() -> None:
     publisher = KafkaPublisher(settings.kafka_bootstrap_servers, client_id="trading-relay")
     await publisher.start()
     relay = OutboxRelay(database, publisher)
-    _on_signals(asyncio.get_running_loop(), relay.stop)
+    # Beside the outbox, the relay keeps instrument_ref in step with market (I2-14)
+    instruments = instrument_consumer(
+        database,
+        instrument_ref,
+        bootstrap_servers=settings.kafka_bootstrap_servers,
+        service="trading",
+        dead_letters=publisher,
+    )
+
+    def stop() -> None:
+        relay.stop()
+        instruments.stop()
+
+    _on_signals(asyncio.get_running_loop(), stop)
     try:
-        await relay.run()
+        await asyncio.gather(relay.run(), instruments.run())
     finally:
+        stop()
         await publisher.stop()
         await database.close()
 

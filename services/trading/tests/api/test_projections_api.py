@@ -20,8 +20,10 @@ from api_support import (
     portfolio_body,
 )
 
+from qs_quant import metrics as k6
 from qs_template.auth import Role
-from qs_trading.metrics import RunFigures, SeriesMetrics
+from qs_trading.metrics import PENDING, RunFigures, SeriesMetrics, to_ratio
+from qs_trading.schemas import money_text
 
 VIEWER = Role.VIEWER
 
@@ -298,7 +300,7 @@ async def test_rebuild_is_admin_only_and_reports_identical_differs_and_applied()
         assert refused.status_code == 422
 
 
-async def test_metrics_count_trades_and_costs_and_leave_the_ratios_pending() -> None:
+async def test_metrics_count_trades_and_costs_and_compute_the_ratios_with_k6() -> None:
     store = FakeStore()
     async with client_for(fake_app(store)) as http:
         idle = await _portfolio(http)
@@ -333,7 +335,44 @@ async def test_metrics_count_trades_and_costs_and_leave_the_ratios_pending() -> 
         assert Decimal(body["final_value"]) == last_value["value"]
         assert body["final_seq"] == store.stored_logs[portfolio_id][-1].seq
         assert body["final_hash"] == store.stored_logs[portfolio_id][-1].hash
-        assert body["total_return"] is None and len(body["pending"]) == 5
+
+        # A-FR-14: the ratios equal K6 on the initial capital followed by the value series
+        rows = sorted(stored.values.values(), key=lambda row: (row["session"], row["seq"]))
+        series = [Decimal("10000.00"), *(row["value"] for row in rows)]
+        returns = k6.simple_returns(series)
+        notional = sum((row["fill_price"] * row["quantity"] for row in fills), Decimal(0))
+        expected = {
+            "total_return": to_ratio(k6.total_return(series)),
+            "volatility": to_ratio(k6.annualised_volatility(returns)),
+            "sharpe": to_ratio(k6.sharpe(returns)),
+            "max_drawdown": to_ratio(k6.max_drawdown(series)),
+            "turnover": to_ratio(k6.turnover([notional], series)),
+        }
+        for name, value in expected.items():
+            assert value is not None, name
+            assert body[name] == money_text(value), name
+        # Option A: total return is the final value over the money put in
+        exact = last_value["value"] / Decimal("10000.00") - 1
+        assert abs(Decimal(body["total_return"]) - exact) < Decimal("1e-11")
+        assert body["pending"] == []
+
+
+async def test_without_the_library_the_ratios_stay_pending() -> None:
+    store = FakeStore()
+    async with client_for(fake_app(store, metrics=PENDING)) as http:
+        portfolio_id = await _ran(http, store)
+        body = (
+            await http.get(f"{API}/portfolios/{portfolio_id}/metrics", headers=as_role(VIEWER))
+        ).json()
+        assert body["trades"] > 0
+        assert body["total_return"] is None
+        assert body["pending"] == [
+            "total_return",
+            "volatility",
+            "sharpe",
+            "max_drawdown",
+            "turnover",
+        ]
 
 
 class _Library:
