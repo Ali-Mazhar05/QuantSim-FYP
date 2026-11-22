@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { delay, http, HttpResponse } from 'msw'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -79,7 +79,7 @@ describe('Calibrations page', () => {
 describe('Models page', () => {
   it('counts the runs of each model and keeps regime switching visible as Extended', async () => {
     renderPage(<Models />)
-    expect(await screen.findByTestId('usage-merton')).toHaveTextContent('1 run')
+    await waitFor(() => expect(screen.getByTestId('usage-merton')).toHaveTextContent('1 run'))
     expect(screen.getByTestId('usage-gbm')).toHaveTextContent('3 runs')
     expect(screen.getByTestId('usage-ou')).toHaveTextContent('0 runs')
     expect(screen.getByTestId('usage-extended')).toHaveTextContent('not available yet')
