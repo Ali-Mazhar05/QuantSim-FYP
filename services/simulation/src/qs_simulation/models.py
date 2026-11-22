@@ -320,3 +320,10 @@ path_quantile = Table(
         name="path_quantile_ordered",
     ),
 )
+
+# References that are deliberately not foreign keys (instrument_ref is a display cache of the
+# market service's instruments); drawn as dotted lines in the ERD, keyed (parent, child)
+LOGICAL_REFERENCES = {
+    ("instrument_ref", "calibration"): "instrument_id",
+    ("instrument_ref", "run_instrument"): "instrument_id",
+}
