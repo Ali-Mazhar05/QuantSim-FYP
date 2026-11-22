@@ -61,21 +61,58 @@ export async function openInApp(page: Page, path: string): Promise<void> {
   }, path)
 }
 
+/** What the sign-in card says when the browser cannot reach the API (authShared.ts). */
+const UNREACHABLE = 'Cannot reach the QuantSim server'
+
+/**
+ * Waits until the browser itself can reach the platform's health route at the API address
+ * the deploy published in /config.json. The first request a fresh browser sends through the
+ * tunnel sometimes fails before the route answers; warming it here keeps that flake out of
+ * the sign-in the test is really about.
+ */
+export async function warmUpApi(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          try {
+            const config = (await (await fetch('/config.json', { cache: 'no-store' })).json()) as {
+              apiBaseUrl?: string
+            }
+            const api = String(config.apiBaseUrl ?? '').replace(/\/$/, '')
+            return (await fetch(`${api}/api/platform/health`, { cache: 'no-store' })).ok
+          } catch {
+            return false
+          }
+        }),
+      { message: 'the browser cannot reach the API', timeout: 60_000, intervals: [1_000, 2_000, 3_000] },
+    )
+    .toBe(true)
+}
+
 /** Signs in through the real sign-in page and waits for the dashboard. */
 export async function signIn(page: Page): Promise<void> {
   const { username, password } = credentials()
   await page.goto('/login')
-  await page.getByLabel('Username or email').fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByRole('button', { name: 'Sign In' }).click()
+  await warmUpApi(page)
 
-  // A refused sign-in shows a notice on the card (or another card, such as "verify your
-  // email first") instead of opening the app
   const notice = page.getByRole('alert')
   const app = page.getByRole('main')
-  await expect(app.or(notice).or(page.getByText('Back to sign in')).first()).toBeVisible({ timeout: 30_000 })
-  if (!(await app.isVisible())) {
+  // One more try only when the API could not be reached; a refused sign-in fails at once
+  for (let attempt = 1; ; attempt += 1) {
+    await page.getByLabel('Username or email').fill(username)
+    await page.getByLabel('Password', { exact: true }).fill(password)
+    await page.getByRole('button', { name: 'Sign In' }).click()
+
+    // A refused sign-in shows a notice on the card (or another card, such as "verify your
+    // email first") instead of opening the app
+    await expect(app.or(notice).or(page.getByText('Back to sign in')).first()).toBeVisible({ timeout: 30_000 })
+    if (await app.isVisible()) break
     const reason = (await notice.isVisible()) ? await notice.innerText() : await page.locator('h1').innerText()
+    if (attempt < 2 && reason.includes(UNREACHABLE)) {
+      await warmUpApi(page)
+      continue
+    }
     throw new Error(`sign-in as ${username} did not open the app: ${reason}`)
   }
   await expect(page).toHaveURL(/\/dashboard$/)

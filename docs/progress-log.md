@@ -15,6 +15,17 @@ repository or in Jenkins.
   (Lane A) and B16 Monte Carlo VaR/CVaR (Lane B). The trading, simulation and risk images
   now rebuild when the library changes (`ci/components.conf`).
 
+**Delivered (Iteration 2, contract K5, `feature/k-k5-calibration` into `develop`)**
+- **Calibration library (K5):** `qs_quant.calibration` 0.2.0 with GBM (closed-form MLE),
+  OU on log price (AR(1) OLS, refused unless the ADF test rejects a unit root at 5%) and
+  Merton jump-diffusion (bounded 3-start L-BFGS-B with log-sum-exp, numerical-Hessian
+  standard errors); `FitResult` with refusal codes instead of exceptions (Lane C guide
+  §7.1-7.4). GBM and OU match exact rational references to 1e-12; random walks refused
+  and OU series accepted in at least 90% of 50 seeds; all ten parameters pass the
+  50-replication recovery study (`docs/report/k5-recovery.md`); no input makes a fit
+  raise. SciPy and statsmodels come through the `qs-quant[calibration]` extra, so the
+  trading image stays NumPy-only. Consumer: B15 calibration (Lane B).
+
 ## 2026-11-20
 
 **Delivered (Iteration 2, Lane A, through `lane/a-trading` into `develop` by #99 and #102)**
