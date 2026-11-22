@@ -330,6 +330,7 @@ def check_projections(
     if metrics.get("trades") != filled:
         raise LiveCheckFailed(f"/metrics counts {metrics.get('trades')} trades, not {filled}")
     ends_on_final("/metrics", metrics, "final_seq", "final_hash")
+    check_run_metrics(metrics, valued)
     rebuild = api.expect(200, "POST", f"{base}/rebuild", token=token)
     if rebuild.get("status") != "identical":
         raise LiveCheckFailed(f"rebuild found differences: {_short(rebuild)}")
@@ -337,6 +338,32 @@ def check_projections(
     log(
         f"projections agree with the log: {filled} fills, {valued} value points, "
         "state, verify, holdings, metrics and rebuild end on the final hash"
+    )
+
+
+def check_run_metrics(metrics: Mapping[str, Any], valued: int) -> None:
+    """A-FR-14: the run's ratios come from the shared metrics library (K6), not pending.
+    Total return is the final value over the initial capital; volatility and Sharpe need
+    at least two returns, so they may be pending only for a run of fewer than 2 sessions
+    (and Sharpe for a run whose value never moved)."""
+    for name in ("total_return", "max_drawdown", "turnover"):
+        if metrics.get(name) is None:
+            raise LiveCheckFailed(f"/metrics {name} is still pending: {_short(metrics)}")
+    if valued >= 2 and metrics.get("volatility") is None:
+        raise LiveCheckFailed(f"/metrics volatility is pending after {valued} sessions")
+    expected = Decimal(metrics["final_value"]) / Decimal(metrics["initial_capital"]) - 1
+    if abs(Decimal(metrics["total_return"]) - expected) > Decimal("1e-9"):
+        raise LiveCheckFailed(
+            f"/metrics total_return {metrics['total_return']} is not final / initial - 1"
+            f" = {expected:.12f}"
+        )
+    drawdown = Decimal(metrics["max_drawdown"])
+    if not Decimal(0) <= drawdown <= Decimal(1):
+        raise LiveCheckFailed(f"/metrics max_drawdown {drawdown} is outside [0, 1]")
+    log(
+        f"A-FR-14 run metrics from K6: total return {metrics['total_return']}, volatility "
+        f"{metrics.get('volatility')}, Sharpe {metrics.get('sharpe')}, max drawdown "
+        f"{metrics['max_drawdown']}, turnover {metrics['turnover']}"
     )
 
 
