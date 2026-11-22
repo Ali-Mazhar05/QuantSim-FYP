@@ -194,6 +194,13 @@ pipeline {
           post {
             always {
               junit allowEmptyResults: true, testResults: 'libs/*/reports/junit.xml, services/*/reports/junit.xml'
+              script {
+                if (findFiles(glob: 'services/*/reports/coverage.xml').length > 0) {
+                  recordCoverage(id: 'backend', name: 'Backend coverage',
+                                 tools: [[parser: 'COBERTURA', pattern: 'services/*/reports/coverage.xml']],
+                                 sourceCodeRetention: 'NEVER')
+                }
+              }
             }
           }
         }

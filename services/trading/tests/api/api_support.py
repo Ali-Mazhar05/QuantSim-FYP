@@ -43,7 +43,7 @@ from qs_trading.engine.core import RunSpec
 from qs_trading.engine.runner import MemorySink, run_portfolio
 from qs_trading.jobs import engine_run_key
 from qs_trading.main import build_app
-from qs_trading.metrics import PENDING, MetricsCalculator, RunFigures
+from qs_trading.metrics import QUANT_METRICS, MetricsCalculator, RunFigures
 from qs_trading.ports.market_environment import EnvironmentRef
 from qs_trading.projections import (
     ProjectedEvent,
@@ -439,7 +439,7 @@ def _fake_ops(_: AsyncSession) -> OpsReader:
 def fake_app(
     store: TradingStore,
     settings: TradingSettings | None = None,
-    metrics: MetricsCalculator = PENDING,
+    metrics: MetricsCalculator = QUANT_METRICS,
     demo_environments: str = "",
     ops: OpsFactory = _fake_ops,
 ) -> FastAPI:

@@ -109,3 +109,71 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _http_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(Exception, _unexpected_error)
+    _document_problems(app)
+
+
+# The problem body every error response carries (RFC 9457), as the OpenAPI document shows it
+PROBLEM_SCHEMA: dict[str, Any] = {
+    "title": "Problem",
+    "type": "object",
+    "description": "RFC 9457 problem details; some problems add fields, such as job_id",
+    "required": ["type", "title", "status"],
+    "properties": {
+        "type": {"type": "string", "description": "A URI naming the problem type"},
+        "title": {"type": "string"},
+        "status": {"type": "integer"},
+        "detail": {"type": "string"},
+        "request_id": {"type": "string", "description": "Matches the service's log lines"},
+        "errors": {
+            "type": "array",
+            "description": "One entry per invalid field (422)",
+            "items": {
+                "type": "object",
+                "required": ["location", "message", "type"],
+                "properties": {
+                    "location": {
+                        "type": "array",
+                        "items": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+                    },
+                    "message": {"type": "string"},
+                    "type": {"type": "string"},
+                },
+            },
+        },
+    },
+    "additionalProperties": True,
+}
+
+_PROBLEM_CONTENT = {PROBLEM_JSON: {"schema": {"$ref": "#/components/schemas/Problem"}}}
+
+
+def _document_problems(app: FastAPI) -> None:
+    """Makes the OpenAPI document say what the handlers above send: every 4xx and 5xx
+    response is ``application/problem+json`` with the ``Problem`` schema, in place of
+    FastAPI's default ``application/json`` validation error, and every operation with a
+    body also lists the 400 sent for a body that is not JSON. Readiness keeps its own
+    body for 503, which :func:`qs_template.app.create_app` documents."""
+    build = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        document = build()
+        for path, operations in document.get("paths", {}).items():
+            for operation in operations.values():
+                responses = operation.setdefault("responses", {})
+                if "requestBody" in operation:
+                    # A body that is not JSON at all is refused before validation
+                    responses.setdefault("400", {"description": "The body is not valid JSON"})
+                for code, response in responses.items():
+                    if code[:1] in {"4", "5"} and not (path.endswith("/ready") and code == "503"):
+                        response["content"] = _PROBLEM_CONTENT
+        schemas = document.setdefault("components", {}).setdefault("schemas", {})
+        schemas["Problem"] = PROBLEM_SCHEMA
+        # FastAPI's own validation error shapes are never sent, so they are not documented
+        for unused in ("HTTPValidationError", "ValidationError"):
+            schemas.pop(unused, None)
+        app.openapi_schema = document
+        return document
+
+    app.openapi = openapi  # type: ignore[method-assign]
