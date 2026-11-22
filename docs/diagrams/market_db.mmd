@@ -18,6 +18,7 @@ erDiagram
     instrument ||--o{ return_series : "instrument_id"
     instrument ||--o{ staging_bar : "instrument_id"
     market_environment ||--o{ environment_activation : "environment_id"
+    market_environment ||--o{ replay_session : "environment_id"
     audit_log {
         bigint id PK
         text table_name
@@ -176,6 +177,19 @@ erDiagram
         jsonb rules
         jsonb payload
         timestamptz rejected_at
+    }
+    replay_session {
+        uuid id PK
+        uuid environment_id FK
+        int anchor_index
+        timestamptz anchor_at
+        int speed
+        text state
+        int session_count
+        text source_fingerprint
+        uuid created_by
+        timestamptz created_at
+        timestamptz updated_at
     }
     return_series {
         uuid instrument_id PK, FK

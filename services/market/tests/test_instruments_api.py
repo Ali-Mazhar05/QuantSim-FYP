@@ -56,6 +56,10 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("POST", "/environments"): CREATORS,
     ("GET", "/environments/{environment_id}/ticks"): ALL_ROLES,
     ("POST", "/environments/{environment_id}/activate"): CREATORS,
+    ("GET", "/replay-sessions"): ALL_ROLES,
+    ("POST", "/replay-sessions"): CREATORS,
+    ("GET", "/replay-sessions/{session_id}"): ALL_ROLES,
+    ("POST", "/replay-sessions/{session_id}/control"): CREATORS,
     ("GET", "/audit"): ADMIN_ONLY,
 }
 
@@ -82,6 +86,10 @@ def body_for(method: str, path: str, n: int, target: str = "") -> dict[str, Any]
             "start_date": "2024-01-02",
             "end_date": "2024-03-28",
         }
+    if method == "POST" and path == "/replay-sessions":
+        return {"environment_id": str(uuid.uuid4())}  # unknown: past authorisation it is a 404
+    if method == "POST" and path == "/replay-sessions/{session_id}/control":
+        return {"action": "play"}
     if method == "POST" and path == "/ingestion-runs":
         return {"mode": "manual", "start": "2024-01-02", "end": "2024-01-03"}
     if method == "POST" and path == "/instruments":
@@ -128,7 +136,7 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
     for (method, path), rule in MATRIX.items():
         url = API + path.replace("{instrument_id}", target).replace("{run_id}", run_id).replace(
             "{environment_id}", environment_id
-        )
+        ).replace("{session_id}", str(uuid.uuid4()))
         for who, headers in callers:
             n += 1
             response = await client.request(
@@ -148,6 +156,10 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
                     # no bars in the matrix environment: not ready, so 422 once past authorisation
                     "/environments/{environment_id}/ticks": (422,),
                     "/environments/{environment_id}/activate": (422,),
+                    # no such environment, no such session
+                    "/replay-sessions": (200, 404),
+                    "/replay-sessions/{session_id}": (404,),
+                    "/replay-sessions/{session_id}/control": (404,),
                 }.get(path, (200, 201))
                 assert response.status_code in accepted, where
             elif who in ("anonymous", "forged"):

@@ -50,6 +50,9 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-029 | Environments that are not ready | Adopted | Lane A |
 | DL-030 | What activation does | Adopted | Lane A |
 | DL-031 | How the feed reads a large window | Adopted | team |
+| DL-032 | Replay session routes and who may use them | Adopted | Lane A |
+| DL-033 | What a replay session stands on | Adopted | Lane A |
+| DL-034 | Position over polling, not SSE | Adopted | team |
 
 ---
 
@@ -399,3 +402,49 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   fingerprint was not built: a restated price changes the data without a trustworthy change marker, so no
   cheap signal was provably exact.
 - **Affects:** `qs_market/replay.py`, `feeds.canonical_line` and `feeds.fingerprint_of_lines`.
+
+### DL-032 Replay session routes and who may use them
+
+- **Asked:** which routes drive a replay clock, and which role may control it (B-FR-06, B-US-05)? The plan
+  names `POST /replay-sessions` and `GET /replay-sessions/{id}` and says control needs the quant role.
+- **Decided:** `POST /replay-sessions` (create, paused at the first session), `GET /replay-sessions?environment_id=`
+  (newest first), `GET /replay-sessions/{id}`, and one `POST /replay-sessions/{id}/control` with a body
+  `{action: play | pause | speed | seek, speed?, index?}`. Reads need `view_market_data` (every role);
+  create and control need `create_market_environments` (quant, admin), so an analyst and a viewer get 403.
+  Speed is 1, 5 or 20 (422 otherwise; the database also refuses). Seek clamps to the first and last session.
+  Repeating a state (play while playing, the same speed, pause while paused) changes nothing, so a double
+  click cannot lose the fraction of a session that has elapsed. Every change is audited with who made it.
+- **Why:** the Tech Stack document already describes a single `.../control` route; one route with an
+  `action` keeps the typed client small. The list route is what lets a reloaded page find the session it was
+  driving. No new capability was added, because the capability list lives in `libs/qs_template` (Lane A).
+- **Alternatives rejected:** a route per verb (four routes for one idea); a new `control_replay` capability
+  (a change to Lane A's file for no new distinction between roles).
+- **Affects:** `qs_market/api_replay.py`, `replay_sessions.py`, the role matrix test, the Replay page (B20).
+
+### DL-033 What a replay session stands on
+
+- **Asked:** which environments can have a session, and what does a session pin?
+- **Decided:** only a daily replay environment that is **active** (activated, so its data is frozen): any
+  other gets 422 `environment-not-active` (a draft, hourly or synthetic environment keeps the 422 of DL-029).
+  The session stores the activation's fingerprint and the number of sessions in the window at creation. The
+  stored count lets the database bound the anchor (`0 <= anchor_index < session_count`). Every read returns
+  `source_fingerprint` (pinned) and `current_fingerprint` (the environment's frozen value now), so a page can
+  show that the environment was activated again; changes to the data without a new activation show on the
+  `X-Source-Fingerprint` header of each page of ticks, as before. Every read also returns the trading date at
+  the position and the `server_time` the position was computed at, so a page can interpolate between polls.
+- **Why:** a replay of data that is not frozen could change under the viewer; computing the live fingerprint
+  of a 100,000-bar window on every poll would cost about a second (DL-031), so the cheap frozen value is the
+  one compared. The date lookup is one grouped read of the window's dates and stays under half a second on 40
+  instruments over 2,900 sessions (tested).
+- **Affects:** `replay_session` (migration 0005), `replay_sessions.py`, ADR 06 note.
+
+### DL-034 Position over polling, not SSE
+
+- **Asked:** is the stream of positions (B-FR-07, Last-Event-ID resume) built? The plan lists it first in the
+  cut order and says polling is accepted if it is cut.
+- **Decided:** cut. Clients poll `GET /replay-sessions/{id}` every 500 ms to 1 s, and animate between polls
+  from `position`, `speed` and `server_time`.
+- **Why:** the position is a pure function of stored values, so a poll is cheap and always right, survives a
+  restart and works through the Cloudflare tunnel; a long-lived stream adds reconnect state for no change in
+  what the page can show. B-FR-07 stays open as a cut item.
+- **If reversed later:** a stream would only repeat the poll answer; no route changes.
