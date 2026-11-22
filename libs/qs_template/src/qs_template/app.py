@@ -33,6 +33,16 @@ from qs_template.db import Database
 from qs_template.errors import install_error_handlers
 from qs_template.logging import configure_logging, get_logger
 
+# The readiness body, for 200 and 503 alike
+READINESS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["status", "checks"],
+    "properties": {
+        "status": {"type": "string", "enum": ["ready", "not ready"]},
+        "checks": {"type": "object", "additionalProperties": {"type": "string"}},
+    },
+}
+
 REQUEST_ID_HEADER = "X-Request-ID"
 
 log = get_logger(__name__)
@@ -103,7 +113,17 @@ def create_app(
             "content_hash": settings.content_hash,
         }
 
-    @app.get(f"{prefix}/ready", tags=["operations"])
+    @app.get(
+        f"{prefix}/ready",
+        tags=["operations"],
+        responses={
+            200: {"description": "Every check passed"},
+            503: {
+                "description": "A check failed; the body names it",
+                "content": {"application/json": {"schema": READINESS_SCHEMA}},
+            },
+        },
+    )
     async def ready() -> JSONResponse:
         results: dict[str, str] = {}
         healthy = True
