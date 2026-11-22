@@ -397,6 +397,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/market/replay-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions */
+        get: operations["list_sessions_api_market_replay_sessions_get"];
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_api_market_replay_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/market/replay-sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session */
+        get: operations["get_session_api_market_replay_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/market/replay-sessions/{session_id}/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Control Session */
+        post: operations["control_session_api_market_replay_sessions__session_id__control_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -969,6 +1021,22 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** Pause */
+        Pause: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "pause";
+        };
+        /** Play */
+        Play: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "play";
+        };
         /**
          * Problem
          * @description RFC 9457 problem details; some problems add fields, such as job_id
@@ -1246,6 +1314,140 @@ export interface components {
             window_end: string | null;
             /** Window Start */
             window_start: string | null;
+        };
+        /** Seek */
+        Seek: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "seek";
+            /**
+             * Index
+             * @description Zero-based session index; clamped to the first and last session of the window
+             */
+            index: number;
+        };
+        /** SessionCreate */
+        SessionCreate: {
+            /**
+             * Environment Id
+             * Format: uuid
+             * @description An activated daily replay environment
+             */
+            environment_id: string;
+            /**
+             * Speed
+             * @description Sessions per second: 1, 5 or 20
+             * @default 1
+             * @enum {integer}
+             */
+            speed: 1 | 5 | 20;
+        };
+        /**
+         * SessionOut
+         * @example {
+         *       "created_at": "2026-11-19T09:29:00Z",
+         *       "created_by": "9d1e5c7b-2222-4b00-8000-000000000001",
+         *       "current_fingerprint": "xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1",
+         *       "environment_id": "6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01",
+         *       "finished": false,
+         *       "id": "3c1d9a52-7e64-4b0f-9a88-5d2e6f1b7c10",
+         *       "position": 42,
+         *       "server_time": "2026-11-19T09:30:02Z",
+         *       "session_count": 253,
+         *       "session_date": "2020-03-02",
+         *       "source_fingerprint": "xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1",
+         *       "speed": 5,
+         *       "state": "playing",
+         *       "updated_at": "2026-11-19T09:29:50Z"
+         *     }
+         */
+        SessionOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Current Fingerprint
+             * @description The environment's frozen fingerprint now; different if it was activated again
+             */
+            current_fingerprint: string | null;
+            /**
+             * Environment Id
+             * Format: uuid
+             */
+            environment_id: string;
+            /**
+             * Finished
+             * @description Playing and the clock has reached the last session
+             */
+            finished: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Position
+             * @description Zero-based session index the clock stands at now
+             */
+            position: number;
+            /**
+             * Server Time
+             * Format: date-time
+             * @description The server time the position was computed at
+             */
+            server_time: string;
+            /**
+             * Session Count
+             * @description Sessions in the window; the last index is one less
+             */
+            session_count: number;
+            /**
+             * Session Date
+             * @description Trading date at the position
+             */
+            session_date: string | null;
+            /**
+             * Source Fingerprint
+             * @description The data the session was created on (ADR 08)
+             */
+            source_fingerprint: string;
+            /**
+             * Speed
+             * @enum {integer}
+             */
+            speed: 1 | 5 | 20;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "playing" | "paused";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SetSpeed */
+        SetSpeed: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "speed";
+            /**
+             * Speed
+             * @enum {integer}
+             */
+            speed: 1 | 5 | 20;
         };
         /**
          * Tick
@@ -2943,6 +3145,262 @@ export interface operations {
                         /** @enum {string} */
                         status: "ready" | "not ready";
                     };
+                };
+            };
+        };
+    };
+    list_sessions_api_market_replay_sessions_get: {
+        parameters: {
+            query?: {
+                /** @description Only the sessions of this environment */
+                environment_id?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    create_session_api_market_replay_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description The body is not valid JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_session_api_market_replay_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    control_session_api_market_replay_sessions__session_id__control_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Play"] | components["schemas"]["Pause"] | components["schemas"]["SetSpeed"] | components["schemas"]["Seek"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description The body is not valid JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
