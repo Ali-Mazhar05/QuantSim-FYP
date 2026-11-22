@@ -6,8 +6,8 @@ from typing import Any
 
 import numpy as np
 import pytest
-from qs_quant.calibration import fit_gbm, fit_merton, fit_ou
 
+from qs_quant.calibration import fit_gbm, fit_merton, fit_ou
 from qs_simulation.domain.calibration import PricePoint, log_prices, log_returns
 from tests.calibration_support import (
     AAPL,

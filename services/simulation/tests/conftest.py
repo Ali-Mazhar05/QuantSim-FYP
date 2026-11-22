@@ -75,4 +75,7 @@ def settings() -> SimulationSettings:
     )
 
 
-from tests.calibration_support import k5_world, world  # noqa: E402, F401 - fixtures, for every test module
+from tests.calibration_support import (  # noqa: E402, F401 - fixtures, for every test module
+    k5_world,
+    world,
+)
