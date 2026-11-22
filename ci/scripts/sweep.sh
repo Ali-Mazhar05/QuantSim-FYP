@@ -3,7 +3,7 @@
 # Runs after every build; safe to run by hand at any time.
 #   usage: sweep.sh
 #
-# - test containers (qs-ci-*) that have stopped, with their volumes, and their networks.
+# - test containers (qsci-*, and qs-ci-* of older branches) that have stopped, with their volumes, and their networks.
 #   A build cleans these up itself, but not when Docker or the agent dies mid-build.
 #   Containers of a build that is still running are never touched, and nothing younger
 #   than two hours is (SWEEP_MIN_AGE_SECONDS), so a build starting its own is left alone.
@@ -30,7 +30,8 @@ old_enough() { # <docker object id> <Go template for its creation time>
   (( now - created >= min_age_seconds ))
 }
 
-mapfile -t candidates < <(docker ps -aq --filter 'name=^qs-ci-' --filter status=exited --filter status=created --filter status=dead)
+# Test containers are named qsci-<build> (qs-ci- before 22 Nov, see lib.sh test_id)
+mapfile -t candidates < <(docker ps -aq --filter 'name=^qsci-' --filter 'name=^qs-ci-'   --filter status=exited --filter status=created --filter status=dead)
 stopped=()
 for container in "${candidates[@]}"; do
   old_enough "$container" '{{.Created}}' && stopped+=("$container")
@@ -40,7 +41,7 @@ if (( ${#stopped[@]} )); then
   log "removed ${#stopped[@]} leftover test container(s)"
 fi
 
-mapfile -t networks < <(docker network ls -q --filter 'name=^qs-ci-')
+mapfile -t networks < <(docker network ls -q --filter 'name=^qsci-' --filter 'name=^qs-ci-')
 for network in "${networks[@]}"; do
   old_enough "$network" '{{.Created}}' || continue
   # A network still in use by a running build refuses removal; that is expected
