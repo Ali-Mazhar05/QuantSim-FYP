@@ -107,6 +107,12 @@ class ActivationOut(BaseModel):
     activated_at: datetime
 
 
+NOT_REPLAYABLE = {
+    "description": "A bad parameter, or an environment that cannot be replayed: "
+    "unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar "
+    "count per symbol in `missing`"
+}
+
 FINGERPRINT_HEADER = {
     "X-Source-Fingerprint": {
         "description": "The fingerprint of the data on this page; it equals the value frozen at "
@@ -123,7 +129,7 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     Creator = Annotated[
         Principal, Depends(auth.require_capability(Capability.CREATE_MARKET_ENVIRONMENTS))
     ]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def writer(
         request: Request, actor: Creator
@@ -141,7 +147,13 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     @router.get(
         "/{environment_id}/ticks",
         response_model=TickPage,
-        responses={200: {"headers": FINGERPRINT_HEADER}, 401: {}, 403: {}, 404: {}, 422: {}},
+        responses={
+            200: {"headers": FINGERPRINT_HEADER},
+            401: {},
+            403: {},
+            404: {},
+            422: NOT_REPLAYABLE,
+        },
     )
     async def read_ticks(
         environment_id: uuid.UUID,
@@ -167,7 +179,7 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
         "/{environment_id}/activate",
         response_model=ActivationOut,
         status_code=status.HTTP_200_OK,
-        responses={401: {}, 403: {}, 404: {}, 422: {}},
+        responses={401: {}, 403: {}, 404: {}, 422: NOT_REPLAYABLE},
     )
     async def activate_environment(environment_id: uuid.UUID, scope: Writer) -> ActivationOut:
         session, actor = scope

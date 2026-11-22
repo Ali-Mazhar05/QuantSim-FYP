@@ -121,7 +121,9 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 
 - **Asked:** what if a bar in the window has no adjusted value (the columns are nullable)?
 - **Decided:** the environment cannot be activated and its feed refuses with 422 `missing_adjusted_prices`
-  and counts per symbol. Raw prices are never substituted.
+  and counts per symbol. Raw prices are never substituted. On the wire the problem type is spelled
+  `urn:quantsim:problem:missing-adjusted-prices` and the counts are `missing` (`{"AAPL": 3}`); see
+  `contracts/README.md` section 3.
 - **Why:** an adjusted price depends on corporate actions that come **after** a session, so a missing one
   cannot be rebuilt, and a raw price before a split is on a different scale from adjusted prices after it:
   mixing them draws a fake crash. The platform already treats adjusted close as the price basis
