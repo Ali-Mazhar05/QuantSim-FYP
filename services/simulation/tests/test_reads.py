@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
+from sqlalchemy import text
 
 from qs_simulation.domain.calendar import step_closes
 from qs_template.auth import Role
@@ -28,6 +29,12 @@ def reader(role: Role = Role.VIEWER) -> dict[str, str]:
 
 async def get(w: RunWorld, url: str, *, role: Role = Role.VIEWER, **params: Any) -> httpx.Response:
     return await w.client.get(url, params=params, headers=reader(role))
+
+
+async def write(w: RunWorld, statement: str, **values: Any) -> None:
+    """A statement that changes rows (``RunWorld.sql`` is for reads)."""
+    async with w.database.transaction() as session:
+        await session.execute(text(statement), values)
 
 
 async def all_ticks(w: RunWorld, run_id: str, path: int, limit: int = 7) -> list[dict[str, Any]]:
@@ -99,7 +106,8 @@ async def test_a_bad_cursor_is_422_and_every_role_may_read(run_world: RunWorld) 
 async def test_a_run_the_queue_gave_up_on_is_listed_as_failed(run_world: RunWorld) -> None:
     basket = await run_world.basket(2)
     queued = await submit(run_world, run_body(basket))
-    await run_world.sql(
+    await write(
+        run_world,
         "UPDATE job SET status = 'failed', error = 'gave up' WHERE id = :i",
         i=uuid.UUID(queued["id"]),
     )
@@ -114,7 +122,7 @@ async def test_calibrations_are_listed_with_filters_and_paging(run_world: RunWor
     odd = await run_world.instrument("TSLA", converged=False)
     page = (await get(run_world, CALIBRATIONS)).json()
     ids = {c["id"] for c in page["items"]}
-    assert ids == {c for _, c in [*gbm, *ou, odd]}
+    assert ids == {str(c) for _, c in [*gbm, *ou, odd]}
     assert all(c["status"] == "succeeded" and c["calibration"]["symbol"] for c in page["items"])
     assert [c["id"] for c in (await get(run_world, CALIBRATIONS, model="ou")).json()["items"]] == [
         str(ou[0][1])
@@ -236,8 +244,10 @@ async def test_ticks_regenerated_from_the_seed_equal_the_stored_ticks(
     done = await complete(run_world, run_body(basket, model=model, n_paths=520, n_steps=10))
     paths = (0, 249, 250, 519)  # either side of the shard joins, and the last path
     stored = {p: await all_ticks(run_world, done["id"], path=p, limit=50) for p in paths}
-    await run_world.sql(
-        "UPDATE run SET storage_mode = 'quantiles' WHERE id = :r", r=uuid.UUID(done["id"])
+    await write(
+        run_world,
+        "UPDATE run SET storage_mode = 'quantiles' WHERE id = :r",
+        r=uuid.UUID(done["id"]),
     )
     for p in paths:  # now nothing is read from path_value: every price is generated again
         assert await all_ticks(run_world, done["id"], path=p, limit=50) == stored[p]
@@ -318,8 +328,11 @@ async def test_a_page_of_ticks_is_fast_stored_and_regenerated(run_world: RunWorl
     done = await complete(run_world, run_body(basket, n_paths=1000, n_steps=252))
     url = f"{RUNS}/{done['id']}/ticks"
     for mode in ("full", "quantiles"):
-        await run_world.sql(
-            "UPDATE run SET storage_mode = :m WHERE id = :r", m=mode, r=uuid.UUID(done["id"])
+        await write(
+            run_world,
+            "UPDATE run SET storage_mode = :m WHERE id = :r",
+            m=mode,
+            r=uuid.UUID(done["id"]),
         )
         for after in (0, 1000, 2000):
             started = time.perf_counter()
