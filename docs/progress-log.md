@@ -26,6 +26,24 @@ repository or in Jenkins.
   raise. SciPy and statsmodels come through the `qs-quant[calibration]` extra, so the
   trading image stays NumPy-only. Consumer: B15 calibration (Lane B).
 
+**Delivered (Iteration 2, Lane B: replay, simulation and the frontend kit)**
+- **Into the lane:** #155 develop into the lane, #162 K4 review follow-ups and ADRs Accepted
+  (into `develop`), #78 B10 path generators, #177 B12 replay feed and activation, #179 B14
+  simulation database, #180 B13 replay sessions.
+- **Merged after Jenkins:** B15 calibration on the real K5 (#181), B16 Monte Carlo on K6 and the K3
+  service client (#186), B18 read API with lists, quantiles and path ticks (#187), B17 stress scenarios
+  (#188), and the pages on the typed client with the Create Portfolio run picker, the simulation diagram
+  and the queue depth route (#189). The Lane B demo spine is in `develop` (#183); Market Data controls
+  (B02) are in their own pull request.
+- **Verified:** market 601 tests with the recorded corpus (120 real-data), simulation 427, frontend 21
+  files and 194 tests; every migration applies, reverses and applies again.
+- **Found:** a single fixed seed gave z = -3.4 on a correct Merton generator, so statistical tests use
+  seed sweeps; the 1,260,000-row demo run costs 13.6 s per 252,000 rows in foreign-key checks (DL-041).
+- **Decided:** DL-042 (read API) and DL-043 (stress scenarios); DL-015 resolved by ADR 09 (service
+  tokens). Report chapter: `docs/report/lane-b.md`.
+- **Not yet:** the Lane B demo spine has not run on TEST (needs the simulation service deployed); the
+  real-data market tests passed locally (601 of 601 with the corpus).
+
 ## 2026-11-20
 
 **Delivered (Iteration 2, Lane A, through `lane/a-trading` into `develop` by #99 and #102)**
