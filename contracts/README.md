@@ -113,6 +113,16 @@ the data moved freezes the new value, and the environment keeps one frozen value
 ready or active environment; every page is served from one database snapshot, so its fingerprint always
 describes the rows on it.
 
+**Activating twice.** It is idempotent in effect: the second call answers 200 with the same body when the
+data has not moved, and re-freezes the new fingerprint (a new `activated_at`) when it has. There is still
+one frozen value per environment.
+
+**Ticks of an environment that is not active.** A `ready` environment (never activated) is served: the
+`X-Source-Fingerprint` header carries the live fingerprint and there is no frozen value to compare with
+(`source_fingerprint` is null on the environment). A `draft` one answers 422
+`environment-not-ready`. There is no 409: no state of the environment makes a read conflict with
+anything. A consumer that needs the frozen value activates first.
+
 ```
 POST /api/market/environments/6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01/activate
 422   Content-Type: application/problem+json

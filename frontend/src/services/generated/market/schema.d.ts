@@ -1772,7 +1772,7 @@ export interface operations {
                     "application/json": components["schemas"]["ActivationOut"];
                 };
             };
-            /** @description Unauthorized */
+            /** @description No token, or a bad or expired one */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1781,7 +1781,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Forbidden */
+            /** @description The role may not activate an environment */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1790,7 +1790,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Not Found */
+            /** @description The environment does not exist */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1799,17 +1799,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad parameter, or an environment that cannot be replayed: unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar count per symbol in `missing` */
+            /** @description The environment cannot be replayed (a bad parameter is also a 422): unsupported-frequency, not-a-replay-environment, environment-not-ready, or missing-adjusted-prices with the bar count per symbol in `missing` */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not Implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1848,7 +1839,7 @@ export interface operations {
                     "application/json": components["schemas"]["TickPage"];
                 };
             };
-            /** @description Unauthorized */
+            /** @description No token, or a bad or expired one */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1857,7 +1848,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Forbidden */
+            /** @description The role may not read the market */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1866,7 +1857,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Not Found */
+            /** @description The environment does not exist */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1875,17 +1866,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description A bad parameter, or an environment that cannot be replayed: unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar count per symbol in `missing` */
+            /** @description The environment cannot be replayed (a bad parameter is also a 422): unsupported-frequency, not-a-replay-environment, environment-not-ready, or missing-adjusted-prices with the bar count per symbol in `missing` */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not Implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
