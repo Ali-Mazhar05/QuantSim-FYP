@@ -35,6 +35,7 @@ from qs_trading.models import (
     fill,
     holding_history,
     job,
+    portfolio_metrics,
     portfolio_state_current,
     portfolio_value,
 )
@@ -172,20 +173,29 @@ def _run_and_read_the_projections(trading_db: TradingDb, tmp_path: Path) -> None
         assert rebuilt.json()["final_seq"] == state["last_seq"]
         assert rebuilt.json()["final_hash"] == done["result"]["final_hash"]
 
-        # Metrics: trades and costs are the sums over the fills
+        # Metrics: trades and costs are the sums over the fills; the ratios come from K6
         metrics = (await http.get(f"{base}/metrics", headers=viewer)).json()
         assert metrics["trades"] == len(fills)
         assert Decimal(metrics["total_costs"]) == sum(row["cost_total"] for row in fills)
         assert metrics["sessions"] == len(values)
         assert Decimal(metrics["final_value"]) == values[-1]["value"]
         assert metrics["final_hash"] == done["result"]["final_hash"]
-        assert metrics["pending"] == [
-            "total_return",
-            "volatility",
-            "sharpe",
-            "max_drawdown",
-            "turnover",
-        ]
+        assert metrics["pending"] == []
+
+        # A-FR-14: the job stored one portfolio_metrics row, equal to what /metrics serves
+        async with database.transaction() as session:
+            stored = (
+                await session.execute(
+                    select(portfolio_metrics).where(
+                        portfolio_metrics.c.portfolio_id == portfolio_id
+                    )
+                )
+            ).all()
+        assert len(stored) == 1
+        (row,) = stored
+        assert (row.final_seq, row.final_hash) == (state["last_seq"], metrics["final_hash"])
+        for name in ("total_return", "volatility", "sharpe", "max_drawdown", "turnover"):
+            assert format(getattr(row, name), "f") == metrics[name], name
 
     async def main() -> None:
         settings = make_settings(trading_db.app_url)
