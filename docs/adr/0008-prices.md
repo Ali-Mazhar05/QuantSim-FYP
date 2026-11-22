@@ -1,6 +1,6 @@
 # ADR 08: Prices
 
-Status: Proposed. Date: 2026-11-17. Owner: Lane B. Consumer: Lane A.
+Status: Accepted. Date: 2026-11-17. Owner: Lane B. Consumer: Lane A.
 
 ## Context
 
