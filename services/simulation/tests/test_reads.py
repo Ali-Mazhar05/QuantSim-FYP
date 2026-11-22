@@ -334,7 +334,7 @@ async def test_a_page_of_ticks_is_fast_stored_and_regenerated(run_world: RunWorl
             m=mode,
             r=uuid.UUID(done["id"]),
         )
-        for after in (0, 1000, 2000):
+        for after in (0, 8, 16):  # 252 steps x 8 names = 2,016 ticks: each page is full
             started = time.perf_counter()
             response = await get(run_world, url, path=999, after_seq=after, limit=2000)
             elapsed = time.perf_counter() - started
