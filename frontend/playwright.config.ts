@@ -30,12 +30,11 @@ export default defineConfig({
     actionTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // HTTP/1.1 over TCP. With QUIC off the sign-in flake remained (develop build 110): in a
-    // browser that earlier tests had used, every API request hung while the same URL
-    // answered 200 outside the browser at once, which is a dead pooled HTTP/2 connection
-    // to the tunnel that all requests to the host share. On HTTP/1.1 a dead reused socket is
-    // retried on a fresh one. The sign-in probe reports it if it still happens (support.ts)
-    launchOptions: { args: ['--disable-quic', '--disable-http2'] },
+    // No QUIC (HTTP/3 over UDP) from the Jenkins agent's container. HTTP/2 stays on: forcing
+    // HTTP/1.1 made every browser request to the API tunnel hang (develop build 112), so the
+    // occasional sign-in hang is most likely a connection that fell back to HTTP/1.1; the
+    // sign-in probe in support.ts reports each one
+    launchOptions: { args: ['--disable-quic'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 })
