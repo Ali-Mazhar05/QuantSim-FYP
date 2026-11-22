@@ -107,7 +107,7 @@ describe('Replay page on the mock backend', () => {
       }),
     )
     renderPage()
-    expect(await screen.findByTestId('replay-toggle')).toHaveTextContent('Pause')
+    await waitFor(() => expect(screen.getByTestId('replay-toggle')).toHaveTextContent('Pause'))
     await userEvent.click(screen.getByTestId('replay-speed-20'))
     await waitFor(() => expect(screen.getByTestId('replay-speed-20')).toHaveAttribute('aria-pressed', 'true'))
     await userEvent.click(screen.getByTestId('replay-toggle'))
