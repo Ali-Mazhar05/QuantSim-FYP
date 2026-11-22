@@ -1,11 +1,15 @@
 """Settings of the Platform service, on top of the template's (all ``QS_*``)."""
 
 import base64
+import hashlib
 from typing import Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 
 from qs_template import ServiceSettings
+from qs_template.auth import KNOWN_SERVICES
+
+MIN_CLIENT_SECRET_LENGTH = 32
 
 
 class PlatformSettings(ServiceSettings):
@@ -22,6 +26,11 @@ class PlatformSettings(ServiceSettings):
     access_token_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     # Refresh tokens slide: each refresh issues a new one valid for this long
     refresh_token_ttl_seconds: int = Field(default=43_200, ge=300, le=2_592_000)
+
+    # Services that may get service tokens (ADR 09): comma-separated name=secret pairs,
+    # e.g. "trading=<64 hex>". A pair with an empty secret is ignored (client disabled).
+    service_client_secrets: SecretStr | None = None
+    service_token_ttl_seconds: int = Field(default=600, ge=60, le=900)
 
     # Redis holding the shared token revocation list
     redis_url: SecretStr
@@ -65,6 +74,13 @@ class PlatformSettings(ServiceSettings):
             raise ValueError("QS_SIGNING_KEY must contain a PEM private key")
         return value
 
+    @field_validator("service_client_secrets")
+    @classmethod
+    def _valid_service_clients(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            _parse_service_clients(value.get_secret_value())
+        return value
+
     @model_validator(mode="after")
     def _mail_configured_when_required(self) -> Self:
         if self.email_required:
@@ -86,9 +102,48 @@ class PlatformSettings(ServiceSettings):
         return self
 
     @property
+    def service_client_digests(self) -> dict[str, bytes]:
+        """SHA-256 of each service's client secret; the secrets themselves are not kept."""
+        if self.service_client_secrets is None:
+            return {}
+        return {
+            name: hashlib.sha256(secret.encode()).digest()
+            for name, secret in _parse_service_clients(
+                self.service_client_secrets.get_secret_value()
+            ).items()
+        }
+
+    @property
     def app_url(self) -> str:
         return self.public_app_url.rstrip("/")
 
     @property
     def signing_key_pem(self) -> bytes:
         return base64.b64decode(self.signing_key.get_secret_value())
+
+
+def _parse_service_clients(raw: str) -> dict[str, str]:
+    """``name=secret,name=secret`` into a dict; never puts a secret in an error."""
+    clients: dict[str, str] = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        name, sep, secret = entry.partition("=")
+        name, secret = name.strip(), secret.strip()
+        if not sep or name not in KNOWN_SERVICES:
+            raise ValueError(
+                "QS_SERVICE_CLIENT_SECRETS must be name=secret pairs naming known services"
+                f" ({', '.join(sorted(KNOWN_SERVICES))})"
+            )
+        if name in clients:
+            raise ValueError(f"QS_SERVICE_CLIENT_SECRETS names {name} twice")
+        if not secret:
+            continue
+        if len(secret) < MIN_CLIENT_SECRET_LENGTH:
+            raise ValueError(
+                f"the client secret of {name} must be at least "
+                f"{MIN_CLIENT_SECRET_LENGTH} characters"
+            )
+        clients[name] = secret
+    return clients

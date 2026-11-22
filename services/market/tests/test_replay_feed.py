@@ -332,6 +332,8 @@ async def test_activation_freezes_the_fingerprint_marks_the_environment_active_a
 ) -> None:
     user = uuid.uuid4()
     _, fingerprints = await read_all(client, ready["id"])
+    before = (await client.get(f"{API}/environments/{ready['id']}", headers=viewer())).json()
+    assert before["source_fingerprint"] is None and before["activated_at"] is None
     response = await activate(client, ready["id"], user=user)
     assert response.status_code == 200, response.text
     body = response.json()
@@ -340,6 +342,14 @@ async def test_activation_freezes_the_fingerprint_marks_the_environment_active_a
     assert body["missing_session_count"] == 0 and body["activated_by"] == str(user)
     listed = (await client.get(f"{API}/environments/{ready['id']}", headers=viewer())).json()
     assert listed["status"] == "active"
+    assert listed["source_fingerprint"] == body["source_fingerprint"]
+    assert listed["activated_at"] == body["activated_at"] and listed["activated_by"] == str(user)
+    in_list = next(
+        e
+        for e in (await client.get(f"{API}/environments", headers=viewer())).json()
+        if e["id"] == ready["id"]
+    )
+    assert in_list["source_fingerprint"] == body["source_fingerprint"]
     audited = await scalar(
         database,
         "SELECT count(*) FROM audit_log WHERE table_name = 'market_environment' AND row_id = :i"
@@ -370,6 +380,17 @@ async def test_activating_again_after_the_data_moved_freezes_the_new_fingerprint
     second = (await activate(client, ready["id"])).json()
     assert second["source_fingerprint"] == page.headers["X-Source-Fingerprint"]
     assert second["activated_at"] >= first["activated_at"]
+    assert (await scalar(database, "SELECT count(*) FROM environment_activation")) == 1
+
+
+async def test_activating_twice_on_unchanged_data_gives_the_same_fingerprint(
+    client: httpx.AsyncClient, database: Database, ready: dict[str, Any]
+) -> None:
+    first = await activate(client, ready["id"])
+    second = await activate(client, ready["id"])
+    assert first.status_code == second.status_code == 200
+    assert first.json()["source_fingerprint"] == second.json()["source_fingerprint"]
+    assert second.json()["status"] == "active"
     assert (await scalar(database, "SELECT count(*) FROM environment_activation")) == 1
 
 

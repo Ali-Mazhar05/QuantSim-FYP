@@ -29,7 +29,7 @@ consumer tells them apart only by `env_type`.
 | `source_fingerprint` | string | Identifies the exact data served (below) |
 | `seq` | integer, at least 1 | 1, 2, 3 without gaps, per environment and path |
 | `session` | integer, at least 0 | Index of the session among the sessions present; for synthetic, the step from 0 |
-| `session_date` | date, optional | The trading date of a replay session |
+| `session_date` | date or null, optional | The trading date of a replay session; absent or null for synthetic |
 | `ts` | UTC timestamp with `Z` | The session close; 21:00 or 20:00 UTC for NYSE, depending on daylight saving time |
 | `instrument_id`, `symbol` | uuid, string | |
 | `open`, `high`, `low`, `close`, `volume` | decimal strings | Adjusted; never a JSON number (below) |
@@ -47,7 +47,8 @@ are above zero and `high` is not below `low`; JSON Schema cannot say that, so
 `services/market/tests/contract_support.py` checks it and this is the rule to copy.
 
 **Prices are adjusted** for splits and dividends (ADR 08). A bar with a missing adjusted value cannot
-be served: the environment is refused (422) and raw prices are never substituted.
+be served: the environment is refused (422 `urn:quantsim:problem:missing-adjusted-prices`, section 3)
+and raw prices are never substituted.
 
 **The fingerprint** is `xxh3:` and 32 hex digits over the ordered served values of the instruments in
 the window: instrument, session, revision, and the five adjusted values. It changes when a bar
@@ -80,13 +81,13 @@ their paths, parameters, models and the other errors below are final and tested.
 
 | Method and path | Who | Answers |
 |---|---|---|
-| `GET /api/market/environments?type=&owner=` | any signed-in role | Environments, newest first. `type`: `historical_replay` or `synthetic`. `owner`: the creator's user id. 422 for a bad value |
+| `GET /api/market/environments?type=&owner=` | any signed-in role | Environments, newest first. `type`: `historical_replay` or `synthetic`. `owner`: the creator's user id. 422 for a bad value. Each carries `source_fingerprint`, `activated_at` and `activated_by`, null until activated, so a read-only caller can read the frozen fingerprint (also on `GET /api/market/environments/{id}`) |
 | `GET /api/market/environments/{id}/ticks?after_seq=0&limit=500` | any signed-in role | A page of ticks; header `X-Source-Fingerprint`. `limit` 1 to 2000, default 500 |
 | `POST /api/market/environments/{id}/activate` | quant, admin | Freezes the fingerprint: `{environment_id, status: "active", source_fingerprint, missing_session_count, activated_by, activated_at}` |
 | `GET/POST /api/market/replay-sessions`, `GET /replay-sessions/{id}`, `POST /replay-sessions/{id}/control` | read: all roles; create and control: quant, admin | A server-side clock over an activated environment: `position` and `session_date` computed at `server_time`, `state`, `speed`, `finished`, the pinned and current fingerprints. Control body `{action: play|pause|speed|seek, speed?, index?}` (DL-032 to DL-034) |
 | `GET /api/simulation/runs?status=&instrument=` | any signed-in role | Completed or other runs for a picker: id, status, model, sizes, symbols, `median_path_index`, `parent_run_id`, `scenario` |
 | `GET /api/simulation/runs/{id}` | any signed-in role | The run with progress, seed, storage mode and per-instrument statistics |
-| `GET /api/simulation/runs/{id}/ticks?path=0&after_seq=0&limit=500` | any signed-in role | A page of one path's ticks, from the stored values or regenerated from the seed |
+| `GET /api/simulation/runs/{id}/ticks?path=&after_seq=0&limit=500` | any signed-in role | A page of one path's ticks, from the stored values or regenerated from the seed. `path` is required (0 to `n_paths - 1`); without it 422, outside the run 404 |
 
 **A page** is `{"items": [tick, ...], "next_after_seq": 4 }`. `next_after_seq` is the `seq` of the last
 tick when more follow and `null` on the last page. A cursor past the end gives an empty page.
@@ -105,12 +106,31 @@ environment or run does not exist. 422 a bad parameter, or an environment that c
 `urn:quantsim:problem:not-a-replay-environment` for a synthetic one,
 `urn:quantsim:problem:environment-not-ready` for an environment some of whose instruments have no data
 yet, and `urn:quantsim:problem:missing-adjusted-prices` (with `missing`: bars per symbol) when a bar has
-no adjusted value. 501 on the simulation routes until they are built.
+no adjusted value. 404 also for a `path` the run does not have (`path >= n_paths`):
+`urn:quantsim:problem:not-found`, as for an unknown run. 501 on the simulation routes until they are built.
 
 **Activation** moves a ready environment to `active` and freezes the fingerprint; doing it again after
 the data moved freezes the new value, and the environment keeps one frozen value. Reading ticks needs a
 ready or active environment; every page is served from one database snapshot, so its fingerprint always
 describes the rows on it.
+
+**Activating twice.** It is idempotent in effect: the second call answers 200 with the same body when the
+data has not moved, and re-freezes the new fingerprint (a new `activated_at`) when it has. There is still
+one frozen value per environment.
+
+**Ticks of an environment that is not active.** A `ready` environment (never activated) is served: the
+`X-Source-Fingerprint` header carries the live fingerprint and there is no frozen value to compare with
+(`source_fingerprint` is null on the environment). A `draft` one answers 422
+`environment-not-ready`. There is no 409: no state of the environment makes a read conflict with
+anything. A consumer that needs the frozen value activates first.
+
+```
+POST /api/market/environments/6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01/activate
+422   Content-Type: application/problem+json
+{"type": "urn:quantsim:problem:missing-adjusted-prices", "title": "Missing adjusted prices",
+ "status": 422, "detail": "bars without adjusted prices: AAPL (3), KO (1)",
+ "missing": {"AAPL": 3, "KO": 1}}
+```
 
 **Which environment is served.** A completed simulation run is an environment by identity: its ticks
 carry `env_type: "synthetic"` and `env_id` equal to the run id, and a path is chosen with `?path=`. A

@@ -183,7 +183,7 @@ def build_data_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     Inspector = Annotated[
         Principal, Depends(auth.require_capability(Capability.VIEW_INGESTION_RUNS))
     ]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
     From = Annotated[date | None, Query(alias="from", description="First session, inclusive")]
     To = Annotated[date | None, Query(description="Last session, inclusive")]
     IntervalParam = Annotated[

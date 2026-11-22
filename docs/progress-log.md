@@ -4,6 +4,80 @@ A dated record of what was delivered, decided and found, newest first. Task ids 
 to [iteration-plan.md](iteration-plan.md). Every entry links to the evidence in the
 repository or in Jenkins.
 
+## 2026-11-22
+
+**Delivered (Iteration 2, contract K6, into `develop` by #145)**
+- **Metrics library (K6, #145):** `libs/qs_quant` with total return, annualised volatility,
+  Sharpe, max drawdown, turnover and historical VaR/CVaR (Lane C guide §7.6). Fixture
+  values match an exact rational reference to 1e-12; 200-example property tests (scale
+  invariance, max drawdown in [0, 1], CVaR >= VaR, determinism); each function under
+  50 ms on 10,000 points; purity check; 100% line coverage. Consumers: A16 run metrics
+  (Lane A) and B16 Monte Carlo VaR/CVaR (Lane B). The trading, simulation and risk images
+  now rebuild when the library changes (`ci/components.conf`).
+
+## 2026-11-20
+
+**Delivered (Iteration 2, Lane A, through `lane/a-trading` into `develop` by #99 and #102)**
+- **Trading engine interfaces (A00, #81):** orders, cost and slippage models, strategy and
+  history-only view, versioned trade-log payloads, the market-environment port.
+- **Execution (A11, #87):** next-open market fills, limit gap/cross/expiry, cash and
+  position checks at placement and at fill, fixed + per-share + percentage costs, fixed-bps
+  and volume slippage (ADR 04).
+- **Strategies (A12, #88):** buy and hold, MA crossover, momentum with a max-position cap,
+  mean reversion, on a history-only view that raises on look-ahead (ADR 05).
+- **trading_db (A13, #89):** append-only, hash-chained `trade_event` hypertable (guard
+  trigger for every role, UPDATE/DELETE/TRUNCATE revoked, seq unique and gap-free across
+  chunks), environment-binding CHECK, projection tables.
+- **Engine job (A14, #92):** one transaction per session, outbox, crash resume that must
+  recompute the stored hash before writing, `engine.run` on the K1 queue.
+- **Projections and rebuild (A15, #96):** one fold for live writes and rebuild, chain
+  verification, state as of any seq, `verify` and `rebuild [--apply]` commands.
+- **Trading API (A16, #97, #100):** strategies, portfolios, idempotent run submit, run
+  status, paged events, fills, holdings, value series, state, verify, admin rebuild,
+  metrics (return, volatility, Sharpe and drawdown wait for Lane C's K6).
+- **CI:** Windows-host fixes (A01, #83), tunnel restart (#52), lane pull requests and
+  Playwright gates (A22, #84), Playwright DEV smoke gating TEST (A21, #91), checkout retry
+  (#90) and a git mirror on the build agent (#93), trading live check on every DEV deploy
+  (#101).
+- **Release v0.1.2** promoted develop → test → acceptance → main (#94, #95, #98) with ACC
+  sign-off and production approval; tagged at `6d79b46`.
+
+**Found and fixed**
+- The lab PC reaches GitHub at about 11 KiB/s, so full clones hit the 10-minute checkout
+  timeout and every build failed before running code. Checkouts now borrow from a mirror on
+  the agent's volume (#93).
+- A trading API test shared its database with the role-matrix test, whose older queued runs
+  the worker claimed first; the run test now uses its own database (#97).
+
+**Verified**
+- DEV deploy of `508f720`: Playwright `dev-smoke` 3/3 against the real site, then the
+  trading live check: a portfolio on the bundled demo environment ran all sessions in 2 s,
+  26 events with an intact hash chain, and fills, value series, state, verify, holdings,
+  metrics and an admin rebuild (`identical`) all ended on the run's final hash.
+- Trading db tests on TimescaleDB in Jenkins: 58/58, including crash after sessions 1, 5
+  and 9 then resume to an identical log.
+
+**Decided**
+- ADR 04 (execution timing), ADR 05 (strategy type) and ADR 09 (service tokens) recorded
+  in `docs/adr/`. Confirms ADR 08 for Lane A: a symbol with no bar on a session has no
+  tick, and the engine tolerates it.
+
+## 2026-11-18
+
+**Delivered**
+- **Platform kit:** job queue library with leases and idempotent submit (K1, #73); service
+  scaffold that generated the simulation, trading and risk services (K2, #74); smaller DEV
+  footprint (#76). The three new services answer `/health` on DEV.
+- **Accounting core** with Decimal money, average cost and P&L (A10, #75).
+- Executable market smoke test and a CI check for script modes (#72).
+
+**Found and fixed**
+- The shared CI cache volume held root-owned files from a local deploy, so `npm ci` failed
+  in every build; ownership returned to the Jenkins user.
+
+**Decided**
+- Jenkins and every environment's stack moved to the always-on Linux lab PC.
+
 ## 2026-11-14
 
 **Found and fixed (same branch)**

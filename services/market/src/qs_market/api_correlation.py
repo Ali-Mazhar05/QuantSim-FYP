@@ -163,7 +163,7 @@ async def _resolve(session: AsyncSession, body: CorrelationRequest) -> dict[uuid
 def build_correlation_routers(*, auth: Authenticator, database: Database) -> list[APIRouter]:
     router = APIRouter(tags=["correlation"])
     Viewer = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_MARKET_DATA))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     @router.post("/correlations", responses={401: {}, 403: {}, 404: {}, 422: {}})
     async def correlations(

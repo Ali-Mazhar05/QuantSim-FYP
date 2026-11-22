@@ -107,6 +107,54 @@ class ActivationOut(BaseModel):
     activated_at: datetime
 
 
+def problem_response(
+    description: str, status_code: int, type_: str, title: str, detail: str, **extra: Any
+) -> dict[str, Any]:
+    """An error answer with a worked example, in the shape every service returns."""
+    body = {"type": f"urn:quantsim:problem:{type_}", "title": title, "status": status_code}
+    body |= {"detail": detail, **extra}
+    return {
+        "description": description,
+        "content": {"application/problem+json": {"example": body}},
+    }
+
+
+NOT_AUTHENTICATED = problem_response(
+    "No token, or a bad or expired one",
+    401,
+    "not-authenticated",
+    "Not authenticated",
+    "A valid access token is required.",
+)
+NOT_FOUND = problem_response(
+    "The environment does not exist",
+    404,
+    "not-found",
+    "Market environment not found",
+    "No market environment has this id.",
+)
+NOT_READY = problem_response(
+    "The environment cannot be replayed (a bad parameter is also a 422): "
+    "unsupported-frequency, not-a-replay-environment, environment-not-ready, or "
+    "missing-adjusted-prices with the bar count per symbol in `missing`",
+    422,
+    "missing-adjusted-prices",
+    "Missing adjusted prices",
+    "bars without adjusted prices: AAPL (3), KO (1)",
+    missing={"AAPL": 3, "KO": 1},
+)
+
+
+def forbidden(what: str) -> dict[str, Any]:
+    return problem_response(
+        f"The role may not {what}",
+        403,
+        "forbidden",
+        "Forbidden",
+        "Your role may not do this.",
+    )
+
+
 FINGERPRINT_HEADER = {
     "X-Source-Fingerprint": {
         "description": "The fingerprint of the data on this page; it equals the value frozen at "
@@ -123,7 +171,7 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     Creator = Annotated[
         Principal, Depends(auth.require_capability(Capability.CREATE_MARKET_ENVIRONMENTS))
     ]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def writer(
         request: Request, actor: Creator
@@ -136,12 +184,18 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
             )
             yield session, actor
 
-    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer)]
+    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer, scope="function")]
 
     @router.get(
         "/{environment_id}/ticks",
         response_model=TickPage,
-        responses={200: {"headers": FINGERPRINT_HEADER}, 401: {}, 403: {}, 404: {}, 422: {}},
+        responses={
+            200: {"headers": FINGERPRINT_HEADER},
+            401: NOT_AUTHENTICATED,
+            403: forbidden("read the market"),
+            404: NOT_FOUND,
+            422: NOT_READY,
+        },
     )
     async def read_ticks(
         environment_id: uuid.UUID,
@@ -167,7 +221,12 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
         "/{environment_id}/activate",
         response_model=ActivationOut,
         status_code=status.HTTP_200_OK,
-        responses={401: {}, 403: {}, 404: {}, 422: {}},
+        responses={
+            401: NOT_AUTHENTICATED,
+            403: forbidden("activate an environment"),
+            404: NOT_FOUND,
+            422: NOT_READY,
+        },
     )
     async def activate_environment(environment_id: uuid.UUID, scope: Writer) -> ActivationOut:
         session, actor = scope
