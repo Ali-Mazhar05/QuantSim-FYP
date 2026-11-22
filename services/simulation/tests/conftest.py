@@ -73,3 +73,10 @@ def settings() -> SimulationSettings:
         auth_jwks_url="http://127.0.0.1:1/jwks.json",
         content_hash="test-hash",
     )
+
+
+from tests.calibration_support import (  # noqa: E402, F401 - fixtures, for every test module
+    k5_world,
+    world,
+)
+from tests.run_support import run_world  # noqa: E402, F401 - the fixture, for every test module

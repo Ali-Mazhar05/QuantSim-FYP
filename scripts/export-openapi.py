@@ -50,8 +50,26 @@ def trading() -> FastAPI:
     )
 
 
+def simulation() -> FastAPI:
+    from qs_simulation.main import build_app
+    from qs_simulation.settings import SimulationSettings
+
+    return build_app(
+        SimulationSettings(
+            database_url=SecretStr("postgresql+asyncpg://unused:unused@127.0.0.1:1/unused"),
+            redis_url=SecretStr("redis://127.0.0.1:1"),
+            content_hash="0123456789ab",
+            auth_jwks_url="http://platform/api/platform/.well-known/jwks.json",
+        )
+    )
+
+
 # Add a service here when it exists; each entry builds the app with placeholder settings
-SERVICES: dict[str, Callable[[], FastAPI]] = {"market": market, "trading": trading}
+SERVICES: dict[str, Callable[[], FastAPI]] = {
+    "market": market,
+    "trading": trading,
+    "simulation": simulation,
+}
 
 
 def spec_path(service: str) -> Path:

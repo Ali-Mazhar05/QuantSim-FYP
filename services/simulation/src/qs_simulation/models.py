@@ -228,7 +228,9 @@ run_correlation = Table(
     metadata,
     Column("run_id", Uuid, primary_key=True),
     Column("size", Integer, nullable=False),
-    Column("matrix", JSONB, nullable=False),  # the matrix the paths used, after any repair
+    # the matrix the generator was given, before repair: the repair is deterministic, so this plus
+    # the record below reproduces the paths exactly (B-FR-14)
+    Column("matrix", JSONB, nullable=False),
     Column("repair_applied", Boolean, nullable=False),
     Column("min_eigenvalue_before", STATISTIC, nullable=False),
     Column("frobenius_change", STATISTIC, nullable=False),
@@ -318,3 +320,10 @@ path_quantile = Table(
         name="path_quantile_ordered",
     ),
 )
+
+# References that are deliberately not foreign keys (instrument_ref is a display cache of the
+# market service's instruments); drawn as dotted lines in the ERD, keyed (parent, child)
+LOGICAL_REFERENCES = {
+    ("instrument_ref", "calibration"): "instrument_id",
+    ("instrument_ref", "run_instrument"): "instrument_id",
+}

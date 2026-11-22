@@ -165,6 +165,7 @@ describe('the top bar and Replay', () => {
     const { calls } = fakeBackend({
       'GET /api/market/environments': () => json(200, [environment('e2', 'Newest Env'), environment('e1', 'Chosen Env')]),
       'GET /api/market/instruments/id-aapl/candles': () => json(200, candles(100)),
+      'GET /api/market/replay-sessions': () => json(200, [serverSession(41, candles(100).items[41].session_date)]),
     })
     useDemoStore.getState().startSession(account('Viewer'))
     useDemoStore.getState().setActiveEnvironment('e1')
@@ -172,7 +173,7 @@ describe('the top bar and Replay', () => {
 
     expect(await screen.findByText('Chosen Env — Historical Replay')).toBeInTheDocument()
     expect(screen.getByText('2025-01-01 → 2026-06-30 · Daily')).toBeInTheDocument()
-    expect(await screen.findByText('Session 42 / 100')).toBeInTheDocument()
+    expect(await screen.findByText('Session 42 / 100', { exact: false })).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByText('Chosen Env').length).toBeGreaterThan(0))
     const request = calls.find((c) => c.path.endsWith('/candles'))
     expect(request).toBeDefined()
@@ -286,3 +287,23 @@ describe('System', () => {
     expect(screen.getByText('Live')).toBeInTheDocument()
   })
 })
+
+/** A replay session as the market service holds it: the server's position, not the page's. */
+function serverSession(position: number, date: string) {
+  return {
+    id: 's1',
+    environment_id: 'e1',
+    created_by: 'u1',
+    created_at: '2026-11-22T10:00:00Z',
+    updated_at: '2026-11-22T10:00:00Z',
+    server_time: '2026-11-22T10:00:05Z',
+    state: 'paused',
+    speed: 1,
+    position,
+    session_count: 100,
+    session_date: date,
+    finished: false,
+    source_fingerprint: 'xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1',
+    current_fingerprint: 'xxh3:3f9a1c0e5b7d2a48c6e10f93b5d7a2c1',
+  }
+}

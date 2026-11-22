@@ -4,7 +4,7 @@ The output depends on the request alone, never on how many workers run it or in 
 shard ``k`` always uses the same three random streams (normals, Poisson counts, jump sizes).
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from typing import Literal
@@ -18,6 +18,7 @@ from qs_simulation.domain.correlation import (
     correlation_factor,
 )
 from qs_simulation.domain.generators import simulate_gbm, simulate_merton, simulate_ou
+from qs_simulation.domain.scenarios import Scenario, apply_prices, vol_scale
 
 SHARD_SIZE = 250
 Model = Literal["gbm", "ou", "merton"]
@@ -40,6 +41,7 @@ class PathRequest:
     n_steps: int
     seed: int
     dt: float = 1 / 252
+    scenario: Scenario | None = None  # a stress overlay; None for a base run
 
     def validate(self) -> None:
         if self.model not in REQUIRED:
@@ -76,6 +78,16 @@ def shard_streams(
 
 
 def generate_shard(request: PathRequest, shard: int) -> Array:
+    """Paths of shape (shard paths, steps, instruments) for one shard of the request.
+
+    A price that overflows becomes infinite instead of raising a warning; the caller checks the
+    paths and refuses a run whose prices cannot be stored (``domain.runs.check_paths``).
+    """
+    with np.errstate(over="ignore", invalid="ignore"):
+        return _generate_shard(request, shard)
+
+
+def _generate_shard(request: PathRequest, shard: int) -> Array:
     """Paths of shape (shard paths, steps, instruments) for one shard of the request."""
     request.validate()
     size = shard_sizes(request.n_paths)[shard]
@@ -85,43 +97,65 @@ def generate_shard(request: PathRequest, shard: int) -> Array:
     shape = (size, request.n_steps, n)
     shocks = correlate(normals.standard_normal(shape), factor)
     p = request.params
+    scale = vol_scale(request.scenario, request.n_steps)  # None for a base run: nothing changes
     if request.model == "gbm":
-        return simulate_gbm(request.s0, p["mu"], p["sigma"], request.dt, shocks)
-    if request.model == "ou":
-        return simulate_ou(request.s0, p["kappa"], p["theta"], p["sigma"], request.dt, shocks)
-    # the jump streams are drawn only here, so GBM and OU output never depends on them
-    counts = counts_stream.poisson(p["lam"] * request.dt, size=shape).astype(np.int64)
-    return simulate_merton(
-        request.s0,
-        p["mu"],
-        p["sigma"],
-        p["lam"],
-        p["mu_j"],
-        p["sigma_j"],
-        request.dt,
-        shocks,
-        counts,
-        jumps_stream.standard_normal(shape),
-    )
+        paths = simulate_gbm(request.s0, p["mu"], p["sigma"], request.dt, shocks, scale)
+    elif request.model == "ou":
+        paths = simulate_ou(
+            request.s0, p["kappa"], p["theta"], p["sigma"], request.dt, shocks, scale
+        )
+    else:
+        # the jump streams are drawn only here, so GBM and OU output never depends on them
+        counts = counts_stream.poisson(p["lam"] * request.dt, size=shape).astype(np.int64)
+        paths = simulate_merton(
+            request.s0,
+            p["mu"],
+            p["sigma"],
+            p["lam"],
+            p["mu_j"],
+            p["sigma_j"],
+            request.dt,
+            shocks,
+            counts,
+            jumps_stream.standard_normal(shape),
+            scale,
+        )
+    return apply_prices(request.scenario, paths)
 
 
 def _run_shard(job: tuple[PathRequest, int]) -> Array:
     return generate_shard(*job)
 
 
-def generate(request: PathRequest, workers: int = 1) -> tuple[Array, RepairRecord]:
+def generate(
+    request: PathRequest,
+    workers: int = 1,
+    on_shard: Callable[[int, int], None] | None = None,
+) -> tuple[Array, RepairRecord]:
     """All paths, shape (paths, steps, instruments), and the correlation repair record.
 
-    ``workers`` changes only how fast the shards are computed, never their values.
+    ``workers`` changes only how fast the shards are computed, never their values. ``on_shard`` is
+    called with (shards done, shards in all) as each shard finishes, in order, so a caller can show
+    progress; it cannot change the result.
     """
     request.validate()
     if workers < 1:
         raise ValueError("workers must be at least 1")
     _, record = correlation_factor(request.correlation)
     jobs = [(request, k) for k in range(len(shard_sizes(request.n_paths)))]
+    parts: list[Array] = []
+
+    def done() -> None:
+        if on_shard is not None:
+            on_shard(len(parts), len(jobs))
+
     if workers == 1:
-        parts = [_run_shard(job) for job in jobs]
+        for job in jobs:
+            parts.append(_run_shard(job))
+            done()
     else:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            parts = list(pool.map(_run_shard, jobs))
+            for part in pool.map(_run_shard, jobs):
+                parts.append(part)
+                done()
     return np.concatenate(parts, axis=0), record
