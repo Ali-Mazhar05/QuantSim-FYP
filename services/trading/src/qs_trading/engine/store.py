@@ -21,7 +21,10 @@ portfolio. Each :meth:`~PortfolioStore.commit` is one transaction per session:
 4. ``portfolio_state_current``: ``last_seq``, ``last_hash``, ``last_session``, cash and
    the positions cache, ``{"<symbol>": {"quantity": <int>, "cost_basis": "<cents>"}}``,
    as the fold's :meth:`~qs_trading.projections.fold.Ledger.state_row`.
-5. Outbox rows (:func:`qs_template.messaging.add_event`) on topic
+5. On the session that completes a run started by a job (``run_id`` given): the run's
+   ``portfolio_metrics`` row (A16), computed with the shared metrics library (K6) from
+   the projections just written, so it always matches the committed log.
+6. Outbox rows (:func:`qs_template.messaging.add_event`) on topic
    ``quantsim.trading.portfolio``, keyed by portfolio id: ``fill.executed`` per fill,
    ``portfolio.updated`` per session and ``run.completed`` at the end. Event ids are
    derived from ``(portfolio_id, seq, event_type)``, so each is unique and stable.
@@ -41,8 +44,16 @@ from qs_template.messaging import add_event
 from qs_trading.domain.events import OrderFilledV1, RunCompletedV1, ValuedV1
 from qs_trading.engine.core import Engine, LoggedEvent, RunSpec, SessionResult
 from qs_trading.engine.runner import ChainHead
-from qs_trading.models import portfolio, portfolio_state_current, strategy, trade_event
+from qs_trading.metrics import QUANT_METRICS, MetricsCalculator
+from qs_trading.models import (
+    portfolio,
+    portfolio_metrics,
+    portfolio_state_current,
+    strategy,
+    trade_event,
+)
 from qs_trading.ports.market_environment import EnvironmentRef, FingerprintChanged
+from qs_trading.projections.figures import load_run_figures
 from qs_trading.projections.fold import (
     Ledger,
     ProjectedEvent,
@@ -130,15 +141,22 @@ def _folded(head: Ledger, result: SessionResult) -> tuple[Ledger, ProjectionRows
 
 
 class PortfolioStore:
-    """The trading_db sink of one portfolio's run. ``run_id`` (the job id) is added to
-    the ``run.completed`` event when given."""
+    """The trading_db sink of one portfolio's run. With a ``run_id`` (the job id), the
+    ``run.completed`` event carries it and the session that completes the run also stores
+    the run's ``portfolio_metrics`` row, computed by ``metrics`` (A16, A-FR-14)."""
 
     def __init__(
-        self, database: Database, portfolio_id: uuid.UUID, *, run_id: uuid.UUID | None = None
+        self,
+        database: Database,
+        portfolio_id: uuid.UUID,
+        *,
+        run_id: uuid.UUID | None = None,
+        metrics: MetricsCalculator = QUANT_METRICS,
     ) -> None:
         self.database = database
         self.portfolio_id = portfolio_id
         self.run_id = run_id
+        self.metrics = metrics
 
     async def load_spec(self) -> RunSpec:
         async with self.database.transaction() as session:
@@ -209,8 +227,40 @@ class PortfolioStore:
                 .where(portfolio_state_current.c.portfolio_id == self.portfolio_id)
                 .values(**state_row, updated_at=func.now())
             )
+            if self.run_id is not None and any(
+                isinstance(e.payload, RunCompletedV1) for e in result.events
+            ):
+                await self._store_metrics(session, self.run_id)
             for event in result.events:
                 await self._publish(session, event)
+
+    async def _store_metrics(self, session: AsyncSession, run_id: uuid.UUID) -> None:
+        """The completed run's metrics, in the transaction that commits its last session,
+        so a stored row always matches the committed log. A repeat is a no-op."""
+        figures = await load_run_figures(session, self.portfolio_id)
+        final_value = figures.final_value
+        if figures.final_hash is None or final_value is None:
+            raise ProjectionError(figures.final_seq, "a completed run has a head and a value")
+        series = self.metrics.series_metrics(figures)
+        await session.execute(
+            pg_insert(portfolio_metrics)
+            .values(
+                run_id=run_id,
+                portfolio_id=self.portfolio_id,
+                final_seq=figures.final_seq,
+                final_hash=figures.final_hash,
+                sessions=figures.sessions,
+                final_value=final_value,
+                total_return=series.total_return,
+                volatility=series.volatility,
+                sharpe=series.sharpe,
+                max_drawdown=series.max_drawdown,
+                turnover=series.turnover,
+                trades=figures.trades,
+                total_costs=figures.total_costs,
+            )
+            .on_conflict_do_nothing(index_elements=[portfolio_metrics.c.run_id])
+        )
 
     async def _lock_head(self, session: AsyncSession, engine: Engine, first: LoggedEvent) -> Ledger:
         psc = portfolio_state_current.c

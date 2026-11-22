@@ -23,8 +23,17 @@ from qs_trading.engine.core import Engine
 from qs_trading.engine.runner import load_ticks, run_portfolio
 from qs_trading.engine.store import ChainConflict, PortfolioStore
 from qs_trading.jobs import ENGINE_RUN, build_handlers, job_queue, submit_engine_run
-from qs_trading.models import fill, order, portfolio, portfolio_state_current, portfolio_value
+from qs_trading.metrics import QUANT_METRICS
+from qs_trading.models import (
+    fill,
+    order,
+    portfolio,
+    portfolio_metrics,
+    portfolio_state_current,
+    portfolio_value,
+)
 from qs_trading.models import trade_event as log
+from qs_trading.projections.figures import load_run_figures
 from qs_trading.settings import TradingSettings
 
 pytestmark = pytest.mark.db
@@ -267,6 +276,57 @@ def test_the_run_job_submits_once_and_runs_on_the_worker(
             assert sorted(resumed_at) == [0, SESSIONS]
             types = await _outbox_types(database, portfolio_id)
             assert types[-1] == "run.completed" and types.count("run.completed") == 1
+        finally:
+            await database.close()
+
+    run(scenario())
+
+
+def test_a_completed_job_run_stores_its_k6_metrics(trading_db: TradingDb) -> None:
+    """A16, A-FR-14: one portfolio_metrics row per completed run, written with the run's
+    last session, equal to the shared metrics library on the stored series and ending on
+    the log head."""
+
+    async def scenario() -> None:
+        database = Database(_settings(trading_db.app_url))
+        try:
+            portfolio_id = await _new_portfolio(database)
+            run_id = uuid.uuid4()
+            store = PortfolioStore(database, portfolio_id, run_id=run_id)
+            result = await run_portfolio(await store.load_spec(), FileEnvironment(FIXTURE), store)
+
+            async with database.transaction() as session:
+                stored = (
+                    await session.execute(
+                        select(portfolio_metrics).where(portfolio_metrics.c.run_id == run_id)
+                    )
+                ).one()
+                figures = await load_run_figures(session, portfolio_id)
+            expected = QUANT_METRICS.series_metrics(figures)
+            assert stored.portfolio_id == portfolio_id
+            assert (stored.final_seq, stored.final_hash) == (result.final_seq, result.final_hash)
+            assert stored.sessions == SESSIONS
+            assert stored.final_value == figures.final_value
+            assert stored.trades == figures.trades > 0
+            assert stored.total_costs == figures.total_costs
+            for name in ("total_return", "volatility", "sharpe", "max_drawdown", "turnover"):
+                assert getattr(stored, name) == getattr(expected, name), name
+                assert getattr(stored, name) is not None, name
+            assert await _count(database, portfolio_metrics, portfolio_id) == 1
+        finally:
+            await database.close()
+
+    run(scenario())
+
+
+def test_a_run_without_a_job_stores_no_metrics(trading_db: TradingDb) -> None:
+    async def scenario() -> None:
+        database = Database(_settings(trading_db.app_url))
+        try:
+            portfolio_id = await _new_portfolio(database)
+            store = PortfolioStore(database, portfolio_id)
+            await run_portfolio(await store.load_spec(), FileEnvironment(FIXTURE), store)
+            assert await _count(database, portfolio_metrics, portfolio_id) == 0
         finally:
             await database.close()
 
