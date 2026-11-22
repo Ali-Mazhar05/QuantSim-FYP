@@ -125,7 +125,7 @@ def build_calibration_routers(
     router = APIRouter(prefix="/calibrations", tags=["calibrations"])
     Reader = Annotated[Principal, Depends(auth.principal)]
     QuantRole = Annotated[Principal, Depends(auth.require_capability(Capability.CALIBRATE_MODELS))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def writer(
         request: Request, actor: QuantRole
@@ -138,7 +138,7 @@ def build_calibration_routers(
             )
             yield session, actor
 
-    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer)]
+    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer, scope="function")]
 
     @router.post(
         "",
