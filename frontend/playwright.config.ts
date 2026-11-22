@@ -30,6 +30,10 @@ export default defineConfig({
     actionTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // HTTP over TCP only. Cloudflare offers HTTP/3 (QUIC, over UDP); from the Jenkins agent's
+    // container a fresh browser's first API request could hang for minutes on it before
+    // falling back to TCP (develop build 109: 2.5 min in sign-in), which was the sign-in flake
+    launchOptions: { args: ['--disable-quic'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 })
