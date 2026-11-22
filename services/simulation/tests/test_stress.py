@@ -202,7 +202,7 @@ def test_bad_parameters_are_named(kind: str, params: dict[str, Any], fields: set
 # ---- through the service ----
 
 
-QUANT = uuid.uuid4()  # one caller, so an idempotency key (scoped to the caller) means the same thing
+QUANT = uuid.uuid4()  # one caller: an idempotency key is scoped to the caller
 
 
 def quant() -> dict[str, str]:
