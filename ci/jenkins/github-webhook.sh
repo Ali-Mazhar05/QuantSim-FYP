@@ -46,5 +46,10 @@ status="$(curl -s -o /dev/null -w '%{http_code}' -X PATCH https://api.github.com
   -H 'Accept: application/vnd.github+json' \
   -H 'X-GitHub-Api-Version: 2022-11-28' \
   -d "{\"url\":\"$hook\",\"content_type\":\"json\"}")"
+if [[ "$status" == 404 ]]; then
+  # GitHub has no webhook for the app until it is switched on in its settings, and the API
+  # cannot switch it on or choose its events
+  die "the GitHub App has no webhook yet. Switch it on once: GitHub -> Settings -> Developer settings -> GitHub Apps -> quantsim-jenkins -> General -> Webhook: tick Active, URL $hook; then Permissions & events -> Subscribe to events: Push and Pull request. Then run this again"
+fi
 [[ "$status" == 200 ]] || die "GitHub refused the webhook update (HTTP $status)"
 log "the GitHub webhook now delivers to $hook"

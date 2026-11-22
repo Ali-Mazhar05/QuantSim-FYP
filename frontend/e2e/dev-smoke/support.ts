@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page, type Request } from '@playwright/test'
 import type { PageRoute } from './routes'
 
 /** The account the suite signs in with; the gate passes it in (playwright-gate.sh). */
@@ -69,25 +69,64 @@ const UNREACHABLE = 'Cannot reach the QuantSim server'
  * the deploy published in /config.json. The first request a fresh browser sends through the
  * tunnel sometimes fails before the route answers; warming it here keeps that flake out of
  * the sign-in the test is really about.
+ *
+ * When the browser never gets through, the error says why: what each attempt saw (the HTTP
+ * status, or the fetch error), the network errors Chromium reported for those requests
+ * (net::ERR_..., which fetch hides behind "Failed to fetch"), and whether the same URL
+ * answers outside the browser, from Playwright's own HTTP client. That tells a stuck
+ * browser session from a tunnel or API that is down.
  */
-export async function warmUpApi(page: Page): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(async () => {
-          try {
-            const config = (await (await fetch('/config.json', { cache: 'no-store' })).json()) as {
-              apiBaseUrl?: string
-            }
-            const api = String(config.apiBaseUrl ?? '').replace(/\/$/, '')
-            return (await fetch(`${api}/api/platform/health`, { cache: 'no-store' })).ok
-          } catch {
-            return false
-          }
-        }),
-      { message: 'the browser cannot reach the API', timeout: 60_000, intervals: [1_000, 2_000, 3_000] },
+export async function warmUpApi(page: Page, timeoutMs = 60_000): Promise<void> {
+  const netErrors: string[] = []
+  const onFailed = (request: Request) => {
+    if (request.url().includes('/api/platform/health') || request.url().endsWith('/config.json')) {
+      netErrors.push(`${request.url()}: ${request.failure()?.errorText ?? 'failed'}`)
+    }
+  }
+  page.on('requestfailed', onFailed)
+  const seen: string[] = []
+  let healthUrl = ''
+  try {
+    const deadline = Date.now() + timeoutMs
+    for (let attempt = 1; Date.now() < deadline; attempt += 1) {
+      const probe = await page.evaluate(async () => {
+        let url = '/config.json'
+        try {
+          const config = await fetch(url, { cache: 'no-store' })
+          if (!config.ok) return { ok: false, url, what: `HTTP ${config.status}` }
+          const api = String(((await config.json()) as { apiBaseUrl?: string }).apiBaseUrl ?? '').replace(/\/$/, '')
+          url = `${api}/api/platform/health`
+          const health = await fetch(url, { cache: 'no-store' })
+          return { ok: health.ok, url, what: `HTTP ${health.status}` }
+        } catch (error) {
+          return { ok: false, url, what: String(error) }
+        }
+      })
+      if (probe.ok) return
+      healthUrl = probe.url.startsWith('http') ? probe.url : healthUrl
+      seen.push(`attempt ${attempt}: ${probe.url} ${probe.what}`)
+      await page.waitForTimeout(Math.min(1_000 * attempt, 3_000))
+    }
+    let outside = 'not tried (the API address was never read)'
+    if (healthUrl) {
+      try {
+        outside = `HTTP ${(await page.request.get(healthUrl, { timeout: 10_000 })).status()}`
+      } catch (error) {
+        outside = String(error).split('\n')[0]
+      }
+    }
+    const unique = (items: string[]) => [...new Set(items)].slice(-5)
+    throw new Error(
+      [
+        `the browser could not reach the API in ${timeoutMs / 1000}s`,
+        `  last attempts: ${seen.slice(-3).join(' | ')}`,
+        `  browser network errors: ${unique(netErrors).join(' | ') || 'none reported'}`,
+        `  the same URL outside the browser: ${outside}`,
+      ].join('\n'),
     )
-    .toBe(true)
+  } finally {
+    page.off('requestfailed', onFailed)
+  }
 }
 
 /** Signs in through the real sign-in page and waits for the dashboard. */
