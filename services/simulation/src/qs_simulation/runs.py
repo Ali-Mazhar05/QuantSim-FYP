@@ -346,6 +346,14 @@ class RunService:
         payload = (
             await self._session.execute(select(job.c.payload).where(job.c.id == run_id))
         ).scalar_one()
+        if "parent_run_id" in payload:  # a stressed run takes its parent's instruments
+            parent = uuid.UUID(payload["parent_run_id"])
+            rows = await self._session.execute(
+                select(run_instrument.c.instrument_id)
+                .where(run_instrument.c.run_id == parent)
+                .order_by(run_instrument.c.position)
+            )
+            return [{"instrument_id": str(i)} for (i,) in rows.all()]
         instruments: list[dict[str, str]] = payload["instruments"]
         return instruments
 

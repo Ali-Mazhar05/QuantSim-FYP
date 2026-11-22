@@ -122,7 +122,8 @@ async def test_the_demo_run_of_five_names_1000_paths_252_steps_completes_and_is_
     [rows] = await run_world.sql("SELECT count(*) AS n FROM path_value")
     assert rows.n == 1_260_000
     # measured on the development machine (generation, statistics, COPY of 1.26 million rows);
-    # a generous bound that still catches a regression of an order of magnitude
+    # about 75 s here and 150 s on a loaded machine (PostgreSQL checks path_value's foreign key row by
+    # row, DL-041); the bound catches a regression of several times, not a busy host
     assert submitted < 0.8, f"submit took {submitted:.2f}s"
-    assert ran < 120, f"the demo run took {ran:.1f}s"
+    assert ran < 300, f"the demo run took {ran:.1f}s"
     print(f"\nDEMO submit={submitted * 1000:.0f} ms, run={ran:.1f} s, rows={rows.n}")
