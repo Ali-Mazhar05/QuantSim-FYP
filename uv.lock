@@ -1253,7 +1253,9 @@ source = { editable = "services/simulation" }
 dependencies = [
     { name = "alembic" },
     { name = "numpy" },
+    { name = "qs-quant", extra = ["calibration"] },
     { name = "qs-template" },
+    { name = "xxhash" },
 ]
 
 [package.dev-dependencies]
@@ -1272,7 +1274,9 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "numpy", specifier = ">=2.0" },
+    { name = "qs-quant", extras = ["calibration"], editable = "libs/qs_quant" },
     { name = "qs-template", editable = "libs/qs_template" },
+    { name = "xxhash", specifier = ">=3.4" },
 ]
 
 [package.metadata.requires-dev]
