@@ -113,8 +113,9 @@ test('a momentum portfolio runs with costs and slippage, rebuilds identical and 
     await main.getByLabel('Fixed per Fill (USD)').fill(FIXED_COST)
     await main.getByLabel('Per Share (USD)').fill('0')
     await main.getByLabel(/^Of Notional/).fill(PCT_COST)
-    await main.getByLabel('Model', { exact: true }).selectOption('fixed_bps')
-    await main.getByLabel('Basis Points').fill(SLIPPAGE_BPS)
+    // The slippage model stays on its default, fixed basis points. A label's text includes
+    // the options of a select it wraps ("Fixed basis points"), so match this one exactly
+    await main.getByLabel('Basis Points', { exact: true }).fill(SLIPPAGE_BPS)
     await main.getByRole('button', { name: 'Create Portfolio' }).click()
     await expect(main.getByRole('button', { name: 'Run backtest' })).toBeVisible()
   })
