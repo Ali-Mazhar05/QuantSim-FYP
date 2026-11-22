@@ -33,7 +33,7 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-012 | A correlation matrix with unavailable cells | Adopted | Lane C |
 | DL-013 | Path storage limit | Adopted | Lane A |
 | DL-014 | Path values in a plain table | Adopted | team |
-| DL-015 | Service tokens for the feeds | Open | Lane A |
+| DL-015 | Service tokens for the feeds | Resolved by ADR 09 | Lane A |
 | DL-016 | The price window a calibration reads | Adopted | Lane C |
 | DL-017 | Snapshotting ticks at activation | Adopted (deferred) | Lane A |
 | DL-018 | Synthetic ticks are single-price bars | Adopted | Lane A |
@@ -241,10 +241,12 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 ### DL-015 Service tokens for the feeds
 
 - **Asked:** do K3 service tokens pass the existing `Authenticator`, or does `libs/qs_template` change?
-- **Status: Open.** `Principal` has no service kind today (`auth.py`).
-- **Working assumption:** Lane B changes nothing in `libs/qs_template` (Lane A owns it, Plan section 2); the
-  HTTP adapters wait for K3, and file adapters over the fixtures are used meanwhile (Plan, "what to do while
-  waiting"). If K3 needs a market-side change, Lane A proposes it.
+- **Resolved (ADR 09, Lane A, 2026-11-20):** a platform-issued service token (`kind: service`, subject
+  `service:<name>`) passes the existing `Authenticator` as a read-only service principal, like a viewer.
+  So the feed, the bars and the correlation API answer it, and activation and replay sessions refuse it.
+  `libs/qs_template` did not need a Lane B change. Tested in
+  `services/market/tests/test_service_token_access.py`; the simulation service sends the token through
+  the K3 service client (`composition.market_sources`).
 
 ### DL-016 The price window a calibration reads
 

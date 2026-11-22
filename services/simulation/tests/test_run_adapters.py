@@ -234,13 +234,14 @@ def test_a_library_without_var_cvar_is_not_available() -> None:
 
 
 def test_k6_and_the_specification_agree_on_the_same_returns() -> None:
-    """The day K6 is installed this holds the two equal (tracker I-04); until then K6 is the
-    specification's own formula, so the check is that the adapter hands the sample over intact."""
+    """K6 is installed (tracker I-04): VaR and CVaR equal the specification's formula, both are
+    positive losses, CVaR is at least VaR, and the service picks K6 up by itself."""
     returns = np.random.default_rng(5).normal(0.0, 0.04, size=500)
-    quant = QuantRisk(install_fake_metrics(lambda r, a: reference_var_cvar(r, a)))
-    assert quant.var_cvar(returns) == pytest.approx(reference_var_cvar(returns))
-    try:
-        import qs_quant.metrics as real  # type: ignore[import-not-found]
-    except ImportError:
-        pytest.skip("K6 (qs_quant.metrics) is not installed yet: tracker I-04")
-    assert real.var_cvar(returns, 0.95) == pytest.approx(reference_var_cvar(returns, 0.95))
+    quant = QuantRisk()
+    assert quant.available
+    for alpha in (0.9, 0.95, 0.99):
+        var, cvar = quant.var_cvar(returns, alpha)
+        assert (var, cvar) == pytest.approx(reference_var_cvar(returns, alpha))
+        assert 0 < var <= cvar
+    assert isinstance(default_risk(), QuantRisk)
+    assert default_risk().version == quant.version

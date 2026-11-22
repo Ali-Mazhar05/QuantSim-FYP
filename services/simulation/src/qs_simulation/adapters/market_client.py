@@ -26,4 +26,4 @@ class JsonPoster:
 def idempotency_key(path: str, body: Any) -> str:
     """The same path and body always give the same key (canonical JSON, then a 128 bit hash)."""
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
-    return xxhash.xxh3_128_hexdigest(f"{path}\n{canonical}")
+    return xxhash.xxh3_128_hexdigest(f"{path}\n{canonical}".encode())
