@@ -1,9 +1,12 @@
 [project]
 name = "qs-quant"
-version = "0.1.0"
+version = "0.2.0"
 description = "Pure quantitative maths for QuantSim: metrics and risk statistics (K6), calibration (K5)"
 requires-python = ">=3.12,<3.13"
 dependencies = ["numpy>=2.0"]
+
+[project.optional-dependencies]
+calibration = ["scipy>=1.13", "statsmodels>=0.15"]
 
 [dependency-groups]
 dev = [
@@ -12,6 +15,8 @@ dev = [
   "hypothesis>=6.100",
   "ruff>=0.8",
   "mypy>=1.13",
+  "scipy>=1.13",
+  "statsmodels>=0.15",
 ]
 
 [build-system]
@@ -33,3 +38,8 @@ show_missing = true
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+[[tool.mypy.overrides]]
+# SciPy and statsmodels ship partial or no type information
+module = ["scipy", "scipy.*", "statsmodels", "statsmodels.*"]
+ignore_missing_imports = true

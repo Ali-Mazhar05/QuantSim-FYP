@@ -30,6 +30,12 @@ export default defineConfig({
     actionTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // HTTP/1.1 over TCP. With QUIC off the sign-in flake remained (develop build 110): in a
+    // browser that earlier tests had used, every API request hung while the same URL
+    // answered 200 outside the browser at once, which is a dead pooled HTTP/2 connection
+    // to the tunnel that all requests to the host share. On HTTP/1.1 a dead reused socket is
+    // retried on a fresh one. The sign-in probe reports it if it still happens (support.ts)
+    launchOptions: { args: ['--disable-quic', '--disable-http2'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 })

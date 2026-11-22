@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page, type Request } from '@playwright/test'
 import type { PageRoute } from './routes'
 
 /** The account the suite signs in with; the gate passes it in (playwright-gate.sh). */
@@ -61,21 +61,98 @@ export async function openInApp(page: Page, path: string): Promise<void> {
   }, path)
 }
 
+/** What the sign-in card says when the browser cannot reach the API (authShared.ts). */
+const UNREACHABLE = 'Cannot reach the QuantSim server'
+
+/**
+ * Waits until the browser itself can reach the platform's health route at the API address
+ * the deploy published in /config.json. The first request a fresh browser sends through the
+ * tunnel sometimes fails before the route answers; warming it here keeps that flake out of
+ * the sign-in the test is really about.
+ *
+ * When the browser never gets through, the error says why: what each attempt saw (the HTTP
+ * status, or the fetch error), the network errors Chromium reported for those requests
+ * (net::ERR_..., which fetch hides behind "Failed to fetch"), and whether the same URL
+ * answers outside the browser, from Playwright's own HTTP client. That tells a stuck
+ * browser session from a tunnel or API that is down. Each request gives up after 10 s, so a
+ * connection that hangs (rather than fails) is reported too ("TimeoutError").
+ */
+export async function warmUpApi(page: Page, timeoutMs = 60_000): Promise<void> {
+  const netErrors: string[] = []
+  const onFailed = (request: Request) => {
+    if (request.url().includes('/api/platform/health') || request.url().endsWith('/config.json')) {
+      netErrors.push(`${request.url()}: ${request.failure()?.errorText ?? 'failed'}`)
+    }
+  }
+  page.on('requestfailed', onFailed)
+  const seen: string[] = []
+  let healthUrl = ''
+  try {
+    const deadline = Date.now() + timeoutMs
+    for (let attempt = 1; Date.now() < deadline; attempt += 1) {
+      const probe = await page.evaluate(async () => {
+        let url = '/config.json'
+        try {
+          const config = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+          if (!config.ok) return { ok: false, url, what: `HTTP ${config.status}` }
+          const api = String(((await config.json()) as { apiBaseUrl?: string }).apiBaseUrl ?? '').replace(/\/$/, '')
+          url = `${api}/api/platform/health`
+          const health = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+          return { ok: health.ok, url, what: `HTTP ${health.status}` }
+        } catch (error) {
+          return { ok: false, url, what: String(error) }
+        }
+      })
+      if (probe.ok) return
+      healthUrl = probe.url.startsWith('http') ? probe.url : healthUrl
+      seen.push(`attempt ${attempt}: ${probe.url} ${probe.what}`)
+      await page.waitForTimeout(Math.min(1_000 * attempt, 3_000))
+    }
+    let outside = 'not tried (the API address was never read)'
+    if (healthUrl) {
+      try {
+        outside = `HTTP ${(await page.request.get(healthUrl, { timeout: 10_000 })).status()}`
+      } catch (error) {
+        outside = String(error).split('\n')[0]
+      }
+    }
+    const unique = (items: string[]) => [...new Set(items)].slice(-5)
+    throw new Error(
+      [
+        `the browser could not reach the API in ${timeoutMs / 1000}s`,
+        `  last attempts: ${seen.slice(-3).join(' | ')}`,
+        `  browser network errors: ${unique(netErrors).join(' | ') || 'none reported'}`,
+        `  the same URL outside the browser: ${outside}`,
+      ].join('\n'),
+    )
+  } finally {
+    page.off('requestfailed', onFailed)
+  }
+}
+
 /** Signs in through the real sign-in page and waits for the dashboard. */
 export async function signIn(page: Page): Promise<void> {
   const { username, password } = credentials()
   await page.goto('/login')
-  await page.getByLabel('Username or email').fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByRole('button', { name: 'Sign In' }).click()
+  await warmUpApi(page)
 
-  // A refused sign-in shows a notice on the card (or another card, such as "verify your
-  // email first") instead of opening the app
   const notice = page.getByRole('alert')
   const app = page.getByRole('main')
-  await expect(app.or(notice).or(page.getByText('Back to sign in')).first()).toBeVisible({ timeout: 30_000 })
-  if (!(await app.isVisible())) {
+  // One more try only when the API could not be reached; a refused sign-in fails at once
+  for (let attempt = 1; ; attempt += 1) {
+    await page.getByLabel('Username or email').fill(username)
+    await page.getByLabel('Password', { exact: true }).fill(password)
+    await page.getByRole('button', { name: 'Sign In' }).click()
+
+    // A refused sign-in shows a notice on the card (or another card, such as "verify your
+    // email first") instead of opening the app
+    await expect(app.or(notice).or(page.getByText('Back to sign in')).first()).toBeVisible({ timeout: 30_000 })
+    if (await app.isVisible()) break
     const reason = (await notice.isVisible()) ? await notice.innerText() : await page.locator('h1').innerText()
+    if (attempt < 2 && reason.includes(UNREACHABLE)) {
+      await warmUpApi(page)
+      continue
+    }
     throw new Error(`sign-in as ${username} did not open the app: ${reason}`)
   }
   await expect(page).toHaveURL(/\/dashboard$/)

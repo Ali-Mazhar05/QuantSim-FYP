@@ -4,7 +4,8 @@
 call :func:`build_app` with their own pieces. With ``QS_EMBEDDED_WORKERS=true`` (DEV) the
 job worker and the outbox relay run inside this process instead of their own containers;
 ``QS_TRADING_DEMO_ENVIRONMENTS`` (LOCAL and DEV) lets that worker run portfolios over the
-bundled demo environments.
+bundled demo environments, and ``QS_TRADING_DEMO_FEEDS`` (LOCAL and DEV) mounts the stand-in
+for Lane B's feeds at ``/demo-feeds`` (see :mod:`qs_trading.demo.feeds`).
 """
 
 from fastapi import FastAPI
@@ -17,6 +18,7 @@ from qs_template.kafka import KafkaPublisher
 from qs_template.messaging import OutboxRelay
 from qs_template.revocation import RevocationList
 from qs_trading.api import build_routers
+from qs_trading.demo.feeds import demo_feeds_app
 from qs_trading.jobs import build_handlers, environment_factory, job_queue
 from qs_trading.settings import TradingSettings
 
@@ -67,7 +69,7 @@ def build_app(
     revocations = revocations or RevocationList.from_url(settings.redis_url.get_secret_value())
     auth = authenticator or Authenticator(settings, is_revoked=revocations.is_revoked)
     loops = embedded_loops(settings, database)
-    return create_app(
+    app = create_app(
         settings,
         database=database,
         routers=build_routers(
@@ -80,6 +82,10 @@ def build_app(
         on_startup=[loops.start],
         on_shutdown=[loops.stop, revocations.close],
     )
+    if settings.trading_demo_feeds:
+        # Not under /api/trading, so the gateway never exposes it: only the worker calls it
+        app.mount("/demo-feeds", demo_feeds_app())
+    return app
 
 
 def create() -> FastAPI:
