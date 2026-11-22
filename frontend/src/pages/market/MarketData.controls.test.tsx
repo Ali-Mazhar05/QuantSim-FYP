@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { delay, http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -156,9 +156,9 @@ describe('Market Data controls', () => {
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2023-01-03' } })
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2023-01-10' } })
     expect(await screen.findByText('Daily · 2023-01-03 to 2023-01-10')).toBeInTheDocument()
-    const asked = lastOf(seen.candles).searchParams
-    expect(asked.get('from')).toBe('2023-01-03')
-    expect(asked.get('to')).toBe('2023-01-10')
+    // the label changes first; the request follows, so wait for it
+    await waitFor(() => expect(lastOf(seen.candles).searchParams.get('to')).toBe('2023-01-10'))
+    expect(lastOf(seen.candles).searchParams.get('from')).toBe('2023-01-03')
     fireEvent.click(screen.getByRole('button', { name: 'Reset window' }))
     expect(await screen.findByText('Daily · last 90 sessions')).toBeInTheDocument()
   })
