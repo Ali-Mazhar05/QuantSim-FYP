@@ -223,9 +223,12 @@ build_id() {
   printf '%s' "${BUILD_TAG:-local-$$}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'
 }
 
-# Name prefix for this build's test containers: qs-ci-<at most 30 characters>. Containers
-# are reached by name on their network, and a host name may not exceed 63 characters,
-# so long branch names are cut and a hash keeps the prefix unique.
+# Name prefix for this build's test containers and networks: qsci-<at most 30 characters>.
+# Containers are reached by name on their network, and a host name may not exceed 63
+# characters, so long branch names are cut and a hash keeps the prefix unique. It was
+# qs-ci- until 22 Nov: the sweep in branches made before then removes any qs-ci- container
+# that is not running yet, including another build's (sweep.sh), so new builds use a name
+# that sweep cannot see.
 test_id() {
   local id
   id="$(build_id)"
@@ -233,7 +236,7 @@ test_id() {
   if (( ${#id} > 30 )); then
     id="${id:0:21}-$(printf '%s' "$id" | sha1sum | cut -c1-8)"
   fi
-  printf 'qs-ci-%s' "$id"
+  printf 'qsci-%s' "$id"
 }
 
 # Cloudflare Pages API: cf_pages_api <METHOD> <path under /pages/projects> [json-body]

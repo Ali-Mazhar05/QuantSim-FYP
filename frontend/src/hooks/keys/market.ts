@@ -3,4 +3,5 @@
 export const marketKeys = {
   all: ['market'] as const,
   environments: () => [...marketKeys.all, 'environments'] as const,
+  session: (environmentId: string) => [...marketKeys.all, 'replay-session', environmentId] as const,
 }
