@@ -1,7 +1,8 @@
 import { marketHandlers } from './market'
+import { simulationHandlers } from './simulation'
 
 // One file per service: a lane edits its own file and adds one line here.
-export { MARKET, problem } from './common'
+export { MARKET, SIMULATION, problem } from './common'
 
 /** The default mock backend. Tests override per case. */
-export const handlers = [...marketHandlers]
+export const handlers = [...marketHandlers, ...simulationHandlers]

@@ -74,3 +74,79 @@ export const listScenarios = (options: RequestOptions = {}): Promise<Scenario[]>
 /** Where a job ends: nothing more will change, so polling stops. */
 export const isFinished = (status: RunSummary['status'] | Calibration['status']): boolean =>
   status === 'completed' || status === 'failed' || status === 'succeeded' || status === 'refused'
+
+/** The numbers a fan chart draws, from one instrument of the stored quantiles. */
+export function fanOf(q: Quantiles, instrumentId?: string) {
+  const one = q.instruments.find((i) => i.instrument_id === instrumentId) ?? q.instruments[0]
+  if (!one) return null
+  const column = (level: 'q05' | 'q25' | 'q50' | 'q75' | 'q95') => [
+    Number(one.start_price),
+    ...one.steps.map((s) => Number(s[level])),
+  ]
+  return {
+    symbol: one.symbol,
+    start: Number(one.start_price),
+    bands: { p5: column('q05'), p25: column('q25'), p50: column('q50'), p75: column('q75'), p95: column('q95') },
+  }
+}
+
+/** A calibration the model refused (too little history, not mean-reverting ...), with its reason. */
+export class CalibrationRefusedError extends Error {
+  constructor(
+    readonly symbol: string,
+    readonly reason: string,
+  ) {
+    super(`${symbol}: ${reason}`)
+    this.name = 'CalibrationRefusedError'
+  }
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+export interface EnsureOptions {
+  model: ModelName
+  instruments: { id: string; symbol: string }[]
+  start: string
+  end: string
+  /** The stored calibrations already known, to reuse a fit of the same model and window. */
+  existing: Calibration[]
+  pollMs?: number
+  /** Give up waiting for a fit after this long (the job itself keeps its own limits). */
+  timeoutMs?: number
+}
+
+/**
+ * The calibration of every instrument for a model and window: a converged stored fit of exactly
+ * that window is reused, anything else is fitted now (one job per instrument, started together)
+ * and waited for. A refusal stops the whole thing with the model's own reason.
+ */
+export async function ensureCalibrations(options: EnsureOptions): Promise<string[]> {
+  const { model, start, end, existing, pollMs = 1000, timeoutMs = 120_000 } = options
+  return Promise.all(
+    options.instruments.map(async ({ id, symbol }) => {
+      const reusable = existing.find(
+        (c) =>
+          c.calibration?.instrument_id === id &&
+          c.calibration.model === model &&
+          c.calibration.converged &&
+          c.calibration.window_start === start &&
+          c.calibration.window_end === end,
+      )
+      if (reusable) return reusable.id
+      let job = await createCalibration(
+        { instrument_id: id, model, window_start: start, window_end: end },
+        `ui:calibrate:${model}:${id}:${start}:${end}`,
+      )
+      const deadline = Date.now() + timeoutMs
+      while (!isFinished(job.status)) {
+        if (Date.now() > deadline) throw new Error(`${symbol}: the fit did not finish in time`)
+        await sleep(pollMs)
+        job = await getCalibration(job.id)
+      }
+      if (job.status === 'refused') throw new CalibrationRefusedError(symbol, job.refusal?.reason ?? 'refused')
+      if (job.status === 'failed') throw new Error(`${symbol}: ${job.error ?? 'the fit failed'}`)
+      if (!job.calibration?.converged) throw new CalibrationRefusedError(symbol, 'the fit did not converge')
+      return job.id
+    }),
+  )
+}

@@ -1,75 +1,196 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Zap } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import MonteCarloFanChart from '../../components/charts/MonteCarloFanChart'
 import Button from '../../components/forms/Button'
-import { useCan } from '../../demo/useCan'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import ErrorNote from '../../components/status/ErrorNote'
 import StatusPill from '../../components/status/StatusPill'
-import { useDemoStore } from '../../demo/demoState'
+import DataTable, { type Column } from '../../components/tables/DataTable'
+import { useCan } from '../../demo/useCan'
+import { classifyError } from '../../hooks/apiError'
+import { useQuantiles, useRun, useRuns, useScenarios, useStressRun } from '../../hooks/useSimulation'
+import { type Run, fanOf } from '../../services/api/simulation'
+
+const MODEL_NAMES = { gbm: 'GBM', ou: 'Ornstein-Uhlenbeck', merton: 'Jump Diffusion' } as const
+type Statistic = Run['statistics'][number]
+
+const money = (value: string) => `$${Number(value).toFixed(2)}`
+/** A loss is a positive fraction on the wire; it is shown as a negative percentage. */
+const loss = (value: string) => `-${(Number(value) * 100).toFixed(1)}%`
+
+const columns: Column<Statistic>[] = [
+  { key: 'symbol', header: 'Instrument', render: (s) => <span className="mono font-semibold">{s.symbol}</span> },
+  { key: 'mean', header: 'Mean', align: 'right', render: (s) => <span className="mono">{money(s.mean_price)}</span> },
+  { key: 'median', header: 'Median', align: 'right', render: (s) => <span className="mono">{money(s.median_price)}</span> },
+  { key: 'p5', header: '5th %ile', align: 'right', render: (s) => <span className="mono">{money(s.p5_price)}</span> },
+  { key: 'p95', header: '95th %ile', align: 'right', render: (s) => <span className="mono">{money(s.p95_price)}</span> },
+  {
+    key: 'var',
+    header: 'VaR 95%',
+    align: 'right',
+    render: (s) => <span className="mono text-[var(--color-risk-severe)]">{loss(s.var95)}</span>,
+  },
+  {
+    key: 'cvar',
+    header: 'CVaR 95%',
+    align: 'right',
+    render: (s) => <span className="mono text-[var(--color-risk-severe)]">{loss(s.cvar95)}</span>,
+  },
+]
 
 export default function SimulationResults() {
-  const { id = '1042' } = useParams()
+  const { id } = useParams()
   const navigate = useNavigate()
   const canCreate = useCan('create_portfolios')
-  const advanceTo = useDemoStore((s) => s.advanceTo)
+  const canLaunch = useCan('launch_simulations')
+  const { run, error } = useRun(id)
+  const { quantiles } = useQuantiles(id, run?.status === 'completed')
+  const { runs } = useRuns()
+  const { scenarios } = useScenarios()
+  const stress = useStressRun()
+  const [problem, setProblem] = useState<string | null>(null)
+  const keys = useRef(new Map<string, string>())
+
+  // the run this one is compared with: its parent (when it is stressed) or its stressed copy
+  const other = run
+    ? run.parent_run_id
+      ? runs?.find((r) => r.id === run.parent_run_id)
+      : runs?.find((r) => r.parent_run_id === run.id && r.status === 'completed')
+    : undefined
+  const { quantiles: otherQuantiles } = useQuantiles(other?.id, Boolean(other))
+  const fan = quantiles ? fanOf(quantiles) : null
+  const otherFan = otherQuantiles ? fanOf(otherQuantiles, fan ? quantiles?.instruments[0]?.instrument_id : undefined) : null
+  const short = (id ?? '').slice(0, 8)
+
+  async function apply(code: string) {
+    if (!run) return
+    setProblem(null)
+    // one key per run and scenario: a double click asks for one stressed run
+    const k = `${run.id}:${code}`
+    if (!keys.current.has(k)) keys.current.set(k, crypto.randomUUID())
+    try {
+      const derived = await stress.mutateAsync({ runId: run.id, scenario: code, key: keys.current.get(k) as string })
+      navigate(`/simulation/run/${derived.id}`)
+    } catch (failure) {
+      setProblem(classifyError(failure).message)
+    }
+  }
 
   return (
-    <div className="qs-fade-in flex flex-col gap-6">
+    <div className="qs-fade-in flex flex-col gap-6" data-testid="page-results">
       <PageHeader
         eyebrow="Step 4 of 8 — Simulation"
-        title={`Simulation #${id}`}
-        breadcrumbs={[{ label: 'Simulations', to: '/simulation/runs' }, { label: `#${id}` }]}
-        description="GBM · AAPL · 10,000 paths · 252 steps"
-        action={<StatusPill tone="success" dot>Complete</StatusPill>}
+        title={`Simulation #${short}`}
+        breadcrumbs={[{ label: 'Simulations', to: '/simulation/runs' }, { label: `#${short}` }]}
+        description={
+          run
+            ? `${MODEL_NAMES[run.model]} · ${run.symbols.join(', ')} · ${run.n_paths.toLocaleString()} paths · ${run.n_steps} steps${run.scenario ? ` · scenario ${run.scenario}` : ''}`
+            : undefined
+        }
+        action={
+          run && (
+            <StatusPill tone={run.status === 'completed' ? 'success' : run.status === 'failed' ? 'danger' : 'info'} dot>
+              {run.status === 'completed' ? 'Complete' : run.status === 'failed' ? 'Failed' : 'Not finished'}
+            </StatusPill>
+          )
+        }
       />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.6fr_1fr]">
-        <Panel title="Monte Carlo Fan Chart" subtitle="Simulated terminal price distribution">
-          <MonteCarloFanChart height={320} />
+      {error ? (
+        <ErrorNote error={error} />
+      ) : !run ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Loading the results…</p>
+      ) : run.status !== 'completed' ? (
+        <Panel>
+          <p role="status" className="text-sm text-[var(--color-text-secondary)]">
+            {run.status === 'failed' ? `This run failed: ${run.error ?? 'no reason was recorded'}.` : 'This run has not finished, so it has no results yet.'}{' '}
+            <button className="underline" onClick={() => navigate(`/simulation/run/${run.id}`)}>
+              Open the run
+            </button>
+          </p>
         </Panel>
-
-        <div className="flex flex-col gap-5">
-          <Panel title="Terminal Price">
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <Stat label="Mean" value="$238.41" />
-              <Stat label="Median" value="$234.80" />
-              <Stat label="5th %ile" value="$181.22" />
-              <Stat label="95th %ile" value="$312.17" />
-            </dl>
+      ) : (
+        <>
+          <Panel
+            title="Monte Carlo Fan Chart"
+            subtitle={fan ? `${fan.symbol}: simulated price quantiles by step` : 'Simulated price quantiles by step'}
+          >
+            {fan ? (
+              <MonteCarloFanChart
+                bands={fan.bands}
+                height={320}
+                {...(otherFan
+                  ? {
+                      compare: otherFan.bands.p50,
+                      compareLabel: run.parent_run_id ? 'Base median' : `Stressed median (${other?.scenario ?? 'scenario'})`,
+                    }
+                  : {})}
+              />
+            ) : (
+              <p className="text-sm text-[var(--color-text-muted)]">Loading the fan chart…</p>
+            )}
           </Panel>
-          <Panel title="Risk Summary">
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <Stat label="VaR 95%" value="-8.7%" tone="negative" />
-              <Stat label="CVaR 95%" value="-12.9%" tone="negative" />
-            </dl>
+
+          <Panel title="Terminal Price and Risk" subtitle="At the last step, over all paths">
+            <DataTable columns={columns} rows={run.statistics} rowKey={(s) => s.instrument_id} />
           </Panel>
-        </div>
-      </div>
 
-      <div className="flex justify-end">
-        <Button
-          icon={ArrowRight}
-          disabled={!canCreate}
-          onClick={() => {
-            advanceTo('SIMULATION_COMPLETE')
-            navigate('/trading/portfolios/new')
-          }}
-        >
-          Create Portfolio
-        </Button>
-      </div>
-    </div>
-  )
-}
+          {other && (
+            <Panel title={run.parent_run_id ? 'Base Run' : 'Stressed Run'} subtitle={`${other.scenario ?? 'base'} · #${other.id.slice(0, 8)}`}>
+              <p className="text-sm text-[var(--color-text-secondary)]" data-testid="compare-note">
+                {run.parent_run_id
+                  ? 'The dashed line is the median of the base run this one was stressed from.'
+                  : `The dashed line is the median of the stressed copy (${other.scenario}) of this run.`}{' '}
+                <button className="underline" onClick={() => navigate(`/simulation/results/${other.id}`)}>
+                  Open it
+                </button>
+              </p>
+            </Panel>
+          )}
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'negative' }) {
-  return (
-    <div>
-      <dt className="text-xs text-[var(--color-text-muted)]">{label}</dt>
-      <dd className={`mono mt-0.5 text-base font-semibold ${tone === 'negative' ? 'text-[var(--color-risk-severe)]' : 'text-[var(--color-text-primary)]'}`}>
-        {value}
-      </dd>
+          {!run.parent_run_id && (
+            <Panel title="Stress Scenarios" subtitle="A stressed copy uses this run's seed and parameters, with the scenario on top">
+              {scenarios === null ? (
+                <p className="text-sm text-[var(--color-text-muted)]">Loading scenarios…</p>
+              ) : scenarios.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-muted)]">There are no scenarios yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {scenarios.map((s) => (
+                    <Button
+                      key={s.code}
+                      variant="secondary"
+                      icon={Zap}
+                      disabled={!canLaunch || stress.isPending}
+                      data-testid={`stress-${s.code}`}
+                      onClick={() => void apply(s.code)}
+                    >
+                      {s.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {!canLaunch && <p className="mt-3 text-xs text-[var(--color-text-muted)]">Your role can read results but not start a stressed run.</p>}
+              {problem && (
+                <p role="alert" className="mt-3 text-sm text-[var(--color-risk-severe)]">
+                  {problem}
+                </p>
+              )}
+            </Panel>
+          )}
+
+          {!canCreate && (
+            <p className="text-sm text-[var(--color-text-muted)]">Your role can read results but not create a portfolio.</p>
+          )}
+          <div className="flex justify-end">
+            <Button icon={ArrowRight} disabled={!canCreate} onClick={() => navigate(`/trading/portfolios/new?run=${run.id}`)}>
+              Create Portfolio
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
