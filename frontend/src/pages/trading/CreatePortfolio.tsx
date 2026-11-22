@@ -1,12 +1,13 @@
 import { ArrowRight, Play, Plus } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
 import EmptyState from '../../components/status/EmptyState'
 import StatusPill from '../../components/status/StatusPill'
 import { useDemoStore } from '../../demo/demoState'
+import { useRuns } from '../../hooks/useSimulation'
 import { ApiError } from '../../services/api/client'
 import { type Environment, listEnvironments } from '../../services/api/market'
 import {
@@ -80,6 +81,8 @@ interface Loaded {
 
 export default function CreatePortfolio() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const { runs: finishedRuns } = useRuns({ status: 'completed' })
   const advanceTo = useDemoStore((s) => s.advanceTo)
 
   const [loaded, setLoaded] = useState<Loaded | null>(null)
@@ -133,7 +136,17 @@ export default function CreatePortfolio() {
     [],
   )
 
+  // arriving from a simulation's results (?run=<id>): that run is the environment to choose
+  const wantedRun = params.get('run')
+  useEffect(() => {
+    if (wantedRun && finishedRuns?.some((r) => r.id === wantedRun)) setEnvironment(`simulation:${wantedRun}`)
+  }, [wantedRun, finishedRuns])
+
   const strategy = loaded?.strategies.find((s) => s.id === strategyId) ?? null
+  // a simulation run is bound at its median path (ADR 03): the one the run chose for portfolios
+  const chosenRun = environment.startsWith('simulation:')
+    ? finishedRuns?.find((r) => r.id === environment.slice('simulation:'.length))
+    : undefined
 
   const submit = async () => {
     if (!strategy) return
@@ -147,7 +160,9 @@ export default function CreatePortfolio() {
         initial_capital: capital.trim(),
         cost_model: { fixed: fixed.trim(), per_share: perShare.trim(), pct: pct.trim() },
         slippage_model: { kind: slippageKind, bps: bps.trim() },
-        replay_environment_id: environment.replace(/^replay:/, ''),
+        ...(chosenRun
+          ? { simulation_run_id: chosenRun.id, path_index: chosenRun.median_path_index }
+          : { replay_environment_id: environment.replace(/^replay:/, '') }),
       })
       setCreated(portfolio)
       advanceTo('PORTFOLIO_CREATED')
@@ -317,14 +332,23 @@ export default function CreatePortfolio() {
                         </optgroup>
                       )}
                       <optgroup label="Simulation runs">
-                        <option value="" disabled>
-                          No simulation runs available yet
-                        </option>
+                        {(finishedRuns ?? []).length === 0 ? (
+                          <option value="" disabled>
+                            No completed simulation runs yet
+                          </option>
+                        ) : (
+                          (finishedRuns ?? []).map((r) => (
+                            <option key={r.id} value={`simulation:${r.id}`}>
+                              #{r.id.slice(0, 8)} · {r.symbols.join(', ')}
+                              {r.scenario ? ` · ${r.scenario}` : ''} · {r.n_paths.toLocaleString()} paths
+                            </option>
+                          ))
+                        )}
                       </optgroup>
                     </select>
                   </Field>
                   <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
-                    Simulation runs will be listed here once the simulation service publishes its run list.
+                    A simulation run is replayed along its median path.
                   </p>
                   {loaded.environmentsError && <ErrorNotice message={`Market environments: ${loaded.environmentsError}`} />}
                 </div>
