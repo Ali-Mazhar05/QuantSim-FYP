@@ -457,7 +457,9 @@ def run_benchmark(api: Api, token: str, env_id: str, name: str) -> None:
     )
 
 
-ENVIRONMENT_KEYS = frozenset({"spec", "environment", "env_id", "portfolio_id"})
+# An order id is derived from the portfolio id and the seq (engine/core.py order_id_for), so
+# it differs between two portfolios; the events are compared position by position anyway
+ENVIRONMENT_KEYS = frozenset({"spec", "environment", "env_id", "portfolio_id", "order_id"})
 
 
 def without_environment(value: Any) -> Any:
@@ -466,6 +468,8 @@ def without_environment(value: Any) -> Any:
 
     >>> without_environment({"env_id": "a", "bars": [{"env_id": "a", "close": "1"}]})
     {'bars': [{'close': '1'}]}
+    >>> without_environment({"order_id": "p1-43", "side": "buy"})
+    {'side': 'buy'}
     """
     if isinstance(value, Mapping):
         return {k: without_environment(v) for k, v in value.items() if k not in ENVIRONMENT_KEYS}
