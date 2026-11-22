@@ -1,4 +1,4 @@
-"""Calibration against the real K5 fitting code (B-FR-08, B-FR-09): the stored fit is what K5 returns
+"""Calibration against the real K5 fitting code (B-FR-08, B-FR-09): the stored fit is what K5 gives
 for the same window, a refusal carries K5's own reason, and Merton, which waited for K5, works."""
 
 from decimal import Decimal
@@ -6,15 +6,14 @@ from typing import Any
 
 import numpy as np
 import pytest
-from qs_quant.calibration import fit_gbm, fit_merton, fit_ou
 
+from qs_quant.calibration import fit_gbm, fit_merton, fit_ou
 from qs_simulation.domain.calibration import PricePoint, log_prices, log_returns
 from tests.calibration_support import (
     AAPL,
     DT,
     START,
     World,
-    k5_world,  # noqa: F401  (a fixture)
     make_points,
     request_body,
 )
@@ -69,7 +68,7 @@ async def test_the_stored_gbm_fit_equals_a_direct_k5_call(k5_world: World) -> No
 
 async def test_ou_on_a_random_walk_is_refused_with_k5s_own_reason(k5_world: World) -> None:
     k5_world.source.add(AAPL, make_points(400, seed=11))
-    done = await calibrate(k5_world, request_body(model="ou"))
+    done = await calibrate(k5_world, request_body(model="ou", window_end="2025-12-31"))
     assert done["status"] == "refused", done
     assert done["refusal"]["http_status"] == 422
     assert done["refusal"]["reason"].startswith("not_mean_reverting")
@@ -78,7 +77,7 @@ async def test_ou_on_a_random_walk_is_refused_with_k5s_own_reason(k5_world: Worl
 async def test_ou_on_a_mean_reverting_series_is_stored_as_k5_fitted_it(k5_world: World) -> None:
     points = mean_reverting(600)
     k5_world.source.add(AAPL, points)
-    done = await calibrate(k5_world, request_body(model="ou"))
+    done = await calibrate(k5_world, request_body(model="ou", window_end="2025-12-31"))
     assert done["status"] == "succeeded", done
     direct = fit_ou(log_prices(points), DT)
     assert not direct.refused
@@ -89,7 +88,7 @@ async def test_ou_on_a_mean_reverting_series_is_stored_as_k5_fitted_it(k5_world:
 async def test_merton_is_calibrated_now_that_k5_provides_it(k5_world: World) -> None:
     points = jumpy(700)
     k5_world.source.add(AAPL, points)
-    done = await calibrate(k5_world, request_body(model="merton"))
+    done = await calibrate(k5_world, request_body(model="merton", window_end="2025-12-31"))
     assert done["status"] == "succeeded", done
     direct = fit_merton(log_returns(points), DT)
     assert set(done["calibration"]["params"]) == {"mu", "sigma", "lam", "mu_j", "sigma_j"}
@@ -100,6 +99,6 @@ async def test_merton_on_a_short_window_is_refused_with_the_reason_k5_gave(
     k5_world: World,
 ) -> None:
     k5_world.source.add(AAPL, make_points(300))
-    done = await calibrate(k5_world, request_body(model="merton"))
+    done = await calibrate(k5_world, request_body(model="merton", window_end="2025-12-31"))
     assert done["status"] == "refused", done
     assert done["refusal"]["reason"].startswith("insufficient_history")
