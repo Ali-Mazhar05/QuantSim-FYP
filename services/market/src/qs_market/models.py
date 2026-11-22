@@ -327,3 +327,28 @@ LOGICAL_REFERENCES = {
 }
 # Partition column of each hypertable
 HYPERTABLES = {"bar": "session_date", "return_series": "session_date"}
+
+# The fingerprint frozen when an environment was activated for replay (ADR 08). One row per
+# environment: activating again after the data changed freezes the new value. A consumer compares
+# it with the fingerprint on each page of ticks to notice that the data it started on has moved.
+environment_activation = Table(
+    "environment_activation",
+    metadata,
+    Column(
+        "environment_id",
+        Uuid,
+        ForeignKey("market_environment.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("source_fingerprint", Text, nullable=False),
+    Column("missing_session_count", Integer, nullable=False),
+    Column("activated_by", Uuid, nullable=False),
+    Column("activated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "source_fingerprint ~ '^xxh3:[0-9a-f]{32}$'",
+        name="environment_activation_fingerprint_format",
+    ),
+    CheckConstraint(
+        "missing_session_count >= 0", name="environment_activation_missing_not_negative"
+    ),
+)

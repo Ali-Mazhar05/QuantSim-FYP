@@ -3,8 +3,14 @@
 #
 #   pr.sh                         current feature/, bugfix/ or hotfix/ branch into its target
 #   pr.sh --title "<one line>"    same, with an explicit title (default: first commit)
+#   pr.sh --base <branch>         same, into <branch> (e.g. develop for a lane's kit or CI task)
+#   pr.sh lane <a|b|c>            weekly lane PR: lane/<lane> into develop
 #   pr.sh promote <from> <to>     promotion: develop test | test acceptance |
 #                                 acceptance main | main develop (after a hotfix)
+#
+# Task branches go to their lane: feature/a-* and bugfix/a-* into lane/a-trading,
+# b-* into lane/b-simulation, c-* into lane/c-quant. Every other feature/ or bugfix/
+# branch (contracts and kit, feature/k-*) goes to develop.
 #
 # Prints the URL of an existing open PR instead of opening a duplicate.
 set -euo pipefail
@@ -16,8 +22,29 @@ command -v gh >/dev/null || fail "GitHub CLI (gh) is not installed"
 gh api "repos/$repo" --silent 2>/dev/null \
   || fail "cannot reach $repo; run gh auth status (active account must have access)"
 
+lane_branch() {
+  case "$1" in
+    a) echo "lane/a-trading" ;;
+    b) echo "lane/b-simulation" ;;
+    c) echo "lane/c-quant" ;;
+    *) return 1 ;;
+  esac
+}
+
 title=""
-if [[ "${1:-}" == "promote" ]]; then
+base_override=""
+if [[ "${1:-}" == "lane" ]]; then
+  lane="${2:?usage: pr.sh lane <a|b|c>}"
+  head="$(lane_branch "$lane")" || fail "unknown lane '$lane' (use a, b or c)"
+  base="develop"; method="--merge"
+  sha="$(git rev-parse --short "origin/$head" 2>/dev/null || echo unknown)"
+  title="addition to lane $lane: weekly lane merge"
+  body="Weekly lane PR: \`$head\` at \`$sha\` into \`develop\`.
+
+Merge only when the Jenkins check is green and a member of another lane has approved it.
+Merge with **Create a merge commit**."
+  needs="Jenkins check and a review from another lane"
+elif [[ "${1:-}" == "promote" ]]; then
   from="${2:?usage: pr.sh promote <from> <to>}"
   to="${3:?usage: pr.sh promote <from> <to>}"
   case "$from>$to" in
@@ -36,13 +63,28 @@ if [[ "${1:-}" == "promote" ]]; then
 Merge only when these are green on this PR: $needs.
 Merge with **Create a merge commit** so the built images carry through unchanged."
 else
-  [[ "${1:-}" == "--title" ]] && title="${2:?}"
+  while (( $# )); do
+    case "$1" in
+      --title) title="${2:?--title needs a value}"; shift 2 ;;
+      --base)  base_override="${2:?--base needs a branch}"; shift 2 ;;
+      *) fail "unknown argument: $1" ;;
+    esac
+  done
   head="$(git branch --show-current)"
   case "$head" in
+    feature/[abc]-*|bugfix/[abc]-*)
+      lane="${head#*/}"; lane="${lane%%-*}"
+      base="$(lane_branch "$lane")"; method="--merge --delete-branch" ;;
     feature/*|bugfix/*) base="develop"; method="--merge --delete-branch" ;;
     hotfix/*)           base="main";    method="--merge --delete-branch" ;;
-    *) fail "run from a feature/, bugfix/ or hotfix/ branch, or use: pr.sh promote <from> <to>" ;;
+    *) fail "run from a feature/, bugfix/ or hotfix/ branch, or use: pr.sh lane <a|b|c> | pr.sh promote <from> <to>" ;;
   esac
+  if [[ -n "$base_override" ]]; then
+    case "$base_override" in
+      develop|lane/a-trading|lane/b-simulation|lane/c-quant) base="$base_override" ;;
+      *) fail "--base must be develop or a lane branch, got $base_override" ;;
+    esac
+  fi
   # Ask the GitHub API (retried: home connections drop git traffic now and then)
   remote_sha=""
   for _ in 1 2 3; do
@@ -59,7 +101,7 @@ else
   body="Commits:
 $commits
 
-Preflight passed locally (.claude/skills/quantsim-git-flow/scripts/preflight.sh)."
+Preflight passed locally."
   needs="Jenkins check"
 fi
 

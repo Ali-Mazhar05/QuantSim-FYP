@@ -47,6 +47,7 @@ erDiagram
     instrument ||--o{ rejected_bar : "instrument_id"
     instrument ||--o{ return_series : "instrument_id"
     instrument ||--o{ staging_bar : "instrument_id"
+    market_environment ||--o{ environment_activation : "environment_id"
     audit_log {
         bigint id PK
         text table_name
@@ -107,6 +108,13 @@ erDiagram
         timestamptz opened_at
         uuid resolved_by_run "optional"
         timestamptz resolved_at "optional"
+    }
+    environment_activation {
+        uuid environment_id PK, FK
+        text source_fingerprint
+        int missing_session_count
+        uuid activated_by
+        timestamptz activated_at
     }
     ingestion_run {
         uuid id PK
