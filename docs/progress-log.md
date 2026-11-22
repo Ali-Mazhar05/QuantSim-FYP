@@ -6,8 +6,8 @@ repository or in Jenkins.
 
 ## 2026-11-22
 
-**Delivered (Iteration 2, contract K6, `feature/k-k6-metrics` into `develop`)**
-- **Metrics library (K6):** `libs/qs_quant` with total return, annualised volatility,
+**Delivered (Iteration 2, contract K6, into `develop` by #145)**
+- **Metrics library (K6, #145):** `libs/qs_quant` with total return, annualised volatility,
   Sharpe, max drawdown, turnover and historical VaR/CVaR (Lane C guide §7.6). Fixture
   values match an exact rational reference to 1e-12; 200-example property tests (scale
   invariance, max drawdown in [0, 1], CVaR >= VaR, determinism); each function under
