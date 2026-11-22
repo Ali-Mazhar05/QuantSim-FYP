@@ -1,6 +1,7 @@
 """HTTP API of simulation runs, under ``/api/simulation/runs`` (contract C2).
 
 Quants and admins (``launch_simulations``):  POST /runs          answers 202 at once (B16)
+                                             POST /runs/{id}/scenarios   a stressed copy (B17)
 Every signed-in role:                        GET  /runs          the list, newest first (B18)
                                              GET  /runs/{id}     state, progress, statistics (B16)
                                              GET  /runs/{id}/quantiles, /runs/{id}/ticks   (B18)
@@ -24,6 +25,7 @@ from qs_simulation.paging import DEFAULT_PAGE, MAX_PAGE
 from qs_simulation.ports import RiskCalculator
 from qs_simulation.reads import Reads
 from qs_simulation.runs import RunInstrument, RunRequest, RunService
+from qs_simulation.stress import StressService
 from qs_template import Database
 from qs_template.audit import set_audit_context
 from qs_template.auth import Authenticator, Capability, Principal
@@ -206,6 +208,12 @@ class RunCreate(BaseModel):
     )
 
 
+class StressCreate(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"scenario": "flash_crash"}]})
+
+    scenario: str = Field(description="The code of a scenario, from GET /scenarios")
+
+
 class RunPage(BaseModel):
     items: list[RunSummary]
     next_cursor: str | None = Field(
@@ -341,6 +349,37 @@ def build_run_routers(
             ) from conflict
         response.headers["Location"] = f"/api/simulation/runs/{run_id}"
         return RunOut.model_validate(await runs.describe(run_id))
+
+    @router.post(
+        "/{run_id}/scenarios",
+        response_model=RunOut,
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={401: NOT_AUTHENTICATED, 403: {}, 404: {}, 409: {}, 422: {}},
+    )
+    async def stress_run(
+        run_id: uuid.UUID,
+        body: StressCreate,
+        scope: Writer,
+        response: Response,
+        idempotency_key: Annotated[
+            str | None,
+            Header(
+                alias="Idempotency-Key",
+                min_length=1,
+                max_length=200,
+                description="Repeat a request with the same key to get the same stressed run back",
+            ),
+        ] = None,
+    ) -> RunOut:
+        """A stressed copy of a completed run: same seed, parameters and correlation, with the
+        scenario applied. The parent is not changed."""
+        session, actor = scope
+        scoped = None if idempotency_key is None else f"stress:{actor.user_id}:{idempotency_key}"
+        derived_id, _ = await StressService(session, queue).derive(
+            run_id, body.scenario, actor=actor.user_id, idempotency_key=scoped
+        )
+        response.headers["Location"] = f"/api/simulation/runs/{derived_id}"
+        return RunOut.model_validate(await service(session).describe(derived_id))
 
     @router.get("", response_model=RunPage, responses={401: NOT_AUTHENTICATED, 422: {}})
     async def list_runs(

@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from qs_simulation.api_calibrations import build_calibration_routers
 from qs_simulation.api_runs import build_run_routers
+from qs_simulation.api_scenarios import build_scenario_routers
 from qs_simulation.composition import Dependencies
 from qs_template import Database
 from qs_template.auth import Authenticator
@@ -27,6 +28,7 @@ def build_routers(
             calibrator=deps.calibrator,
             can_run=deps.can_calibrate,
         ),
+        *build_scenario_routers(auth=auth, database=database),
         *build_run_routers(
             auth=auth,
             database=database,

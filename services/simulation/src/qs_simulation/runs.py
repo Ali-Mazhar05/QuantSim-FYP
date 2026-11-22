@@ -43,6 +43,7 @@ from qs_simulation.domain.runs import (
     storage_mode,
     terminal_statistics,
 )
+from qs_simulation.domain.scenarios import Scenario, parse
 from qs_simulation.domain.sharding import REQUIRED, PathRequest, generate
 from qs_simulation.models import (
     MAX_PATHS,
@@ -345,6 +346,14 @@ class RunService:
         payload = (
             await self._session.execute(select(job.c.payload).where(job.c.id == run_id))
         ).scalar_one()
+        if "parent_run_id" in payload:  # a stressed run takes its parent's instruments
+            parent = uuid.UUID(payload["parent_run_id"])
+            rows = await self._session.execute(
+                select(run_instrument.c.instrument_id)
+                .where(run_instrument.c.run_id == parent)
+                .order_by(run_instrument.c.position)
+            )
+            return [{"instrument_id": str(i)} for (i,) in rows.all()]
         instruments: list[dict[str, str]] = payload["instruments"]
         return instruments
 
@@ -381,6 +390,14 @@ async def load_request(session: AsyncSession, run_id: uuid.UUID) -> tuple[Any, P
             select(run_correlation.c.matrix).where(run_correlation.c.run_id == run_id)
         )
     ).scalar_one()
+    overlay: Scenario | None = None
+    if row.scenario_id is not None:  # a stressed run: the parent's inputs with the scenario on top
+        found = (
+            await session.execute(
+                select(scenario.c.type, scenario.c.params).where(scenario.c.id == row.scenario_id)
+            )
+        ).one()
+        overlay = parse(found.type, found.params)
     request = PathRequest(
         model=row.model,
         s0=np.array([float(m.s0) for m in members], dtype=np.float64),
@@ -392,6 +409,7 @@ async def load_request(session: AsyncSession, run_id: uuid.UUID) -> tuple[Any, P
         n_paths=row.n_paths,
         n_steps=row.n_steps,
         seed=row.seed,
+        scenario=overlay,
     )
     return row, request
 
@@ -517,17 +535,17 @@ def make_handler(
             computed = await _compute(
                 database, job_.payload, row, prices, correlations, risk, workers, progress
             )
-            await _store(database, run_id, row, computed, risk)
+            await store_run(database, run_id, row, computed, risk)
         except RunRefused as refusal:
-            await _fail(database, run_id, refusal.code, refusal.reason)
+            await fail_run(database, run_id, refusal.code, refusal.reason)
             return {"status": "failed", "code": refusal.code, "reason": refusal.reason}
         except InstrumentNotFound:
             reason = "the market service has no such instrument"
-            await _fail(database, run_id, "instrument_not_found", reason)
+            await fail_run(database, run_id, "instrument_not_found", reason)
             return {"status": "failed", "code": "instrument_not_found", "reason": reason}
         except Exception as error:
             if job_.attempt >= max_attempts:
-                await _fail(database, run_id, "failed", str(error))
+                await fail_run(database, run_id, "failed", str(error))
             raise
         log.info(
             "run completed",
@@ -600,17 +618,39 @@ async def _compute(
         _matrix_refusal(symbols, np.asarray(found.values), found.unavailable)
         matrix = np.asarray(found.values, dtype=np.float64)
     await progress.at(0.15)
+    params = {
+        name: np.array([fits[m.calibration_id].params[name] for m in members], dtype=np.float64)
+        for name in REQUIRED[row.model]
+    }
+    return await generate_run(
+        row, members, s0, matrix, params, symbols, risk, workers, progress, scenario=None
+    )
+
+
+async def generate_run(
+    row: Any,
+    members: Sequence[RunInstrument],
+    s0: Sequence[Decimal],
+    matrix: Array,
+    params: dict[str, Array],
+    symbols: list[str],
+    risk: RiskCalculator,
+    workers: int,
+    progress: Progress,
+    *,
+    scenario: Scenario | None,
+) -> Computed:
+    """The paths of a run and everything computed from them: shared by the base run (its inputs
+    come from the market) and the stressed run (its inputs come from its parent)."""
     request = PathRequest(
         model=row.model,
         s0=np.array([float(p) for p in s0], dtype=np.float64),
-        params={
-            name: np.array([fits[m.calibration_id].params[name] for m in members], dtype=np.float64)
-            for name in REQUIRED[row.model]
-        },
+        params=params,
         correlation=matrix,
         n_paths=row.n_paths,
         n_steps=row.n_steps,
         seed=row.seed,
+        scenario=scenario,
     )
     loop = asyncio.get_running_loop()
 
@@ -683,7 +723,7 @@ def _path_lines(run_id: uuid.UUID, computed: Computed) -> Iterator[str]:
                 yield f"{prefix}{step},{price:.{PRICE_PLACES}f}"
 
 
-async def _store(
+async def store_run(
     database: Database, run_id: uuid.UUID, row: Any, computed: Computed, risk: RiskCalculator
 ) -> None:
     """Everything the run produced, and the event that announces it, in one transaction."""
@@ -760,12 +800,13 @@ async def _store(
                     "symbols": computed.symbols,
                     "repair_applied": computed.record.applied,
                     "risk": risk.version,
+                    "parent_run_id": None if row.parent_run_id is None else str(row.parent_run_id),
                 },
             ),
         )
 
 
-async def _fail(database: Database, run_id: uuid.UUID, code: str, reason: str) -> None:
+async def fail_run(database: Database, run_id: uuid.UUID, code: str, reason: str) -> None:
     async with database.transaction() as session:
         updated = await session.execute(
             update(run)

@@ -18,6 +18,7 @@ from qs_simulation.domain.correlation import (
     correlation_factor,
 )
 from qs_simulation.domain.generators import simulate_gbm, simulate_merton, simulate_ou
+from qs_simulation.domain.scenarios import Scenario, apply_prices, vol_scale
 
 SHARD_SIZE = 250
 Model = Literal["gbm", "ou", "merton"]
@@ -40,6 +41,7 @@ class PathRequest:
     n_steps: int
     seed: int
     dt: float = 1 / 252
+    scenario: Scenario | None = None  # a stress overlay; None for a base run
 
     def validate(self) -> None:
         if self.model not in REQUIRED:
@@ -95,24 +97,30 @@ def _generate_shard(request: PathRequest, shard: int) -> Array:
     shape = (size, request.n_steps, n)
     shocks = correlate(normals.standard_normal(shape), factor)
     p = request.params
+    scale = vol_scale(request.scenario, request.n_steps)  # None for a base run: nothing changes
     if request.model == "gbm":
-        return simulate_gbm(request.s0, p["mu"], p["sigma"], request.dt, shocks)
-    if request.model == "ou":
-        return simulate_ou(request.s0, p["kappa"], p["theta"], p["sigma"], request.dt, shocks)
-    # the jump streams are drawn only here, so GBM and OU output never depends on them
-    counts = counts_stream.poisson(p["lam"] * request.dt, size=shape).astype(np.int64)
-    return simulate_merton(
-        request.s0,
-        p["mu"],
-        p["sigma"],
-        p["lam"],
-        p["mu_j"],
-        p["sigma_j"],
-        request.dt,
-        shocks,
-        counts,
-        jumps_stream.standard_normal(shape),
-    )
+        paths = simulate_gbm(request.s0, p["mu"], p["sigma"], request.dt, shocks, scale)
+    elif request.model == "ou":
+        paths = simulate_ou(
+            request.s0, p["kappa"], p["theta"], p["sigma"], request.dt, shocks, scale
+        )
+    else:
+        # the jump streams are drawn only here, so GBM and OU output never depends on them
+        counts = counts_stream.poisson(p["lam"] * request.dt, size=shape).astype(np.int64)
+        paths = simulate_merton(
+            request.s0,
+            p["mu"],
+            p["sigma"],
+            p["lam"],
+            p["mu_j"],
+            p["sigma_j"],
+            request.dt,
+            shocks,
+            counts,
+            jumps_stream.standard_normal(shape),
+            scale,
+        )
+    return apply_prices(request.scenario, paths)
 
 
 def _run_shard(job: tuple[PathRequest, int]) -> Array:

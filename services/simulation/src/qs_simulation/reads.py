@@ -172,39 +172,50 @@ class Reads:
         return items, next_cursor
 
     async def _symbols(self, rows: list[Any]) -> dict[uuid.UUID, list[str]]:
-        """The symbols of each run in the page: stored ones in matrix order, else the requested."""
-        ids = [r.id for r in rows]
-        found: dict[uuid.UUID, list[str]] = {i: [] for i in ids}
-        if not ids:
-            return found
-        stored = await self._session.execute(
-            select(run_instrument.c.run_id, run_instrument.c.instrument_id, instrument_ref.c.symbol)
-            .select_from(
-                run_instrument.outerjoin(
-                    instrument_ref, instrument_ref.c.instrument_id == run_instrument.c.instrument_id
+        """The symbols of each run in the page: stored ones in matrix order; a stressed run not yet
+        generated takes its parent's; else the ones requested."""
+        parents = {r.id: r.parent_run_id for r in rows if r.parent_run_id is not None}
+        lookup = list({*(r.id for r in rows), *parents.values()})
+        stored_symbols: dict[uuid.UUID, list[str]] = {}
+        if lookup:
+            stored = await self._session.execute(
+                select(
+                    run_instrument.c.run_id, run_instrument.c.instrument_id, instrument_ref.c.symbol
                 )
-            )
-            .where(run_instrument.c.run_id.in_(ids))
-            .order_by(run_instrument.c.run_id, run_instrument.c.position)
-        )
-        for run_id, instrument_id, symbol in stored.all():
-            found[run_id].append(symbol or str(instrument_id))
-        waiting = [r for r in rows if not found[r.id]]
-        wanted = {
-            r.id: [uuid.UUID(i["instrument_id"]) for i in (r.payload or {}).get("instruments", [])]
-            for r in waiting
-        }
-        names = dict(
-            (
-                await self._session.execute(
-                    select(instrument_ref.c.instrument_id, instrument_ref.c.symbol).where(
-                        instrument_ref.c.instrument_id.in_({i for v in wanted.values() for i in v})
+                .select_from(
+                    run_instrument.outerjoin(
+                        instrument_ref,
+                        instrument_ref.c.instrument_id == run_instrument.c.instrument_id,
                     )
                 )
-            ).all()
-        )
-        for run_id, instrument_ids in wanted.items():
-            found[run_id] = [names.get(i, str(i)) for i in instrument_ids]
+                .where(run_instrument.c.run_id.in_(lookup))
+                .order_by(run_instrument.c.run_id, run_instrument.c.position)
+            )
+            for run_id, instrument_id, symbol in stored.all():
+                stored_symbols.setdefault(run_id, []).append(symbol or str(instrument_id))
+        found = {
+            r.id: stored_symbols.get(r.id) or stored_symbols.get(parents.get(r.id), [])  # type: ignore[arg-type]
+            for r in rows
+        }
+        wanted = {
+            r.id: [uuid.UUID(i["instrument_id"]) for i in (r.payload or {}).get("instruments", [])]
+            for r in rows
+            if not found[r.id]
+        }
+        if wanted:
+            names = dict(
+                (
+                    await self._session.execute(
+                        select(instrument_ref.c.instrument_id, instrument_ref.c.symbol).where(
+                            instrument_ref.c.instrument_id.in_(
+                                {i for v in wanted.values() for i in v}
+                            )
+                        )
+                    )
+                ).all()
+            )
+            for run_id, instrument_ids in wanted.items():
+                found[run_id] = [names.get(i, str(i)) for i in instrument_ids]
         return found
 
     async def _page(
@@ -236,7 +247,12 @@ class Reads:
     async def _completed(self, run_id: uuid.UUID) -> Any:
         row = (
             await self._session.execute(
-                select(run, scenario.c.code.label("scenario_code"))
+                select(
+                    run,
+                    scenario.c.code.label("scenario_code"),
+                    scenario.c.type.label("scenario_type"),
+                    scenario.c.params.label("scenario_params"),
+                )
                 .select_from(run.outerjoin(scenario, scenario.c.id == run.c.scenario_id))
                 .where(run.c.id == run_id)
             )
@@ -345,7 +361,8 @@ class Reads:
             f"seed={row.seed}",
             f"paths={row.n_paths}",
             f"steps={row.n_steps}",
-            f"scenario={row.scenario_code or '-'}",
+            f"scenario={row.scenario_code or '-'}:{row.scenario_type}:"
+            f"{json.dumps(row.scenario_params, sort_keys=True)}",
             json.dumps(matrix, separators=(",", ":")),
             *(
                 f"{m.instrument_id}:{m.s0}:{json.dumps(m.params, sort_keys=True)}"

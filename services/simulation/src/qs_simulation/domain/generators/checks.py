@@ -36,3 +36,13 @@ def check_param(
         raise ValueError(f"{name} must be positive")
     if non_negative and not np.all(values >= 0):
         raise ValueError(f"{name} must not be negative")
+
+
+def check_vol_scale(vol_scale: Array | None, n_steps: int) -> None:
+    """A volatility multiplier for each step (a stress scenario): finite and positive."""
+    if vol_scale is None:
+        return
+    if vol_scale.shape != (n_steps,):
+        raise ValueError(f"vol_scale must have one value per step ({n_steps})")
+    if not np.all(np.isfinite(vol_scale)) or not np.all(vol_scale > 0):
+        raise ValueError("vol_scale must be finite and positive")
