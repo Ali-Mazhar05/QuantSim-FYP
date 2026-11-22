@@ -221,7 +221,7 @@ def describe(state: JobState, stored: Any) -> dict[str, Any]:
         "error": None,
     }
     if stored is not None:
-        return {**base, "status": "succeeded", "progress": 1.0, "calibration": _row(stored)}
+        return {**base, "status": "succeeded", "progress": 1.0, "calibration": fit_row(stored)}
     result = state.result or {}
     if result.get("status") == "refused":
         refusal = {k: result[k] for k in ("http_status", "code", "reason")}
@@ -231,7 +231,7 @@ def describe(state: JobState, stored: Any) -> dict[str, Any]:
     return {**base, "status": "running" if state.status == "running" else "queued"}
 
 
-def _row(stored: Any) -> dict[str, Any]:
+def fit_row(stored: Any) -> dict[str, Any]:
     return {
         "model": stored.model,
         "instrument_id": stored.instrument_id,

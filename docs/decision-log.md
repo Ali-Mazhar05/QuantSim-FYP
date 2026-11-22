@@ -60,6 +60,7 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-039 | How a run is stored and reproduced | Adopted | team |
 | DL-040 | VaR and CVaR before K6 is installed | Adopted | team |
 | DL-041 | What the demo-size run costs, and why | Adopted | team |
+| DL-042 | The read API: ticks, dates, fingerprint, lists, quantiles | Adopted | team |
 
 ---
 
@@ -577,3 +578,40 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   statement (a constraint trigger over the inserted rows), which keeps the guarantee for about the cost of the
   insert; or store less (quantiles only). Neither is built; tracker I-31.
 - **Affects:** `runs._store`, `path_value`, the B22 timeouts.
+
+### DL-042 The read API: ticks, dates, fingerprint, lists, quantiles
+
+- **Asked:** how does `GET /runs/{id}/ticks` date a step, order its ticks and name the run, and what do the
+  lists and the quantiles return?
+- **Decided:**
+  - **Ticks.** One page of one path (`path` is required), ordered by `(step, symbol)` with the symbols in
+    code-point order, as the replay feed orders its ticks; `seq` is 1, 2, 3 without gaps over the path. A run
+    that has not completed answers 409 `run-not-complete`; an unknown run or a path past `n_paths` answers 404.
+    A run kept in full is read from `path_value`; a run kept as quantiles is generated again from its seed, and
+    only the shard that holds the path (250 paths) is generated. Both give the same text (tested for GBM, OU and
+    Merton, across the shard joins).
+  - **Dates.** Step 0 is the first NYSE session after the latest `window_end` of the run's calibrations (the day
+    the start prices describe, or the last of them); each next step is the next session; `ts` is that session's
+    close in UTC (DL-019). The calendar is extended to 2045 for long runs. `session` is the step from 0 and
+    `session_date` is null, as the contract says for synthetic ticks.
+  - **Fingerprint.** `xxh3:` and 32 hex digits over the generator version, the run id, model, seed, paths, steps,
+    scenario, the stored correlation matrix (as stored, before repair) and each instrument's start price,
+    parameters and fitting library version. The same on every page and every path of a run; another run, seed or
+    parameter gives another value. `GENERATOR_VERSION` changes whenever the generators would give other prices
+    for the same request.
+  - **Lists.** `GET /runs` and `GET /calibrations` page by cursor in the market's envelope (`items`,
+    `next_cursor`; `limit` default 500, at most 2000), newest first by `(created_at, id)`, so a page never repeats
+    or skips a row that arrives meanwhile (Lane A's review of #80: adding paging later would break callers).
+    `GET /runs` filters by `status` and `instrument`; its status is the one `GET /runs/{id}` shows (a run whose
+    job the queue gave up on is `failed`), and a run not yet generated is found by instrument through its
+    request. `GET /calibrations` lists the **stored fits** only, filtered by `instrument`, `model` and
+    `converged`; a queued or refused calibration is read by its id.
+  - **Quantiles.** `GET /runs/{id}/quantiles?instrument=` returns the stored per-step quantiles
+    (0.01 to 0.99) for each instrument, with the start price; `step` k is tick `session` k - 1. The instrument
+    filter exists because a long run holds up to 40 instruments of 2,520 steps.
+- **Why:** the contract fixes the order, the gap-free `seq` and the timestamp rule; paging must exist from the
+  first release; one shard per page keeps a quantiles-only run cheap to read (a page costs the same as a stored
+  one, measured under 2 s).
+- **Affects:** `reads.py`, `api_runs.py`, `api_calibrations.py`, `domain/calendar.py`; Lane A's synthetic
+  adapter; the Results, Simulations and Create Portfolio pages (B20).
+- **If changed:** the order or the fingerprint is part of the C1 contract: change it with Lane A.
