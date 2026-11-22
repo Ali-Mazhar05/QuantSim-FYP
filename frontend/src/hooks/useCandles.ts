@@ -7,7 +7,7 @@ import {
   getMetrics,
   getRecentSeries,
 } from '../services/api/market'
-import { marketKeys } from './queryKeys'
+import { marketKeys } from './keys/market'
 
 /** The window a user chose: an interval and an optional date range ('' means open). */
 export interface WindowChoice {
