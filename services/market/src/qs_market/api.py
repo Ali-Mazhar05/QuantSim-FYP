@@ -90,7 +90,9 @@ def build_routers(
 
     Viewer = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_MARKET_DATA))]
     Admin = Annotated[Principal, Depends(auth.require_capability(Capability.MANAGE_INSTRUMENTS))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    # scope="function" on every committing yield dependency: the transaction commits when the
+    # route returns, before the response is sent, so a client reads its own writes.
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def admin_service(request: Request, actor: Admin) -> AsyncIterator[InstrumentService]:
         """A transaction whose changes the audit trail attributes to the acting admin."""
@@ -102,7 +104,7 @@ def build_routers(
             )
             yield InstrumentService(session, actor_id=actor.user_id)
 
-    Writer = Annotated[InstrumentService, Depends(admin_service)]
+    Writer = Annotated[InstrumentService, Depends(admin_service, scope="function")]
 
     @router.get("", responses={401: {}, 403: {}})
     async def list_instruments(

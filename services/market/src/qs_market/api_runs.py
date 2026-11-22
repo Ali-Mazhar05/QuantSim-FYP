@@ -143,7 +143,7 @@ def build_routers(*, auth: Authenticator, database: Database, vendor: str) -> li
         ),
     ]
     Reader = Annotated[Principal, Depends(auth.require_capability(Capability.VIEW_INGESTION_RUNS))]
-    Session = Annotated[AsyncSession, Depends(database.session)]
+    Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
     async def audited_session(request: Request, actor: Admin) -> AsyncIterator[AsyncSession]:
         async with database.transaction() as session:
@@ -154,7 +154,7 @@ def build_routers(*, auth: Authenticator, database: Database, vendor: str) -> li
             )
             yield session
 
-    Writer = Annotated[AsyncSession, Depends(audited_session)]
+    Writer = Annotated[AsyncSession, Depends(audited_session, scope="function")]
 
     @router.post(
         "",
