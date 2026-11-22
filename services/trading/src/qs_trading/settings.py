@@ -31,6 +31,9 @@ class TradingSettings(ServiceSettings):
     # adapters (A17) exist. "bundled" is the demo directory shipped inside the package.
     # Empty: no environment is available and every run fails clearly.
     trading_demo_environments: str = ""
+    # LOCAL and DEV only: mounts the stand-in for Lane B's feeds (qs_trading.demo.feeds) at
+    # /demo-feeds, serving the recorded contract fixtures, until B12 serves the real ones
+    trading_demo_feeds: bool = False
 
     # The market feeds (task A17): base URLs of the market and simulation services, e.g.
     # "http://market:8000". When one is set, portfolios on that kind of environment (replay
@@ -51,6 +54,14 @@ class TradingSettings(ServiceSettings):
         if self.trading_demo_environments and self.environment not in DEMO_ALLOWED_IN:
             raise ValueError(
                 f"QS_TRADING_DEMO_ENVIRONMENTS is for local and dev only, not {self.environment}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _demo_feeds_only_in_dev(self) -> Self:
+        if self.trading_demo_feeds and self.environment not in DEMO_ALLOWED_IN:
+            raise ValueError(
+                f"QS_TRADING_DEMO_FEEDS is for local and dev only, not {self.environment}"
             )
         return self
 
