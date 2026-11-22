@@ -202,8 +202,11 @@ def test_bad_parameters_are_named(kind: str, params: dict[str, Any], fields: set
 # ---- through the service ----
 
 
+QUANT = uuid.uuid4()  # one caller, so an idempotency key (scoped to the caller) means the same thing
+
+
 def quant() -> dict[str, str]:
-    return bearer(make_token(Role.QUANT))
+    return bearer(make_token(Role.QUANT, user_id=QUANT))
 
 
 async def make_scenario(
