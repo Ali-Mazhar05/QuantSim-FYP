@@ -1,10 +1,10 @@
 # Lane A: Trading Engine and Platform
 
 Chapter, Iteration 2 (window 16 Nov to 23 Dec 2026). State of the code: `develop` at
-`f49661c` (after lane PR #140 and the spine fixes #141, #142), 22 Nov 2026; `v0.1.4` is the release on PROD. Three items still depend on
+`f49661c` (after lane PR #140 and the spine fixes #141, #142), 22 Nov 2026; `v0.1.4` is the release on PROD. Two items still depend on
 other lanes or on the release date and are marked **partial** with the reason: the live J2
-check on DEV (Lane B's feed routes), the risk ratios in the run metrics (Lane C's K6) and
-the `v0.2.0` release (23 Dec).
+check on DEV (Lane B's feed routes) and the `v0.2.0` release (23 Dec). The run metrics'
+risk ratios use the K6 metrics library (`qs_quant.metrics`) since 22 Nov.
 
 Lane A owns module M3, the event-sourced trading engine, from `trading_db` to the trading
 pages; the platform kit that every new Iteration 2 service is built on (K1 to K3); the CI
@@ -244,7 +244,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR-11 | Holdings, fills and value series are projections; rebuild equals live | Implemented | `db/test_rebuild_db.py::test_a_run_rebuilds_identical_with_its_final_hash`, `::test_changed_projection_rows_are_named_and_apply_restores_them`; `unit/test_projections.py::test_folding_session_by_session_equals_folding_the_whole_log` |
 | A-FR-12 | Same spec on the same fingerprint gives the same final hash | Implemented, across both adapters on recorded feeds; the live J2 run on DEV waits for Lane B's feed routes (section 5.4) | `unit/test_engine.py::test_two_runs_end_on_the_same_hash`, `::test_one_changed_input_changes_the_final_hash`, `::test_another_fingerprint_changes_the_final_hash`; `property/test_strategy_properties.py::test_every_kind_is_deterministic`; `contract/test_http_feeds.py::test_j2_parity_on_the_replay`, `::test_j2_parity_on_the_median_synthetic_path`; DEV gate `lane-a-spine.spec.ts` (a rerun ends on the same hash) |
 | A-FR-13 | A killed worker resumes to an identical log | Implemented | `db/test_engine_db.py::test_a_crash_then_resume_gives_the_identical_log` (crash after sessions 1, 5, 9); `unit/test_engine_runner.py::test_a_crashed_run_resumes_to_the_identical_log`, `::test_resuming_with_a_changed_spec_is_refused`; `unit/test_engine.py::test_replay_refuses_a_log_it_cannot_reproduce` |
-| A-FR-14 | Run metrics stored and served, computed with `qs_quant.metrics` | Partial: trades and costs served; return, volatility, Sharpe, drawdown pending Lane C's K6 | `api/test_projections_api.py::test_metrics_count_trades_and_costs_and_leave_the_ratios_pending`, `::test_a_metrics_calculator_fills_in_the_ratios_it_computes` |
+| A-FR-14 | Run metrics stored and served, computed with `qs_quant.metrics` | Implemented (#145, A16b): return, volatility, Sharpe, max drawdown and turnover from K6 on the initial capital followed by the valued sessions; stored in `portfolio_metrics` in the transaction that completes the run; served by `/metrics`; asserted by the DEV live check | `api/test_projections_api.py::test_metrics_count_trades_and_costs_and_compute_the_ratios_with_k6`, `unit/test_metrics.py`, `db/test_engine_db.py::test_a_completed_job_run_stores_its_k6_metrics`, `ci/scripts/trading_live_check.py::check_run_metrics` |
 | A-FR-15 | State as of any seq can be read | Implemented | `db/test_rebuild_db.py::test_the_state_as_of_a_seq_equals_the_projection_there`; `unit/test_projections.py::test_the_state_as_of_each_session_end_equals_the_engines`; `api/test_projections_api.py::test_the_state_as_of_the_last_seq_is_the_state_row` |
 | A-FR-16 | Five trading pages in the prototype layout; Trade Replay at 1x, 5x, 20x | Implemented (A18, #130): Strategies, Configure Strategy, Portfolios, Create Portfolio, Trade Replay, on the generated API client | `frontend/src/trading-pages.test.tsx` (`plays at the chosen speed, pauses and seeks`); `frontend/e2e/dev-smoke/trading-flow.spec.ts` and `lane-a-spine.spec.ts` on DEV |
 | A-FR-17 | Job library: single claim, lease reclaim, idempotent submit | Implemented | `libs/qs_template/tests/test_jobs.py::test_two_open_claims_never_take_the_same_job`, `::test_many_workers_claim_every_job_exactly_once`, `::test_a_dead_workers_job_is_reclaimed_and_the_old_owner_is_fenced`, `::test_duplicate_submit_returns_the_same_job`, `::test_concurrent_duplicate_submits_create_one_job` |
@@ -280,13 +280,11 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 
 | | Implemented | Partial | Pending | Total |
 |---|---|---|---|---|
-| A-FR | 20 | 2 | 0 | 22 |
+| A-FR | 21 | 1 | 0 | 22 |
 | A-NFR | 16 | 1 | 0 | 17 |
 
-Still partial: A-FR-14's ratios (return, volatility, Sharpe and drawdown come from Lane C's
-K6, which has not been delivered; the API returns them as null and names them in
-`pending`), A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (waits for real
-replay environments on TEST from Lane B).
+Still partial: A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (waits for
+real replay environments on TEST from Lane B).
 
 ## 5. Test results
 
@@ -378,9 +376,6 @@ against the deployed services.
   check and the DEV spine still run on the bundled demo environment until Lane B's feed
   routes serve real environments; for the same reason the TEST `demo-spine` gate is not yet
   active.
-- **Risk ratios.** Return, volatility, Sharpe and drawdown are returned as null until Lane
-  C's K6 metrics library is delivered; trades, costs, sessions and the final value are
-  served.
 - **Public addresses.** DEV and TEST APIs are reached through free Cloudflare quick tunnels,
   whose URLs change when a tunnel restarts; the deploy scripts read the current URL each
   time.
