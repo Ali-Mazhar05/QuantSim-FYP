@@ -1,6 +1,6 @@
 # ADR 01: Pull-based tick interface
 
-Status: Proposed. Date: 2026-11-17. Owner: Lane B. Consumer: Lane A (trading engine).
+Status: Accepted. Date: 2026-11-17. Owner: Lane B. Consumer: Lane A (trading engine).
 
 ## Context
 
