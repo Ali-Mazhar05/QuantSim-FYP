@@ -31,7 +31,7 @@ from qs_trading.api_projections import build_projection_routers
 from qs_trading.api_runs import build_run_routers
 from qs_trading.api_store import StoreFactory, TradingStore, sql_store
 from qs_trading.api_strategies import build_strategy_routers
-from qs_trading.metrics import PENDING, MetricsCalculator
+from qs_trading.metrics import QUANT_METRICS, MetricsCalculator
 from qs_trading.models import job
 
 
@@ -41,7 +41,7 @@ def build_routers(
     database: Database,
     queue: JobQueue | None = None,
     store: StoreFactory | None = None,
-    metrics: MetricsCalculator = PENDING,
+    metrics: MetricsCalculator = QUANT_METRICS,
     demo_environments: str = "",
     ops: OpsFactory = SqlOpsReader,
 ) -> list[APIRouter]:
@@ -50,7 +50,7 @@ def build_routers(
     ``queue`` is the job queue runs are submitted to (the service's ``job`` table with the
     default lease and attempts when omitted). ``store`` replaces the trading_db store, for
     tests that run the routes without a database. ``metrics`` computes the run ratios
-    (none until the shared metrics library is wired in). ``demo_environments`` is the
+    (the shared metrics library, K6, by default). ``demo_environments`` is the
     ``QS_TRADING_DEMO_ENVIRONMENTS`` setting, whose fixtures ``GET /demo-environments``
     lists (none when empty). ``ops`` reads the operational metrics (trading_db's job and
     outbox tables by default)."""

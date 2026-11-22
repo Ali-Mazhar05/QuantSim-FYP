@@ -40,6 +40,7 @@ from qs_trading.models import (
     strategy,
     trade_event,
 )
+from qs_trading.projections.figures import load_run_figures
 from qs_trading.projections.fold import PortfolioSnapshot, positions_json
 from qs_trading.projections.rebuild import (
     RebuildResult,
@@ -593,33 +594,7 @@ class SqlTradingStore:
         return chain_report_out(await verify_portfolio(self.session, portfolio_id))
 
     async def run_figures(self, portfolio_id: uuid.UUID) -> RunFigures:
-        capital = await self.session.scalar(
-            select(portfolio.c.initial_capital).where(portfolio.c.id == portfolio_id)
-        )
-        if capital is None:
-            raise LookupError(f"no portfolio has id {portfolio_id}")
-        f = fill.c
-        trades, costs, notional = (
-            await self.session.execute(
-                select(
-                    func.count(),
-                    func.coalesce(func.sum(f.cost_total), 0),
-                    func.coalesce(func.sum(f.fill_price * f.quantity), 0),
-                ).where(f.portfolio_id == portfolio_id)
-            )
-        ).one()
-        values = await self.session.scalars(self._values(portfolio_id, portfolio_value.c.value))
-        state = await self._state_row(portfolio_id)
-        return RunFigures(
-            portfolio_id=portfolio_id,
-            initial_capital=capital,
-            values=tuple(values),
-            trades=int(trades),
-            total_costs=Decimal(costs),
-            traded_notional=Decimal(notional),
-            final_seq=0 if state is None else int(state["last_seq"]),
-            final_hash=None if state is None else state["last_hash"],
-        )
+        return await load_run_figures(self.session, portfolio_id)
 
 
 def sql_store(queue: JobQueue) -> StoreFactory:
