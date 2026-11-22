@@ -4,6 +4,7 @@ test controls, a migrated database and the real app, queue and worker around the
 import math
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -16,11 +17,13 @@ from fakeredis import FakeAsyncRedis
 from pydantic import SecretStr
 from sqlalchemy import text
 
+from qs_simulation.adapters.calibrators import QuantCalibrator
 from qs_simulation.calibrations import KIND, make_handler
 from qs_simulation.domain.calibration import FitResult, Model, PricePoint, log_returns
 from qs_simulation.jobs import job_queue
 from qs_simulation.main import build_app
 from qs_simulation.ports import (
+    Calibrator,
     CalibratorUnavailable,
     InstrumentInfo,
     InstrumentNotFound,
@@ -135,7 +138,7 @@ class World:
     database: Database
     queue: JobQueue
     source: ScriptedSource
-    calibrator: ReferenceCalibrator
+    calibrator: Any  # the reference double (tests script it) or the real K5 adapter
     client: httpx.AsyncClient
     worker: Worker
 
@@ -150,10 +153,10 @@ class World:
 CLEAR = "TRUNCATE calibration, job, instrument_ref CASCADE"
 
 
-@pytest.fixture
-async def world(migrated_database_url: str) -> AsyncIterator[World]:
+@asynccontextmanager
+async def build_world(database_url: str, calibrator: Calibrator) -> AsyncIterator[World]:
     settings = SimulationSettings(
-        database_url=SecretStr(migrated_database_url),
+        database_url=SecretStr(database_url),
         redis_url=SecretStr("redis://unused"),
         auth_jwks_url="http://127.0.0.1:1/jwks.json",
         content_hash="test-hash",
@@ -162,7 +165,6 @@ async def world(migrated_database_url: str) -> AsyncIterator[World]:
     async with database.transaction() as session:
         await session.execute(text(CLEAR))
     source = ScriptedSource()
-    calibrator = ReferenceCalibrator()
     app = build_app(
         settings,
         database=database,
@@ -181,6 +183,19 @@ async def world(migrated_database_url: str) -> AsyncIterator[World]:
     async with database.transaction() as session:
         await session.execute(text(CLEAR))
     await database.close()
+
+
+@pytest.fixture
+async def world(migrated_database_url: str) -> AsyncIterator[World]:
+    async with build_world(migrated_database_url, ReferenceCalibrator()) as built:
+        yield built
+
+
+@pytest.fixture
+async def k5_world(migrated_database_url: str) -> AsyncIterator[World]:
+    """The same world with the real fitting code (K5) in place of the reference."""
+    async with build_world(migrated_database_url, QuantCalibrator()) as built:
+        yield built
 
 
 CALIBRATIONS = f"{API}/calibrations"
