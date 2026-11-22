@@ -31,6 +31,33 @@ require_env() {
   done
 }
 
+# json_get <dotted.path>: prints one field of the JSON document on stdin, or nothing when
+# it is missing or null. Booleans print as true/false. Uses jq when installed and falls
+# back to Python, so the scripts also run on a host without jq (e.g. Git Bash on Windows).
+json_get() {
+  local path=$1 py
+  if command -v jq >/dev/null 2>&1; then
+    jq -r ".$path // empty"
+    return
+  fi
+  for py in python3 python; do
+    if "$py" -c '' >/dev/null 2>&1; then
+      "$py" -c '
+import json, sys
+value = json.load(sys.stdin)
+for key in sys.argv[1].split("."):
+    value = value.get(key) if isinstance(value, dict) else None
+if isinstance(value, bool):
+    print("true" if value else "false")
+elif value is not None:
+    print(value)
+' "$path"
+      return
+    fi
+  done
+  die "json_get needs jq or Python"
+}
+
 # retry <attempts> <delay-seconds> <command...>
 retry() {
   local attempts=$1 delay=$2 n=1
@@ -159,6 +186,8 @@ UV_IMAGE="ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7d
 REDPANDA_IMAGE="redpandadata/redpanda:v25.2.9@sha256:bd6c35647153a4dbc19507c8037dcca0802484c23e6e5fbb97591a62539e313a"
 SOPS_IMAGE="ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea"
 TIMESCALE_IMAGE="timescale/timescaledb:2.22.1-pg17@sha256:fba60021a224479e174ae1ec577c1a0576d5185b09fe9e622f1d19e4bf5bab0d"
+# Browsers for the Playwright gates; the @playwright/test version in frontend must match
+PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v1.49.1-noble@sha256:70e367e0cbf60340a5b5fd562f6247a34eb3196efab9f88a3dd56482d9fe09d2"
 
 # Public HTTPS address of an environment's API, from its tunnel; empty when it has none yet
 #   api_public_url <compose-project>
@@ -174,13 +203,15 @@ wait_for_api_url() {
   local project=$1 url attempt
   for attempt in $(seq 1 60); do
     url="$(api_public_url "$project")"
-    if [[ -n "$url" ]] && curl -fsS --max-time 10 -o /dev/null "$url/api/platform/health"; then
+    if [[ -n "$url" ]] && curl -fsS --max-time 10 "$url/api/platform/health" >/dev/null; then
       printf '%s' "$url"
       return 0
     fi
-    if (( attempt == 30 )); then
-      log "no public API address yet; restarting the tunnel"
-      docker compose -p "$project" -f "$COMPOSE_FILE" restart api-tunnel >/dev/null 2>&1 || true
+    # A quick tunnel can expire (Cloudflare then answers "Tunnel not found"); a restart
+    # gets a new address
+    if (( attempt == 10 || attempt == 35 )); then
+      log "no working public API address; restarting the tunnel"
+      docker restart "$project-api-tunnel-1" >/dev/null
     fi
     sleep 3
   done
@@ -192,9 +223,12 @@ build_id() {
   printf '%s' "${BUILD_TAG:-local-$$}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'
 }
 
-# Name prefix for this build's test containers: qs-ci-<at most 30 characters>. Containers
-# are reached by name on their network, and a host name may not exceed 63 characters,
-# so long branch names are cut and a hash keeps the prefix unique.
+# Name prefix for this build's test containers and networks: qsci-<at most 30 characters>.
+# Containers are reached by name on their network, and a host name may not exceed 63
+# characters, so long branch names are cut and a hash keeps the prefix unique. It was
+# qs-ci- until 22 Nov: the sweep in branches made before then removes any qs-ci- container
+# that is not running yet, including another build's (sweep.sh), so new builds use a name
+# that sweep cannot see.
 test_id() {
   local id
   id="$(build_id)"
@@ -202,7 +236,7 @@ test_id() {
   if (( ${#id} > 30 )); then
     id="${id:0:21}-$(printf '%s' "$id" | sha1sum | cut -c1-8)"
   fi
-  printf 'qs-ci-%s' "$id"
+  printf 'qsci-%s' "$id"
 }
 
 # Cloudflare Pages API: cf_pages_api <METHOD> <path under /pages/projects> [json-body]
@@ -219,7 +253,7 @@ cf_pages_api() {
 pages_url() {
   require_env PAGES_PROJECT PAGES_BRANCH PAGES_PRODUCTION_BRANCH
   local subdomain alias
-  subdomain="$(cf_pages_api GET "/$PAGES_PROJECT" | jq -r '.result.subdomain // empty')"
+  subdomain="$(cf_pages_api GET "/$PAGES_PROJECT" | json_get result.subdomain)"
   [[ -n "$subdomain" ]] || die "Cloudflare Pages project $PAGES_PROJECT not found"
   if [[ "$PAGES_BRANCH" == "$PAGES_PRODUCTION_BRANCH" ]]; then
     printf 'https://%s' "$subdomain"
@@ -227,4 +261,22 @@ pages_url() {
     alias="$(printf '%s' "$PAGES_BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')"
     printf 'https://%s.%s' "$alias" "$subdomain"
   fi
+}
+
+# Decrypts one secret of deploy/secrets/<env>.enc.env into an exported shell variable,
+# without printing it. Pass the value on by name only (docker run -e NAME), never in a
+# command line. Needs SOPS_AGE_KEY_FILE (Jenkins binds the sops-age-key credential).
+#   read_secret <env> <SECRET_NAME> <variable>
+read_secret() {
+  local env=$1 secret=$2 var=$3 encrypted="deploy/secrets/$1.enc.env" value
+  [[ -f "$REPO_ROOT/$encrypted" ]] || die "no $encrypted to read $secret from"
+  require_env SOPS_AGE_KEY_FILE
+  value="$(SOPS_AGE_KEY="$(cat "$SOPS_AGE_KEY_FILE")" run_in_image "$SOPS_IMAGE" -e SOPS_AGE_KEY -- \
+    --decrypt --input-type dotenv --output-type dotenv "$encrypted" \
+    | sed -n "s/^$secret=//p" | tr -d '\r')" \
+    || die "could not decrypt $encrypted; is SOPS_AGE_KEY_FILE one of the keys in .sops.yaml?"
+  [[ -n "$value" ]] \
+    || die "$secret is not in $encrypted; add it with ci/scripts/set-secret.sh $secret $env"
+  printf -v "$var" '%s' "$value"
+  export "${var?}"
 }

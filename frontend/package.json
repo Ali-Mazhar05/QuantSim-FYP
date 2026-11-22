@@ -6,12 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p tsconfig.e2e.json",
     "lint": "oxlint",
     "test": "vitest run",
     "test:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml",
     "preview": "vite preview",
-    "gen:api": "openapi-typescript src/services/generated/market/openapi.json -o src/services/generated/market/schema.d.ts"
+    "gen:api": "openapi-typescript src/services/generated/market/openapi.json -o src/services/generated/market/schema.d.ts && openapi-typescript src/services/generated/trading/openapi.json -o src/services/generated/trading/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.108.0",
@@ -24,6 +24,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "1.49.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

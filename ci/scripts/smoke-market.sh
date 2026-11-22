@@ -71,7 +71,7 @@ if [[ -n "${SMOKE_ADMIN_USER:-}" && -n "${SMOKE_ADMIN_PASSWORD:-}" ]]; then
     grep -Eq '"status":"(succeeded|partially_succeeded|failed)"' <<<"$body"
   }
   retry 40 3 finished || die "run $run_id did not finish"
-  curl -fsS --max-time 10 "${auth[@]}" "$base/ingestion-runs/$run_id" | check_report "$run_id" \
+  curl -fsS --max-time 10 "${auth[@]}" "$base/ingestion-runs/$run_id" | report_succeeded \
     || die "run $run_id did not succeed"
 else
   log "manual run in the market container (set SMOKE_ADMIN_USER and SMOKE_ADMIN_PASSWORD to go through the API)"

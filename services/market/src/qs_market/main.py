@@ -11,6 +11,7 @@ from qs_market.api_audit import build_audit_routers
 from qs_market.api_correlation import build_correlation_routers
 from qs_market.api_data import build_data_routers
 from qs_market.api_environments import build_environment_routers
+from qs_market.api_feeds import build_feed_routers
 from qs_market.api_runs import build_routers as build_run_routers
 from qs_market.settings import MarketSettings
 from qs_market.symbol_directory import DirectorySource
@@ -44,6 +45,7 @@ def build_app(
             *build_correlation_routers(auth=auth, database=database),
             *build_run_routers(auth=auth, database=database, vendor=settings.vendor),
             *build_environment_routers(auth=auth, database=database),
+            *build_feed_routers(auth=auth, database=database),
             *build_audit_routers(auth=auth, database=database),
         ],
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],

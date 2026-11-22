@@ -44,7 +44,7 @@ export default function MarketEnvironmentsList() {
       />
       {error ? (
         <p role="alert" className="text-sm text-[var(--color-risk-severe)]">
-          {error}
+          {error.message}
         </p>
       ) : environments === null ? (
         <p className="text-sm text-[var(--color-text-muted)]">Loading environments…</p>

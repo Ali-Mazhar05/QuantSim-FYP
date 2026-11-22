@@ -71,7 +71,15 @@ describe('useEnvironments', () => {
     server.use(http.get(`${MARKET}/environments`, () => problem(403, 'Your role may not do this')))
     signIn()
     const { result } = renderHook(() => useEnvironments(), { wrapper })
-    await waitFor(() => expect(result.current.error).toContain('Your role may not do this'))
+    await waitFor(() => expect(result.current.error?.kind).toBe('forbidden'))
+    expect(result.current.error?.message).toContain('Your role may not do this')
+  })
+
+  it('signs the user out when the session has ended (401 after the refresh failed)', async () => {
+    server.use(http.get(`${MARKET}/environments`, () => problem(401, 'The session has ended')))
+    signIn()
+    renderHook(() => useEnvironments(), { wrapper: ({ children }) => <QueryProvider>{children}</QueryProvider> })
+    await waitFor(() => expect(useDemoStore.getState().authenticated).toBe(false))
   })
 
   it('makes no request while signed out', async () => {

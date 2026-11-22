@@ -36,7 +36,11 @@ builder="qs-builder"
 docker buildx inspect "$builder" >/dev/null 2>&1 \
   || docker buildx create --name "$builder" --driver docker-container >/dev/null
 
-docker buildx build \
+# The build host's upload to the registry can stall for good (develop #92 hung 42 minutes
+# after authenticating until the stage timed out). Each attempt is bounded; a retry is
+# cheap because layers come from the cache and the registry skips blobs it already has.
+push_attempt_seconds="${PUSH_ATTEMPT_SECONDS:-600}"
+retry 3 30 timeout "$push_attempt_seconds" docker buildx build \
   --builder "$builder" \
   --platform "$platforms" \
   "${build_args[@]}" \
@@ -47,6 +51,7 @@ docker buildx build \
   -f "$dockerfile" \
   -t "$repo:$hash" \
   --push \
-  "$context"
+  "$context" \
+  || die "could not build and push $repo:$hash after 3 attempts"
 
 log "pushed $repo:$hash"
