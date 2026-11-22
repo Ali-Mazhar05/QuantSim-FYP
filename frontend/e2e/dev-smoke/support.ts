@@ -74,7 +74,8 @@ const UNREACHABLE = 'Cannot reach the QuantSim server'
  * status, or the fetch error), the network errors Chromium reported for those requests
  * (net::ERR_..., which fetch hides behind "Failed to fetch"), and whether the same URL
  * answers outside the browser, from Playwright's own HTTP client. That tells a stuck
- * browser session from a tunnel or API that is down.
+ * browser session from a tunnel or API that is down. Each request gives up after 10 s, so a
+ * connection that hangs (rather than fails) is reported too ("TimeoutError").
  */
 export async function warmUpApi(page: Page, timeoutMs = 60_000): Promise<void> {
   const netErrors: string[] = []
@@ -92,11 +93,11 @@ export async function warmUpApi(page: Page, timeoutMs = 60_000): Promise<void> {
       const probe = await page.evaluate(async () => {
         let url = '/config.json'
         try {
-          const config = await fetch(url, { cache: 'no-store' })
+          const config = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
           if (!config.ok) return { ok: false, url, what: `HTTP ${config.status}` }
           const api = String(((await config.json()) as { apiBaseUrl?: string }).apiBaseUrl ?? '').replace(/\/$/, '')
           url = `${api}/api/platform/health`
-          const health = await fetch(url, { cache: 'no-store' })
+          const health = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
           return { ok: health.ok, url, what: `HTTP ${health.status}` }
         } catch (error) {
           return { ok: false, url, what: String(error) }
