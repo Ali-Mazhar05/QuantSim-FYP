@@ -1,4 +1,4 @@
-"""Calibration against the real K5 fitting code (B-FR-08, B-FR-09): the stored fit is what K5 returns
+"""Calibration against the real K5 fitting code (B-FR-08, B-FR-09): the stored fit is what K5 gives
 for the same window, a refusal carries K5's own reason, and Merton, which waited for K5, works."""
 
 from decimal import Decimal
@@ -14,7 +14,6 @@ from tests.calibration_support import (
     DT,
     START,
     World,
-    k5_world,  # noqa: F401  (a fixture)
     make_points,
     request_body,
 )
