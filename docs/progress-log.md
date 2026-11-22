@@ -30,7 +30,7 @@ repository or in Jenkins.
 - **Into the lane:** #155 develop into the lane, #162 K4 review follow-ups and ADRs Accepted
   (into `develop`), #78 B10 path generators, #177 B12 replay feed and activation, #179 B14
   simulation database, #180 B13 replay sessions.
-- **Built and verified on their branches (CI green), in review:** B15 calibration on the real K5
+- **Merged after Jenkins:** B15 calibration on the real K5
   (#181), B16 Monte Carlo on K6 and the K3 service client, B18 read API (lists, quantiles, path ticks),
   B17 stress scenarios, and the seven pages on the typed client with the Create Portfolio run picker.
 - **Verified:** market 481 tests (120 real-data skipped without the corpus), simulation 417, frontend

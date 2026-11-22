@@ -1,10 +1,11 @@
 # Lane B: Replay, Simulation and the Frontend Kit
 
 Chapter, Iteration 2 (window 16 Nov to 23 Dec 2026). State of the code: `lane/b-simulation` after
-the merges of 22 Nov 2026 (develop into the lane #155, B10 #78, B12 #177, B14 #179, B13 #180); the
-calibration, Monte Carlo, read API, scenario and page branches are built and verified, in the merge
-queue at the time of writing, and are marked **in review** below. Items that cannot be proved from a
-developer machine are marked **partial** with the reason.
+the merges of 22 Nov 2026: the generators (#78), the replay feed (#177), the database (#179), replay
+sessions (#180), calibration (#181), Monte Carlo (#186), the read API (#187), scenarios (#188) and the
+pages with the typed client, the simulation diagram and the queue depth route (#189). Items that
+cannot be proved from a developer machine are marked **partial** with the reason; the Market Data
+controls (B02) wait in their own pull request into `develop`.
 
 Lane B owns the replay of historical markets (module M2's feed and sessions), the stochastic
 simulation service (calibration, Monte Carlo, stress scenarios), the frontend kit (typed client,
@@ -109,9 +110,8 @@ and gates test to acceptance.
 
 ## 4. Requirements traceability
 
-Result: **pass** = proved by the named tests in CI; **in review** = the code and tests are built and
-green in CI on their branch and wait for the lane merge; **partial** = something is not proved, see
-section 7.
+Result: **pass** = proved by the named tests, green in CI and merged into the lane; **partial** =
+something is not proved or not built, see section 7; **not proved** = it cannot be tried yet.
 
 ### 4.1 Functional requirements
 
@@ -121,54 +121,54 @@ section 7.
 | B-FR-02 fingerprint changes only with data | B12 | `test_replay_feed`: a revision and a restated adjusted price change it; another instrument and a bar outside the window do not | pass |
 | B-FR-03 hourly and tick cannot be replayed | B12 | `test_replay_feed`, `test_feed_contract_api`: 422 with a distinct type each | pass |
 | B-FR-04 inverted window refused by API and database | B12 | creation 422; the `bar`/environment CHECK exists since Iteration 1 | pass |
-| B-FR-05 lists for pickers | C2, B18 | environment filters `type`, `owner`; `GET /runs` and `/calibrations` with filters and paging (`test_reads`) | in review |
+| B-FR-05 lists for pickers | C2, B18 | environment filters `type`, `owner`; `GET /runs` and `/calibrations` with filters and paging (`test_reads`) | pass |
 | B-FR-06 play, pause, speed, seek | B13 | `test_replay_sessions`: 5x for 2 s advances 10; pause freezes; seek then play; speed change re-anchors; analyst 403 | pass |
 | B-FR-07 stream resumes after reconnect | B13 | cut by design (DL-034); polling resumes at the server position | partial (cut) |
-| B-FR-08 calibrate, fit equals K5, fingerprint | B15 | `test_calibrations`, `test_calibrations_k5`: stored fit equals a direct K5 call; unchanged data reproduces the fingerprint | in review |
-| B-FR-09 short history and refusals readable | B15 | 59 sessions gives 422 `insufficient_history`; OU on a random walk gives K5's `not_mean_reverting` | in review |
+| B-FR-08 calibrate, fit equals K5, fingerprint | B15 | `test_calibrations`, `test_calibrations_k5`: stored fit equals a direct K5 call; unchanged data reproduces the fingerprint | pass |
+| B-FR-09 short history and refusals readable | B15 | 59 sessions gives 422 `insufficient_history`; OU on a random walk gives K5's `not_mean_reverting` | pass |
 | B-FR-10 exact generators with correlated shocks | B10 | `test_gbm`, `test_ou`, `test_merton`, `test_sharding`: moments within 3 SE at 20,000 paths; shock correlation within 0.02; seed sweeps | pass |
 | B-FR-11 reproducible from the seed, any worker count | B10, B16 | identical output with 1, 2 and 4 workers (real processes) | pass |
 | B-FR-12 other instrument's calibration refused by the database | B14 | `test_schema`: raw insert fails with `run_instrument_calibration_same_instrument`; the valid pairing is accepted | pass |
-| B-FR-13 run statistics, VaR <= CVaR equal K6 | B16 | `test_runs`, `test_run_adapters`: stored statistics; VaR and CVaR equal K6 and the specification formula | in review |
-| B-FR-14 regenerated path equals the stored one | B16, B18 | `test_runs`, `test_reads`: GBM, OU and Merton across shard joins; stored and regenerated ticks equal | in review |
-| B-FR-15 scenarios make derived runs, parent unchanged | B17 | `test_stress`: parent byte for byte; derived links to parent | in review |
-| B-FR-16 a new scenario is a row | B17 | `test_stress`: a 90% crash inserted with SQL works end to end; bad parameters give 422 naming the field | in review |
-| B-FR-17 seven pages on the typed client | B20 | page tests per state; Replay resumes at the server position | in review |
+| B-FR-13 run statistics, VaR <= CVaR equal K6 | B16 | `test_runs`, `test_run_adapters`: stored statistics; VaR and CVaR equal K6 and the specification formula | pass |
+| B-FR-14 regenerated path equals the stored one | B16, B18 | `test_runs`, `test_reads`: GBM, OU and Merton across shard joins; stored and regenerated ticks equal | pass |
+| B-FR-15 scenarios make derived runs, parent unchanged | B17 | `test_stress`: parent byte for byte; derived links to parent | pass |
+| B-FR-16 a new scenario is a row | B17 | `test_stress`: a 90% crash inserted with SQL works end to end; bad parameters give 422 naming the field | pass |
+| B-FR-17 seven pages on the typed client | B20 | page tests per state; Replay resumes at the server position | pass |
 | B-FR-18 types from the APIs, drift fails CI | K4 | `test_openapi_export`, `generated.test.ts`, `tsc` (proved by renaming a market field: three failures) | pass |
 | B-FR-19 pages run on mocks | K4 | page tests on MSW with no backend | pass |
-| B-FR-20 interval selector and metric cards | B02 | `MarketData.controls.test` | pass (built; PR waits) |
+| B-FR-20 interval selector and metric cards | B02 | `MarketData.controls.test` | pass (PR into develop) |
 | B-FR-21 the spine in Playwright on TEST | B22 | `lane-b-spine.spec.ts` type-checked and listed; not run | partial |
 
 ### 4.2 Non-functional requirements
 
 | ID | Proof | Result |
 |---|---|---|
-| B-NFR-01 submit 202 under 800 ms p95 | 100 submits measured, p95 under 0.8 s (runs); calibration submit under 0.8 s | in review |
-| B-NFR-02 pages under 2 s p95 | replay feed 40 x 2,900 first, middle and last page under 2 s (CI); synthetic tick pages, stored and regenerated, under 2 s | pass / in review |
+| B-NFR-01 submit 202 under 800 ms p95 | 100 submits measured, p95 under 0.8 s (runs); calibration submit under 0.8 s | pass |
+| B-NFR-02 pages under 2 s p95 | replay feed 40 x 2,900 first, middle and last page under 2 s (CI); synthetic tick pages, stored and regenerated, under 2 s | pass |
 | B-NFR-03 10,000 x 252 completes and is measured | the 1,000 x 252 demo run completes (about 75 s here, up to 150 s on a loaded host); the 10,000 x 252 run belongs to Lane C's study | partial |
 | B-NFR-04 shards of 250, identical for 1, 2, 4 workers | `test_sharding` | pass |
 | B-NFR-05 determinism | same seed identical, killed run rerun identical, replay reads byte-identical | pass |
 | B-NFR-06 statistical validity | seed sweeps (a single fixed seed gave z = -3.4 on a correct generator, so no single-seed test is kept); a 3,000,000-path compensator test | pass |
 | B-NFR-07 NUMERIC in the database, strings on the wire | test over every price and statistic column; the tick schema rejects JSON numbers | pass |
 | B-NFR-08 constraints tested on real PostgreSQL | 55 refusals each naming its rule, plus the replay and activation tables | pass |
-| B-NFR-09 duplicate submit returns the same run, event with state | idempotency tests; the completion event is written in the run's transaction | in review |
+| B-NFR-09 duplicate submit returns the same run, event with state | idempotency tests; the completion event is written in the run's transaction | pass |
 | B-NFR-10 timeout, retries, breaker on the price fetch | the K3 client carries them; failure handling tested on this side and the client's wiring on a mock transport | partial |
-| B-NFR-11 role matrix | per route for market and simulation; a service token reads and cannot write | pass / in review |
+| B-NFR-11 role matrix | per route for market and simulation; a service token reads and cannot write | pass |
 | B-NFR-12 type check fails on drift; consumer tests run in the pipeline | the drift checks pass; the consumer tests of Lanes A and C are not in the pipeline yet | partial |
 | B-NFR-13 progress events, duration, queue depth | `sim.progress` about every tenth, a structured line per run; the admin queue-depth route is not built | partial |
 | B-NFR-14 memory limit, one thread per worker | `OMP_NUM_THREADS=1`, a shard pool of cores minus one, `max_run_values` caps a run; the compose limits are Lane A's file | partial |
-| B-NFR-15 four states on every page, layout unchanged | page tests per state; prototype layout kept (ADR 06) | in review |
+| B-NFR-15 four states on every page, layout unchanged | page tests per state; prototype layout kept (ADR 06) | pass |
 | B-NFR-16 three consecutive green spine runs | not possible before TEST has the services | not proved |
 
 ## 5. Test results
 
-Counts are from CI runs of 22 Nov 2026 on the stacked branches.
+Counts are from CI runs of 22 Nov 2026 on the merged branches.
 
 | Level | Result |
 |---|---|
 | Market service (with B12, B13) | 481 passed in CI; with the recorded corpus added, 601 passed and none skipped (the 120 real-data tests included), run locally on the B16 tip on 22 Nov |
-| Simulation service (with B10 to B17) | 417 passed |
-| Frontend | 21 test files, all passing |
+| Simulation service (with B10 to B17, the diagram and the queue route) | 427 passed |
+| Frontend | 21 test files, 194 tests, all passing |
 | Migrations | market 0001 to 0005 and simulation 0001 to 0003 apply from empty, reverse fully and apply again |
 | Generators | 100% branch coverage of the generators (B10) |
 
