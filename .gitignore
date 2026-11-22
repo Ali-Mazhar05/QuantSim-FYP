@@ -47,3 +47,7 @@ ci/jenkins/.state/
 
 # Jenkins admin password copied out of the container
 /admin_password
+
+# coverage data files
+.coverage
+.coverage.*

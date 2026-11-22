@@ -63,6 +63,11 @@ ci/jenkins/host.sh stop      # hand over: stop Jenkins here and upload its state
 - `start` fetches the latest state if someone else hosted since, opens a free public
   link (`https://<random>.trycloudflare.com`, shown by `status`), and rebuilds `develop`
   and `test` so DEV and TEST come up on this laptop from the same images.
+- `start` also points the `quantsim-jenkins` GitHub App's webhook at the new link
+  (`github-webhook.sh`, signed with `secrets/github_app_key`), so merges build at once.
+  If the tunnel restarts on its own and gets a new link, run `host.sh webhook`.
+  The app's webhook must be switched on once by hand (Active, events Push and Pull
+  request); until then the script says so and builds wait for the branch scan.
 - Always `stop` before closing the laptop for the day, so the next person gets your
   latest state.
 - Everyone signs in with their own account from `secrets/team_users` (below); the

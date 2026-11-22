@@ -1,9 +1,10 @@
 # Lane A: Trading Engine and Platform
 
 Chapter, Iteration 2 (window 16 Nov to 23 Dec 2026). State of the code: `develop` at
-`f49661c` (after lane PR #140 and the spine fixes #141, #142), 22 Nov 2026; `v0.1.4` is the release on PROD. Two items still depend on
-other lanes or on the release date and are marked **partial** with the reason: the live J2
-check on DEV (Lane B's feed routes) and the `v0.2.0` release (23 Dec). The run metrics'
+`5532d2b` (after lane PR #166: the DEV stand-in feed and live J2 check, the TEST spine and
+the webhook), 22 Nov 2026; `v0.1.5` is the release on PROD. Two items still depend on other
+lanes or on the release date and are marked **partial** with the reason: the ACC gate's
+spine on real replay data (Lane B's feed routes) and the `v0.2.0` release (23 Dec). The run metrics'
 risk ratios use the K6 metrics library (`qs_quant.metrics`) since 22 Nov.
 
 Lane A owns module M3, the event-sourced trading engine, from `trading_db` to the trading
@@ -186,10 +187,14 @@ promotion to TEST (A21, #91). The DEV gate also runs Lane A's part of the demo s
 (`frontend/e2e/dev-smoke/lane-a-spine.spec.ts`, #137): a momentum portfolio with the demo's
 execution assumptions runs through the pages, every fill's cost and slippage is checked to
 the cent, the chain verifies, a rebuild is identical and a second run ends on the same final
-hash, and an analyst is refused. The TEST stage runs the `demo-spine` suite in the same way
-and gates ACC; it is switched on once Lane B's feeds serve real replay environments on TEST,
-because the demo environments exist only in local and DEV. Until then the stage is skipped
-with a notice. The pr.sh
+hash, and an analyst is refused. The TEST stage runs the same spine
+(`frontend/e2e/demo-spine/lane-a-spine.spec.ts`, #160; the steps are shared in
+`dev-smoke/spine.ts`) on a real replay environment and gates ACC: it picks the first active
+historical replay the market service lists whose ticks it serves. While Lane B's tick route
+still answers 501 there is none, and the test is skipped with that reason in the report;
+it runs in full as soon as the feed serves ticks. Sign-in in every suite first checks that
+the browser can reach the API, and when it cannot, the failure names the browser's network
+error and whether the same address answers outside the browser (#156, #163). The pr.sh
 helper opens task pull requests into `lane/*` and lane pull requests into `develop` (A22,
 #84).
 
@@ -217,7 +222,13 @@ frontend's (#139). The Trading API is fuzzed against its own OpenAPI document by
 Schemathesis on every build (`api/test_openapi_fuzz.py`), and the committed OpenAPI exports
 must match the running code, or the frontend's generated types fail the build (#130).
 
-**Releases.** The same pipeline promoted `v0.1.2`, `v0.1.3` and `v0.1.4` from `develop`
+**Webhook.** Jenkins' public address is a Cloudflare quick tunnel whose URL changes when the
+tunnel restarts. `host.sh start` now points the `quantsim-jenkins` GitHub App's webhook at
+the new address (`ci/jenkins/github-webhook.sh`, signed with the app's key; `host.sh webhook`
+does it again on demand), so pushes and pull requests start builds at once instead of at the
+next branch scan (#157, #164).
+
+**Releases.** The same pipeline promoted `v0.1.2`, `v0.1.3`, `v0.1.4` and `v0.1.5` from `develop`
 through TEST and ACC to PROD, each with an ACC sign-off and a PROD approval in Jenkins and a
 tag on `main`.
 
@@ -242,7 +253,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR-09 | Slippage fixed bps or volume based | Implemented | `unit/test_slippage.py::test_buy_fills_higher`, `::test_buy_scales_with_participation`, `::test_participation_is_capped_at_the_bar_volume`; `unit/test_execution.py::test_volume_slippage_on_a_market_buy`; `property/test_execution_properties.py::test_slippage_is_never_favourable` |
 | A-FR-10 | Gap-free, append-only, hash-chained log | Implemented | `db/test_trading_db.py::test_the_service_role_may_not_change_the_log`, `::test_the_guard_trigger_stops_the_owner_even_with_the_privilege_granted_back`, `::test_the_guard_trigger_stops_a_superuser`, `::test_a_repeated_portfolio_seq_is_refused_even_at_another_time`, `::test_a_gap_in_the_log_is_refused`; `unit/test_hashing.py`; `unit/test_verify.py` |
 | A-FR-11 | Holdings, fills and value series are projections; rebuild equals live | Implemented | `db/test_rebuild_db.py::test_a_run_rebuilds_identical_with_its_final_hash`, `::test_changed_projection_rows_are_named_and_apply_restores_them`; `unit/test_projections.py::test_folding_session_by_session_equals_folding_the_whole_log` |
-| A-FR-12 | Same spec on the same fingerprint gives the same final hash | Implemented, across both adapters on recorded feeds; the live J2 run on DEV waits for Lane B's feed routes (section 5.4) | `unit/test_engine.py::test_two_runs_end_on_the_same_hash`, `::test_one_changed_input_changes_the_final_hash`, `::test_another_fingerprint_changes_the_final_hash`; `property/test_strategy_properties.py::test_every_kind_is_deterministic`; `contract/test_http_feeds.py::test_j2_parity_on_the_replay`, `::test_j2_parity_on_the_median_synthetic_path`; DEV gate `lane-a-spine.spec.ts` (a rerun ends on the same hash) |
+| A-FR-12 | Same spec on the same fingerprint gives the same final hash | Implemented, across both adapters on recorded feeds, and live on DEV through the deployed worker's HTTP path against the stand-in feed (section 5.4); against the market service once its feed routes answer | `unit/test_engine.py::test_two_runs_end_on_the_same_hash`, `::test_one_changed_input_changes_the_final_hash`, `::test_another_fingerprint_changes_the_final_hash`; `property/test_strategy_properties.py::test_every_kind_is_deterministic`; `contract/test_http_feeds.py::test_j2_parity_on_the_replay`, `::test_j2_parity_on_the_median_synthetic_path`; `unit/test_demo_feeds.py`; DEV live check `check_j2` (HTTP feed vs file, build 109); DEV gate `lane-a-spine.spec.ts` (a rerun ends on the same hash) |
 | A-FR-13 | A killed worker resumes to an identical log | Implemented | `db/test_engine_db.py::test_a_crash_then_resume_gives_the_identical_log` (crash after sessions 1, 5, 9); `unit/test_engine_runner.py::test_a_crashed_run_resumes_to_the_identical_log`, `::test_resuming_with_a_changed_spec_is_refused`; `unit/test_engine.py::test_replay_refuses_a_log_it_cannot_reproduce` |
 | A-FR-14 | Run metrics stored and served, computed with `qs_quant.metrics` | Implemented (#145, A16b): return, volatility, Sharpe, max drawdown and turnover from K6 on the initial capital followed by the valued sessions; stored in `portfolio_metrics` in the transaction that completes the run; served by `/metrics`; asserted by the DEV live check | `api/test_projections_api.py::test_metrics_count_trades_and_costs_and_compute_the_ratios_with_k6`, `unit/test_metrics.py`, `db/test_engine_db.py::test_a_completed_job_run_stores_its_k6_metrics`, `ci/scripts/trading_live_check.py::check_run_metrics` |
 | A-FR-15 | State as of any seq can be read | Implemented | `db/test_rebuild_db.py::test_the_state_as_of_a_seq_equals_the_projection_there`; `unit/test_projections.py::test_the_state_as_of_each_session_end_equals_the_engines`; `api/test_projections_api.py::test_the_state_as_of_the_last_seq_is_the_state_row` |
@@ -252,14 +263,14 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR-19 | Workers call other services without a user token | Implemented (#129, #131): platform-issued service tokens in every deployed environment | `libs/qs_template/tests/test_service_tokens.py::test_a_job_calling_thirty_minutes_later_gets_a_valid_token`, `::test_refuses_a_forged_service_token`, `::test_refuses_bad_service_tokens`, `::test_factory_prefers_real_tokens`; `unit/test_http_environment.py::test_with_a_client_secret_the_tokens_come_from_the_platform` |
 | A-FR-20 | Playwright DEV smoke gates promotion to TEST | Implemented | `frontend/e2e/dev-smoke/` (`smoke.spec.ts`, `trading-flow.spec.ts`, `lane-a-spine.spec.ts`); `ci/scripts/playwright-gate.sh`; `quantsim/dev-verified` required on the `develop -> test` PR |
 | A-FR-21 | pr.sh lane support; Jenkins runs both Playwright gates | Implemented; the TEST `demo-spine` gate is wired and switches on with real replay environments on TEST | pr.sh (A22, #84), verified by use; Jenkinsfile Deploy stage, `ci/scripts/playwright-gate.sh` |
-| A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: content-hash builds used for `v0.1.2`, `v0.1.3` and `v0.1.4` (#94, #95, #98); `v0.2.0` release on 23 Dec (A19) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh`; tags `v0.1.2` to `v0.1.4` on `main` |
+| A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: content-hash builds used for `v0.1.2`, `v0.1.3`, `v0.1.4` and `v0.1.5` (#94, #95, #98, #149 to #152); `v0.2.0` release on 23 Dec (A19) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh`; tags `v0.1.2` to `v0.1.4` on `main` |
 
 ### 4.2 Non-functional requirements
 
 | ID | Requirement (short) | Status | Proved by |
 |---|---|---|---|
 | A-NFR-01 | 40 instruments x 252 sessions under 60 s on DEV | Implemented | `unit/test_performance.py`; `db/test_performance_db.py::test_a_persisted_40_by_252_run_finishes_inside_the_budget`; DEV live check: 4.0 s |
-| A-NFR-02 | Run submit 202 under 800 ms p95 | Implemented: 100 submits on DEV, p50 4 ms, p95 7 ms | `api/test_runs_api.py::test_a_submit_is_202_and_a_repeated_key_returns_the_same_job`; `ci/scripts/trading_live_check.py` (every DEV deploy) |
+| A-NFR-02 | Run submit 202 under 800 ms p95 | Implemented: 100 submits on DEV, p50 4 ms, p95 5 ms | `api/test_runs_api.py::test_a_submit_is_202_and_a_repeated_key_returns_the_same_job`; `ci/scripts/trading_live_check.py` (every DEV deploy) |
 | A-NFR-03 | Projection and metrics reads under 2 s p95 | Implemented: 100 reads on DEV, p50 3 ms, p95 6 ms | `ci/scripts/trading_live_check.py` (every DEV deploy) |
 | A-NFR-04 | Decimal in domain, NUMERIC in DB, no float | Implemented: refused at runtime and in the schema, and a static rule keeps `float` out of the money code | `unit/test_money.py::test_float_and_bool_are_refused`; `unit/test_hashing.py::test_floats_and_bad_seqs_are_refused`; `unit/test_no_float.py::test_no_float_in_the_money_code`; `db/test_schema_definitions.py::test_money_columns_use_fixed_precision`; `api/test_api_roles.py::test_money_is_a_decimal_string_in_the_openapi_document` |
 | A-NFR-05 | Trade log append-only for everyone | Implemented | `db/test_trading_db.py` tampering tests as service role, owner and superuser |
@@ -273,7 +284,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-NFR-13 | Services start from env vars only; missing config fails at start-up | Implemented | `libs/qs_template/tests/test_config.py::test_refuses_to_start_without_required_settings`; `unit/test_demo_environments.py::test_a_missing_directory_stops_the_worker_from_starting` |
 | A-NFR-14 | Structured logs; job duration, queue depth, outbox backlog exposed | Implemented: JSON logs with request ids; `GET /ops/metrics` (admin) gives queue depth, p95 duration and outbox backlog | `api/test_ops_api.py::test_an_admin_gets_queue_depth_durations_and_outbox_backlog`, `::test_other_roles_are_refused`; `api/test_ops_db.py::test_ops_metrics_follow_a_worker_run`; DEV live check |
 | A-NFR-15 | Memory limits, `OMP_NUM_THREADS=1`, relay in-process on DEV, disk headroom | Implemented: compose limits, embedded relay, and a Jenkins disk check that warns under 20 GB free | `deploy/compose/docker-compose.yml`; `test_service.py::test_embedded_mode_runs_the_worker_and_relay_in_process`; `ci/scripts/disk-check.sh` |
-| A-NFR-16 | No TEST without green Playwright smoke; no ACC without B's spine | Partial: TEST gate active, now including Lane A's spine on DEV; the ACC gate is wired and switches on with real replay environments on TEST | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh` |
+| A-NFR-16 | No TEST without green Playwright smoke; no ACC without B's spine | Partial: TEST gate active, including Lane A's spine on DEV; the ACC gate runs Lane A's spine on TEST (#160) and skips, with the reason in the report, until Lane B's feed serves ticks for an active replay environment | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh`; `frontend/e2e/demo-spine/lane-a-spine.spec.ts` |
 | A-NFR-17 | Every trading page has loading, empty, error and 403 states | Implemented (#130) | `frontend/src/trading-pages.test.tsx` (`shows the empty, error and 403 states` for each page; `shows the loading, empty, error, not-found and 403 states`) |
 
 ### 4.3 Summary
@@ -283,25 +294,25 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR | 21 | 1 | 0 | 22 |
 | A-NFR | 16 | 1 | 0 | 17 |
 
-Still partial: A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (waits for
-real replay environments on TEST from Lane B).
+Still partial: A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (the test is in
+place and waits for Lane B's feed to serve ticks on TEST).
 
 ## 5. Test results
 
 ### 5.1 Counts per level
 
-Test functions in `services/trading/tests/` after #139 (parametrised tests run as several
+Test functions in `services/trading/tests/` after #165 (parametrised tests run as several
 cases, so Jenkins reports more cases than functions):
 
 | Level | Folder | Files | Test functions | What it covers |
 |---|---|---|---|---|
-| Unit and fixture | `unit/` | 24 | 235 | Money, accounting, costs, slippage, execution rules, strategies, history view, hashing, verification, engine core and runner, projections, file and HTTP adapters, service tokens, deploy configuration, CLI, performance in memory |
+| Unit and fixture | `unit/` | 26 | 255 | Money, accounting, costs, slippage, execution rules, strategies, history view, hashing, verification, engine core and runner, projections, file and HTTP adapters, the DEV stand-in feed and its J2 parity, K6 run metrics, service tokens, deploy configuration, CLI, performance in memory |
 | Property (Hypothesis) | `property/` | 3 | 11 | Books balance after every fill, cash never negative, costs add up, slippage never favourable, limit respected, momentum cap, determinism per kind |
 | Contract | `contract/` | 3 | 41 | The tick contract (C1) and its fixtures (C3); the HTTP adapters against recorded feeds, including J2 parity with the file adapter |
-| Database (TimescaleDB) | `db/` | 8 | 53 | Guard trigger, revoked privileges, CHECKs, migration up/down/up, schema equals models, database isolation per service role, persisted run, crash-resume, rebuild, job failures, `instrument_ref`, A-NFR-01 |
-| API | `api/` | 14 | 64 | Role matrix per route, idempotent submit, one active run, paging, projections, rebuild, ops metrics, commit before response, Schemathesis contract (42 generated cases); `*_db.py` files on a real database |
+| Database (TimescaleDB) | `db/` | 8 | 55 | Guard trigger, revoked privileges, CHECKs, migration up/down/up, schema equals models, database isolation per service role, persisted run, crash-resume, rebuild, job failures, `instrument_ref`, A-NFR-01 |
+| API | `api/` | 14 | 65 | Role matrix per route, idempotent submit, one active run, paging, projections, rebuild, ops metrics, commit before response, Schemathesis contract (42 generated cases); `*_db.py` files on a real database |
 | Service and export | `test_service.py`, `test_openapi_export.py`, `test_dependency_scope.py` | 3 | 6 | Health, embedded worker and relay, the committed OpenAPI export, dependency scope |
-| **Total** | | **55** | **410** | |
+| **Total** | | **57** | **433** | |
 
 Line coverage of `qs_trading` in Jenkins, database tests included, is **95%** (3,608
 statements, 167 not run; build PR-139). Without the database tests it is 91%; the code that
@@ -312,7 +323,8 @@ Outside the service: the kit's job-queue tests (`libs/qs_template/tests/test_job
 functions) and service-token tests (`test_service_tokens.py`); the trading pages' tests
 (`frontend/src/trading-pages.test.tsx`, 23 tests, part of the frontend's 153); and the DEV
 Playwright gate, which runs `smoke.spec.ts`, `trading-flow.spec.ts` and
-`lane-a-spine.spec.ts` against the deployed site on every DEV deploy.
+`lane-a-spine.spec.ts` against the deployed site on every DEV deploy, and the TEST gate's
+`demo-spine/lane-a-spine.spec.ts`.
 
 ### 5.2 Determinism and crash-resume
 
@@ -337,15 +349,15 @@ Playwright gate, which runs `smoke.spec.ts`, `trading-flow.spec.ts` and
 
 ### 5.3 Performance (A-NFR-01 to A-NFR-03)
 
-Measured on DEV by the trading live check on every deploy (figures from develop build 101,
+Measured on DEV by the trading live check on every deploy (figures from develop build 109,
 22 Nov):
 
 | Requirement | Measured | Limit |
 |---|---|---|
 | A-NFR-01: momentum, 40 instruments x 252 sessions, persisted, one transaction per session | 4.0 s from submit to success; 1,438 events, chain intact | 60 s |
-| A-NFR-02: 100 run submits | p50 4 ms, p95 7 ms, max 7 ms | 800 ms p95 |
-| A-NFR-03: 100 projection and metrics reads | p50 3 ms, p95 6 ms, max 9 ms | 2 s p95 |
-| A-NFR-14: `/ops/metrics` after the checks | 1,152 runs succeeded, 0 failed; p95 duration 0.017 s over the last 100; outbox backlog 0 | exposed |
+| A-NFR-02: 100 run submits | p50 4 ms, p95 5 ms, max 7 ms | 800 ms p95 |
+| A-NFR-03: 100 projection and metrics reads | p50 3 ms, p95 6 ms, max 7 ms | 2 s p95 |
+| A-NFR-14: `/ops/metrics` after the checks | 1,894 runs succeeded, 0 failed; p95 duration 0.100 s over the last 100 (the J2 runs read a full year); outbox backlog 0 | exposed |
 
 The A-NFR-01 run is also timed in memory (`unit/test_performance.py`) and on the Jenkins
 database (`db/test_performance_db.py`). Lane C's performance study records the figures.
@@ -357,9 +369,20 @@ through the HTTP adapter and requires equal final hashes. On recorded feeds it p
 historical replay and for the median path of a simulation run
 (`contract/test_http_feeds.py::test_j2_parity_on_the_replay`,
 `::test_j2_parity_on_the_median_synthetic_path`), with the HTTP adapter calling through K3
-with a service token. The live run on DEV waits for Lane B's feed routes, which still answer
-501; when they land, DEV trading is pointed at the market feed and the same comparison runs
-against the deployed services.
+with a service token. **Live on DEV (#159, #165).** Lane B's feed routes still answer 501, so DEV mounts a
+stand-in inside the Trading service (`qs_trading.demo.feeds`, refused outside local and dev,
+not routed by the gateway) that serves the same recorded fixtures through the contract's
+routes, and points the worker's feed URLs at it. Every DEV deploy then runs one momentum
+strategy on two portfolios: one bound to the recorded 2020 replay, read by the deployed
+worker over HTTP through K3 with a platform service token, and one bound to a demo file
+holding the same data under its own id. Both chains must verify, and the runs must agree on
+the source fingerprint, the number of sessions, the final value and every event apart from
+the ids that name the portfolio, the environment and the orders (an order id is derived from
+the portfolio id). Develop build 109 (22 Nov): 253 sessions, 854 events equal, fingerprint
+`xxh3:2f5521859c9b7beb06802a3df29ef9c3`, final value 161,739.29. The first deployed run
+(build 108) failed because the comparison still included order ids; the unit test now runs
+the live check's two-portfolio setup (`unit/test_demo_feeds.py`). When the real feeds
+answer, the same check runs against the market service by changing `deploy/env/dev.env`.
 
 ### 5.5 Known limits
 
@@ -372,10 +395,14 @@ against the deployed services.
 - **Crash points.** The crash-resume test kills the job at three fixed sessions, not a random
   one; resume is session-granular by construction, so the boundaries tested are the ones
   that can occur.
-- **DEV data.** The HTTP adapters (A17) and platform tokens (K3) are deployed, but the live
-  check and the DEV spine still run on the bundled demo environment until Lane B's feed
-  routes serve real environments; for the same reason the TEST `demo-spine` gate is not yet
-  active.
+- **DEV data.** Until Lane B's feed routes serve ticks, the HTTP path on DEV reads a
+  stand-in that serves the recorded contract fixtures (section 5.4), not the market and
+  simulation services, and the TEST `demo-spine` test skips. Pointing
+  `TRADING_MARKET_URL` and `TRADING_SIMULATION_URL` at the real services and switching
+  `TRADING_DEMO_FEEDS` off is a configuration change in `deploy/env/dev.env`.
+- **Sign-in flake.** About one Playwright test per DEV run cannot reach the API from its
+  browser for a full minute and passes on Playwright's retry in a fresh browser; the gate
+  stays green. The cause is being traced with the probe's error details (#163).
 - **Public addresses.** DEV and TEST APIs are reached through free Cloudflare quick tunnels,
   whose URLs change when a tunnel restarts; the deploy scripts read the current URL each
   time.
@@ -413,8 +440,8 @@ Lane A rows, from the merged pull requests (to be confirmed by Ali before submis
 | Platform kit | Job queue (K1), service scaffold and the three new services (K2), service client and platform service tokens (K3), instrument projection, commit before response, problem-details contract | #73, #74, #76, #85, #112, #129, #131, #138, #139 |
 | Trading engine | Accounting core, execution, strategies, `trading_db`, engine job, projections and rebuild, trading API, HTTP feed adapters | #75, #87, #88, #89, #92, #96, #97, #100, #128 |
 | Trading pages | Five trading pages on the generated API client | #130 |
-| Quality | Trading live check, Playwright DEV gate and Lane A spine, contract tests, coverage | #91, #101, #106, #110, #137, #139, #141, #142 |
-| Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, releases `v0.1.2` to `v0.1.4` | #84, #93, #94, #95, #98, #111, #126, #127 |
+| Quality | Trading live check, Playwright DEV gate and Lane A spine, TEST spine, DEV stand-in feed and live J2, contract tests, coverage | #91, #101, #106, #110, #137, #139, #141, #142, #156, #159, #160, #163, #165 |
+| Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, webhook that follows the tunnel, releases `v0.1.2` to `v0.1.5` | #84, #93, #94, #95, #98, #111, #126, #127, #149 to #152, #157, #164 |
 
 ## 8. Tool use disclosure
 
