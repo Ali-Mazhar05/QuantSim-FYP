@@ -145,9 +145,9 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
                 accepted = {
                     "/correlations": (422,),
                     "/ingestion-runs": (200, 202, 409),
-                    # past authorisation, to the answer "built by B12"; replaced by 200 then
-                    "/environments/{environment_id}/ticks": (501,),
-                    "/environments/{environment_id}/activate": (501,),
+                    # no bars in the matrix environment: not ready, so 422 once past authorisation
+                    "/environments/{environment_id}/ticks": (422,),
+                    "/environments/{environment_id}/activate": (422,),
                 }.get(path, (200, 201))
                 assert response.status_code in accepted, where
             elif who in ("anonymous", "forged"):

@@ -74,9 +74,10 @@ a restart resumes where it stopped. Nothing is pushed.
 ## 3. C2: endpoints
 
 All paths are behind the gateway. Errors are `application/problem+json` with `type`, `title`,
-`status` and `detail`. **Today** the replay feed, activation and the three simulation routes answer
-**501** (`type: urn:quantsim:problem:not-implemented`); their paths, parameters, models and the other
-errors below are final and tested. The environment list filters are live.
+`status` and `detail`. **Today** the market routes are live: the environment list filters, the replay
+feed and activation (B12). The three simulation routes answer **501**
+(`type: urn:quantsim:problem:not-implemented`) until the Monte Carlo and read API tasks build them;
+their paths, parameters, models and the other errors below are final and tested.
 
 | Method and path | Who | Answers |
 |---|---|---|
@@ -102,9 +103,25 @@ GET /api/market/environments/6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01/ticks?after_se
 environment or run does not exist. 422 a bad parameter, or an environment that cannot be replayed:
 `urn:quantsim:problem:unsupported-frequency` for an hourly or tick environment,
 `urn:quantsim:problem:not-a-replay-environment` for a synthetic one,
-`urn:quantsim:problem:missing-adjusted-prices` for a window with a bar that has no adjusted value (on
-the feed and on activation; `missing` counts those bars per symbol). 404 for a `path` the run does not
-have (`path >= n_paths`): `urn:quantsim:problem:not-found`, as for an unknown run. 501 not built yet.
+`urn:quantsim:problem:environment-not-ready` for an environment some of whose instruments have no data
+yet, and `urn:quantsim:problem:missing-adjusted-prices` (with `missing`: bars per symbol) when a bar has
+no adjusted value. 404 also for a `path` the run does not have (`path >= n_paths`):
+`urn:quantsim:problem:not-found`, as for an unknown run. 501 on the simulation routes until they are built.
+
+**Activation** moves a ready environment to `active` and freezes the fingerprint; doing it again after
+the data moved freezes the new value, and the environment keeps one frozen value. Reading ticks needs a
+ready or active environment; every page is served from one database snapshot, so its fingerprint always
+describes the rows on it.
+
+**Activating twice.** It is idempotent in effect: the second call answers 200 with the same body when the
+data has not moved, and re-freezes the new fingerprint (a new `activated_at`) when it has. There is still
+one frozen value per environment.
+
+**Ticks of an environment that is not active.** A `ready` environment (never activated) is served: the
+`X-Source-Fingerprint` header carries the live fingerprint and there is no frozen value to compare with
+(`source_fingerprint` is null on the environment). A `draft` one answers 422
+`environment-not-ready`. There is no 409: no state of the environment makes a read conflict with
+anything. A consumer that needs the frozen value activates first.
 
 ```
 POST /api/market/environments/6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01/activate

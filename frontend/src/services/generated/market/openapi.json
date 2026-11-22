@@ -2995,7 +2995,7 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "No token, or a bad or expired one"
           },
           "403": {
             "content": {
@@ -3005,7 +3005,7 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "The role may not activate an environment"
           },
           "404": {
             "content": {
@@ -3015,7 +3015,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "The environment does not exist"
           },
           "422": {
             "content": {
@@ -3025,17 +3025,7 @@
                 }
               }
             },
-            "description": "A bad parameter, or an environment that cannot be replayed: unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar count per symbol in `missing`"
-          },
-          "501": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "Not Implemented"
+            "description": "The environment cannot be replayed (a bad parameter is also a 422): unsupported-frequency, not-a-replay-environment, environment-not-ready, or missing-adjusted-prices with the bar count per symbol in `missing`"
           }
         },
         "summary": "Activate Environment",
@@ -3129,7 +3119,7 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "No token, or a bad or expired one"
           },
           "403": {
             "content": {
@@ -3139,7 +3129,7 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "The role may not read the market"
           },
           "404": {
             "content": {
@@ -3149,7 +3139,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "The environment does not exist"
           },
           "422": {
             "content": {
@@ -3159,17 +3149,7 @@
                 }
               }
             },
-            "description": "A bad parameter, or an environment that cannot be replayed: unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar count per symbol in `missing`"
-          },
-          "501": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "Not Implemented"
+            "description": "The environment cannot be replayed (a bad parameter is also a 422): unsupported-frequency, not-a-replay-environment, environment-not-ready, or missing-adjusted-prices with the bar count per symbol in `missing`"
           }
         },
         "summary": "Read Ticks",

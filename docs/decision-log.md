@@ -47,6 +47,9 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-026 | Lane branch protection | Open | Lane A |
 | DL-027 | Pull requests while Jenkins is down | Adopted | team |
 | DL-028 | Grouping work into fewer pull requests | Adopted | team |
+| DL-029 | Environments that are not ready | Adopted | Lane A |
+| DL-030 | What activation does | Adopted | Lane A |
+| DL-031 | How the feed reads a large window | Adopted | team |
 
 ---
 
@@ -277,7 +280,7 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 
 ### DL-020 Stubs on DEV for the feeds
 
-- **Asked:** the plan puts fixture-serving stubs on DEV by 25 Nov for Lane A's HTTP adapter.
+- **Asked:** the plan puts fixture-serving stubs on DEV by 25 Nov for Lane A's HTTP adapter. (The market feed has since been built for real in B12; this now applies to the simulation routes only.)
 - **Decided:** no stubs; the feed, activation and run routes answer an explicit 501 until B12, B16 and B18
   build them, and Lane A reads the C3 fixtures meanwhile.
 - **Why:** DEV was unreachable when this was decided (Jenkins host offline), so a stub there could not be
@@ -344,3 +347,55 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   description that lists its commits. This replaces the guide's "one ADR per pull request" and "about
   400 lines".
 - **Why:** reviewing is the bottleneck with three people; commits keep the step-by-step reading.
+
+### DL-029 Environments that are not ready
+
+- **Asked:** what does the feed or activation do for an environment some of whose instruments have no data
+  yet (status `draft`)? Found while building B12.
+- **Decided:** both refuse with 422 `environment-not-ready`; a `ready` or `active` environment is served.
+- **Why:** `draft` means some instrument has no clean bar in the window (`market_environment` status, set
+  when the environment is created). A feed with a whole instrument missing would hand an engine a market
+  that is not the one the user declared; refusing says so. Reading and activating a ready environment is
+  unchanged. A partly filled window of a *ready* environment is served and its gaps are reported
+  (DL-006).
+- **Affects:** `replay.check_replayable`; the C2 errors in `contracts/README.md`.
+
+### DL-030 What activation does
+
+- **Asked:** what exactly happens on `POST /environments/{id}/activate`? The plan says it freezes the
+  fingerprint and sets the status.
+- **Decided:** in one transaction: compute the fingerprint of the window, count the sessions on which an
+  instrument has no bar, upsert one `environment_activation` row (fingerprint, missing count, who, when),
+  and set the environment's status to `active`. Repeating it re-freezes (a new fingerprint, a new time,
+  still one row). Quants and admins only. The status change is audited like any other change to an
+  environment (who, when, before and after); the frozen fingerprint is in its own row.
+- **Why:** one frozen value per environment is what a consumer needs to compare with each page (DL-004);
+  re-freezing is how a user accepts restated data on purpose. `active` already exists in the status check
+  and was reserved for "used by a replay or a run". A separate audit trigger on the new table would need
+  the audit feed (which formats known tables) to learn it; the status change already records the actor.
+- **Affects:** migration `0004`; `environment_activation`; ADR 08 (fingerprint frozen at activation).
+
+### DL-031 How the feed reads a large window
+
+- **Asked:** a window can hold 100,000 bars; how does a page of 500 to 2,000 ticks stay inside the 2 second
+  target (B-NFR-02)? Found by measuring: the first version took 6.2 s per page for 40 instruments over
+  2,900 sessions.
+- **Decided:** PostgreSQL writes each bar's canonical line (instrument, session, revision and the five
+  adjusted values at column scale) and flags gaps; Python only hashes the lines; only the rows of the
+  page are fetched as values. Both queries run in one `REPEATABLE READ` transaction. The pure
+  `feeds.fingerprint` stays the reference, and a test holds the database's lines and the pure core equal
+  on the same rows.
+- **Why:** the cost was moving every value of the window into Python on every page, then formatting and
+  hashing it. Rendering text in the database and hashing strings is an order of magnitude cheaper and keeps
+  the exact fingerprint of ADR 08 (it still changes on a revision or a restated price). One snapshot means a
+  restatement that commits during a request cannot give a page and a header from different data.
+- **If it is still too slow later:** cache the fingerprint per environment against a database-side
+  checksum of the window; do not weaken what the fingerprint covers.
+- **Measured after that, three more changes:** (1) both queries sort symbols by code point (`COLLATE "C"`),
+  as `feeds.ordered` does, so a database locale that ignores punctuation cannot reorder `BRK.B` and `BRKA`
+  (a test holds it) and the sort is cheaper; (2) the window query groups by session, so a window comes back
+  as about 2,900 texts, not 116,000 rows; (3) a page reads only the sessions its seq range covers, found
+  from the per-session bar counts, instead of sorting the whole window for an `OFFSET`. A cached
+  fingerprint was not built: a restated price changes the data without a trustworthy change marker, so no
+  cheap signal was provably exact.
+- **Affects:** `qs_market/replay.py`, `feeds.canonical_line` and `feeds.fingerprint_of_lines`.
