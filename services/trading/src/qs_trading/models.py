@@ -31,6 +31,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
+from qs_template.instrument_ref import instrument_ref_table
 from qs_template.jobs import job_table
 from qs_trading.domain.events import EventType
 from qs_trading.domain.strategies import KINDS
@@ -294,18 +295,5 @@ portfolio_state_current = Table(
     ),
 )
 
-instrument_ref = Table(
-    "instrument_ref",
-    metadata,
-    Column("id", Uuid, primary_key=True),
-    Column("symbol", Text, nullable=False),
-    Column("name", Text),
-    Column("sector", Text),
-    Column("exchange", Text, nullable=False),
-    Column("currency", Text, nullable=False),
-    Column("asset_class", Text),
-    Column("status", Text, nullable=False, server_default=text("'active'")),
-    _now("updated_at"),
-    CheckConstraint("status IN ('active', 'retired')", name="instrument_ref_status_valid"),
-    Index("instrument_ref_symbol", "symbol"),
-)
+# Market's instruments, kept in step by the relay's consumer (qs_template.instrument_ref)
+instrument_ref = instrument_ref_table(metadata)
