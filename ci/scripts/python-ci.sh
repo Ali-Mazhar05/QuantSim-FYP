@@ -79,5 +79,11 @@ run_in_image "$UV_IMAGE" "${service_opts[@]}" -e UV_LINK_MODE=copy -e PROJECT="$
   echo "--- ruff";   uv run --frozen ruff check .
   echo "--- format"; uv run --frozen ruff format --check .
   echo "--- mypy";   uv run --frozen mypy .
-  echo "--- pytest"; uv run --frozen pytest --junitxml=reports/junit.xml
+  # A project with pytest-cov in its dev group also reports line coverage, database
+  # tests included, as reports/coverage.xml (Jenkins records it)
+  cov=()
+  if uv run --frozen python -c "import pytest_cov" 2>/dev/null; then
+    cov=(--cov=src --cov-report=xml:reports/coverage.xml --cov-report=term:skip-covered)
+  fi
+  echo "--- pytest"; uv run --frozen pytest --junitxml=reports/junit.xml "${cov[@]}"
 '
