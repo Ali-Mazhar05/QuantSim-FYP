@@ -2,7 +2,10 @@
 
 ``uvicorn --factory qs_trading.main:create`` reads the settings from the environment; tests
 call :func:`build_app` with their own pieces. With ``QS_EMBEDDED_WORKERS=true`` (DEV) the
-job worker and the outbox relay run inside this process instead of their own containers.
+job worker and the outbox relay run inside this process instead of their own containers;
+``QS_TRADING_DEMO_ENVIRONMENTS`` (LOCAL and DEV) lets that worker run portfolios over the
+bundled demo environments, and ``QS_TRADING_DEMO_FEEDS`` (LOCAL and DEV) mounts the stand-in
+for Lane B's feeds at ``/demo-feeds`` (see :mod:`qs_trading.demo.feeds`).
 """
 
 from fastapi import FastAPI
@@ -15,7 +18,8 @@ from qs_template.kafka import KafkaPublisher
 from qs_template.messaging import OutboxRelay
 from qs_template.revocation import RevocationList
 from qs_trading.api import build_routers
-from qs_trading.jobs import HANDLERS, job_queue
+from qs_trading.demo.feeds import demo_feeds_app
+from qs_trading.jobs import build_handlers, environment_factory, job_queue
 from qs_trading.settings import TradingSettings
 
 
@@ -24,7 +28,12 @@ def embedded_loops(settings: TradingSettings, database: Database) -> BackgroundT
     tasks = BackgroundTasks()
     if not settings.embedded_workers:
         return tasks
-    worker = Worker(database, job_queue(settings), HANDLERS, poll_seconds=settings.job_poll_seconds)
+    worker = Worker(
+        database,
+        job_queue(settings),
+        build_handlers(database, environment_factory(settings)),
+        poll_seconds=settings.job_poll_seconds,
+    )
     tasks.add("worker", worker.run, worker.stop)
     if settings.kafka_bootstrap_servers:
         servers = settings.kafka_bootstrap_servers
@@ -60,14 +69,23 @@ def build_app(
     revocations = revocations or RevocationList.from_url(settings.redis_url.get_secret_value())
     auth = authenticator or Authenticator(settings, is_revoked=revocations.is_revoked)
     loops = embedded_loops(settings, database)
-    return create_app(
+    app = create_app(
         settings,
         database=database,
-        routers=build_routers(auth=auth, database=database),
+        routers=build_routers(
+            auth=auth,
+            database=database,
+            queue=job_queue(settings),
+            demo_environments=settings.trading_demo_environments,
+        ),
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],
         on_startup=[loops.start],
         on_shutdown=[loops.stop, revocations.close],
     )
+    if settings.trading_demo_feeds:
+        # Not under /api/trading, so the gateway never exposes it: only the worker calls it
+        app.mount("/demo-feeds", demo_feeds_app())
+    return app
 
 
 def create() -> FastAPI:

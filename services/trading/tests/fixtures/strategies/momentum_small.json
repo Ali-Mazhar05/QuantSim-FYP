@@ -1,0 +1,21 @@
+{
+  "description": "Momentum, 3 symbols, 10 sessions. Bars are gapless (open = previous close), so an order sized at the close of t fills at that same price at the open of t + 1. Expected orders derived by hand: see test_momentum_fixture_gives_hand_derived_orders.",
+  "capital": "10000",
+  "params": {
+    "lookback": 3,
+    "top_n": 2,
+    "rebalance_every": 3,
+    "max_position": "0.4",
+    "cash_buffer": "0"
+  },
+  "closes": {
+    "AAA": ["10", "11", "11.5", "12", "12", "12", "12.6", "12.6", "12.6", "12.6"],
+    "BBB": ["20", "21", "21", "22", "22", "22", "22", "22", "22", "23.1"],
+    "CCC": ["50", "48", "47", "45", "45", "45", "54", "54", "54", "48.6"]
+  },
+  "expected_orders": {
+    "3": [["AAA", "buy", 333], ["BBB", "buy", 181]],
+    "6": [["AAA", "sell", 10], ["BBB", "sell", 181], ["CCC", "buy", 75]],
+    "9": [["AAA", "sell", 13], ["CCC", "sell", 75], ["BBB", "buy", 169]]
+  }
+}

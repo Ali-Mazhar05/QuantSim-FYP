@@ -154,6 +154,10 @@ services:
           WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'name') \gexec
         REVOKE ALL ON DATABASE :"name" FROM PUBLIC;
         GRANT CONNECT, TEMPORARY ON DATABASE :"name" TO :"name";
+        -- Service roles reach only their own database: close the built-in ones too
+        -- (only the admin, a superuser, uses them, e.g. for backups)
+        REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+        REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
         SQL
           echo "database and role ready: $$1"
         }
@@ -237,6 +241,9 @@ services:
       QS_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       QS_SIGNING_KEY: ${PLATFORM_SIGNING_KEY:?PLATFORM_SIGNING_KEY comes from the environment's secrets}
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
+      # Services that may get service tokens (ADR 09): name=secret pairs, one secret per
+      # calling service in the environment's encrypted secrets
+      QS_SERVICE_CLIENT_SECRETS: trading=${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
       # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
@@ -695,6 +702,18 @@ services:
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # DEV: true runs the worker and relay inside the API (EMBEDDED_WORKERS in deploy/env)
       QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
+      # DEV only: runs portfolios over the demo market data bundled in the image
+      # (TRADING_DEMO_ENVIRONMENTS in deploy/env); refused outside local and dev
+      QS_TRADING_DEMO_ENVIRONMENTS: ${TRADING_DEMO_ENVIRONMENTS:-}
+      # DEV only: the stand-in for Lane B's feeds at /demo-feeds (TRADING_DEMO_FEEDS), and
+      # the feed addresses the worker reads replays and simulation paths from. Empty until
+      # the market and simulation services serve their feeds (B12)
+      QS_TRADING_DEMO_FEEDS: ${TRADING_DEMO_FEEDS:-false}
+      QS_TRADING_MARKET_URL: ${TRADING_MARKET_URL:-}
+      QS_TRADING_SIMULATION_URL: ${TRADING_SIMULATION_URL:-}
+      # Service tokens for calls to other services (ADR 09), from the Platform service
+      QS_SERVICE_TOKEN_URL: http://platform:8000/api/platform/service-tokens
+      QS_SERVICE_CLIENT_SECRET: ${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
     depends_on:

@@ -54,6 +54,8 @@ MATRIX: dict[tuple[str, str], str | frozenset[Role]] = {
     ("GET", "/environments"): ALL_ROLES,
     ("GET", "/environments/{environment_id}"): ALL_ROLES,
     ("POST", "/environments"): CREATORS,
+    ("GET", "/environments/{environment_id}/ticks"): ALL_ROLES,
+    ("POST", "/environments/{environment_id}/activate"): CREATORS,
     ("GET", "/audit"): ADMIN_ONLY,
 }
 
@@ -143,6 +145,9 @@ async def test_every_route_allows_exactly_the_declared_roles(client: httpx.Async
                 accepted = {
                     "/correlations": (422,),
                     "/ingestion-runs": (200, 202, 409),
+                    # past authorisation, to the answer "built by B12"; replaced by 200 then
+                    "/environments/{environment_id}/ticks": (501,),
+                    "/environments/{environment_id}/activate": (501,),
                 }.get(path, (200, 201))
                 assert response.status_code in accepted, where
             elif who in ("anonymous", "forged"):
