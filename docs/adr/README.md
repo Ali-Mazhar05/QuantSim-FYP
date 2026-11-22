@@ -9,10 +9,10 @@ Format: **Status** (Proposed, Accepted, Superseded), **Date**, **Owner**, then *
 | 01 | Pull-based tick interface | Lane B | Proposed |
 | 02 | Correlated synthetic market | Lane B | Proposed |
 | 03 | Path storage | Lane B | Proposed |
-| 04 | Execution timing | Lane A | not yet written |
-| 05 | Strategy type | Lane A | not yet written |
+| 04 | Execution timing | Lane A | Accepted |
+| 05 | Strategy type | Lane A | Accepted |
 | 06 | Prototype UI additions only | Lane B | Proposed |
 | 07 | TDA basket and score | Lane C | not yet written |
 | 08 | Prices | Lane B | Proposed |
-| 09 | Service tokens | Lane A | not yet written |
+| 09 | Service tokens | Lane A | Accepted |
 | 10 | Scope cut | Lane C | not yet written |

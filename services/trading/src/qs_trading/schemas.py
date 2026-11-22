@@ -8,7 +8,7 @@ defaults filled in), and are returned exactly as stored.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
@@ -21,6 +21,8 @@ from qs_trading.domain.strategies import KINDS
 
 __all__ = [
     "ChainReportOut",
+    "CostModelOut",
+    "DemoEnvironmentOut",
     "EventOut",
     "EventPage",
     "FillOut",
@@ -28,14 +30,19 @@ __all__ = [
     "HoldingChangeOut",
     "HoldingHistoryPage",
     "HoldingsOut",
+    "JobDurationsOut",
+    "JobQueueOut",
     "JobStatus",
     "MetricsOut",
+    "OpsMetricsOut",
+    "OutboxBacklogOut",
     "PortfolioCreate",
     "PortfolioOut",
     "PositionOut",
     "RebuildOut",
     "RunAccepted",
     "RunOut",
+    "SlippageModelOut",
     "StateOut",
     "StrategyIn",
     "StrategyOut",
@@ -66,6 +73,18 @@ Capital = Annotated[
 
 class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class DemoEnvironmentOut(BaseModel):
+    """A demo market environment the worker can run over (LOCAL and DEV only); bind a
+    portfolio to it with ``replay_environment_id``."""
+
+    id: uuid.UUID
+    name: str
+    env_type: EnvType
+    sessions: int = Field(ge=0, description="Trading sessions in the environment")
+    start_date: date | None
+    end_date: date | None
 
 
 class StrategyIn(_Body):
@@ -128,6 +147,21 @@ class PortfolioCreate(_Body):
         return "replay" if self.replay_environment_id is not None else "simulation"
 
 
+class CostModelOut(BaseModel):
+    """A portfolio's stored cost model: every parameter as a decimal string."""
+
+    fixed: str
+    per_share: str
+    pct: str
+
+
+class SlippageModelOut(BaseModel):
+    """A portfolio's stored slippage model: its kind and basis points as a decimal string."""
+
+    kind: Literal["fixed_bps", "volume"]
+    bps: str
+
+
 class PortfolioOut(BaseModel):
     id: uuid.UUID
     name: str
@@ -137,8 +171,8 @@ class PortfolioOut(BaseModel):
     owner_id: uuid.UUID
     initial_capital: str = Field(description="USD, 2 decimal places")
     base_currency: str
-    cost_model: dict[str, Any]
-    slippage_model: dict[str, Any]
+    cost_model: CostModelOut
+    slippage_model: SlippageModelOut
     env_type: EnvType
     replay_environment_id: uuid.UUID | None
     simulation_run_id: uuid.UUID | None
@@ -336,6 +370,48 @@ class MetricsOut(BaseModel):
     max_drawdown: Ratio
     turnover: Ratio
     pending: list[str] = Field(description="The metrics not computed yet")
+
+
+class JobQueueOut(BaseModel):
+    """Depth of the job queue for one job kind, by status (A-NFR-14)."""
+
+    kind: str
+    queued: int
+    running: int
+    succeeded: int
+    failed: int
+    oldest_queued_seconds: float | None = Field(
+        description="Age of the oldest queued job in seconds; null when none is queued"
+    )
+
+
+class JobDurationsOut(BaseModel):
+    """Run time of the last finished jobs, from first claim (``started_at``) to
+    ``finished_at``, so retries are included (A-NFR-14)."""
+
+    window: int = Field(description="How many of the most recently finished jobs are asked for")
+    count: int = Field(description="How many finished jobs the figures cover (<= window)")
+    p50_seconds: float | None
+    p95_seconds: float | None
+    max_seconds: float | None
+
+
+class OutboxBacklogOut(BaseModel):
+    """Events written to the outbox and not yet published (A-NFR-14, NFR-OBS-003)."""
+
+    pending: int
+    oldest_pending_seconds: float | None = Field(
+        description="Age of the oldest unpublished event in seconds; null when none waits"
+    )
+
+
+class OpsMetricsOut(BaseModel):
+    """Operational figures of the service for admins and the DEV live check."""
+
+    generated_at: datetime
+    queue: JobQueueOut
+    durations: JobDurationsOut
+    outbox: OutboxBacklogOut
 
 
 def money_text(value: Decimal) -> str:

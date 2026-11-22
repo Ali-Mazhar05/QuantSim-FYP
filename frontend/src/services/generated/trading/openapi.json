@@ -1,0 +1,3133 @@
+{
+  "components": {
+    "schemas": {
+      "ChainReportOut": {
+        "properties": {
+          "broken_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broken Seq"
+          },
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "last_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Hash"
+          },
+          "last_seq": {
+            "description": "The end of the intact prefix",
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "valid",
+          "events",
+          "last_seq",
+          "last_hash",
+          "broken_seq",
+          "reason"
+        ],
+        "title": "ChainReportOut",
+        "type": "object"
+      },
+      "CostModelOut": {
+        "description": "A portfolio's stored cost model: every parameter as a decimal string.",
+        "properties": {
+          "fixed": {
+            "title": "Fixed",
+            "type": "string"
+          },
+          "pct": {
+            "title": "Pct",
+            "type": "string"
+          },
+          "per_share": {
+            "title": "Per Share",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fixed",
+          "per_share",
+          "pct"
+        ],
+        "title": "CostModelOut",
+        "type": "object"
+      },
+      "DemoEnvironmentOut": {
+        "description": "A demo market environment the worker can run over (LOCAL and DEV only); bind a\nportfolio to it with ``replay_environment_id``.",
+        "properties": {
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "env_type": {
+            "enum": [
+              "replay",
+              "simulation"
+            ],
+            "title": "Env Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sessions": {
+            "description": "Trading sessions in the environment",
+            "minimum": 0.0,
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "env_type",
+          "sessions",
+          "start_date",
+          "end_date"
+        ],
+        "title": "DemoEnvironmentOut",
+        "type": "object"
+      },
+      "EventOut": {
+        "properties": {
+          "event_time": {
+            "format": "date-time",
+            "title": "Event Time",
+            "type": "string"
+          },
+          "hash": {
+            "title": "Hash",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "description": "Amounts and prices as decimal strings",
+            "title": "Payload",
+            "type": "object"
+          },
+          "prev_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Hash"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "type",
+          "version",
+          "event_time",
+          "payload",
+          "prev_hash",
+          "hash"
+        ],
+        "title": "EventOut",
+        "type": "object"
+      },
+      "EventPage": {
+        "properties": {
+          "items": {
+            "description": "Ascending by seq, without gaps",
+            "items": {
+              "$ref": "#/components/schemas/EventOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as after_seq to get the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "EventPage",
+        "type": "object"
+      },
+      "FillOut": {
+        "description": "One ``fill`` row: an order filled at ``session`` with its slippage and costs.",
+        "properties": {
+          "cash_after": {
+            "description": "Decimal string, USD",
+            "title": "Cash After",
+            "type": "string"
+          },
+          "cost_fixed": {
+            "description": "Decimal string, USD",
+            "title": "Cost Fixed",
+            "type": "string"
+          },
+          "cost_per_share": {
+            "description": "Decimal string, USD",
+            "title": "Cost Per Share",
+            "type": "string"
+          },
+          "cost_percentage": {
+            "description": "Decimal string, USD",
+            "title": "Cost Percentage",
+            "type": "string"
+          },
+          "cost_total": {
+            "description": "cost_fixed + cost_per_share + cost_percentage",
+            "title": "Cost Total",
+            "type": "string"
+          },
+          "fill_price": {
+            "description": "Decimal string, USD per share",
+            "title": "Fill Price",
+            "type": "string"
+          },
+          "order_id": {
+            "title": "Order Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "reference_price": {
+            "description": "Decimal string, USD per share",
+            "title": "Reference Price",
+            "type": "string"
+          },
+          "seq": {
+            "description": "The ORDER_FILLED event",
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session": {
+            "title": "Session",
+            "type": "integer"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "slippage": {
+            "description": "Decimal string, USD per share",
+            "title": "Slippage",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "order_id",
+          "session",
+          "symbol",
+          "side",
+          "quantity",
+          "reference_price",
+          "fill_price",
+          "slippage",
+          "cost_fixed",
+          "cost_per_share",
+          "cost_percentage",
+          "cost_total",
+          "cash_after"
+        ],
+        "title": "FillOut",
+        "type": "object"
+      },
+      "FillPage": {
+        "properties": {
+          "items": {
+            "description": "Ascending by seq",
+            "items": {
+              "$ref": "#/components/schemas/FillOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as after_seq to get the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "FillPage",
+        "type": "object"
+      },
+      "FixedBpsSlippage": {
+        "additionalProperties": false,
+        "description": "A fixed ``bps`` move against the trader on every fill.",
+        "properties": {
+          "bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "ge": 0,
+            "lt": 10000,
+            "title": "Bps"
+          },
+          "kind": {
+            "const": "fixed_bps",
+            "default": "fixed_bps",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "FixedBpsSlippage",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HoldingChangeOut": {
+        "description": "One ``holding_history`` row: a symbol's position right after the fill at ``seq``\n(quantity and cost basis zero when the fill closed it).",
+        "properties": {
+          "cost_basis": {
+            "description": "Decimal string, USD",
+            "title": "Cost Basis",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session": {
+            "title": "Session",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "session",
+          "symbol",
+          "quantity",
+          "cost_basis"
+        ],
+        "title": "HoldingChangeOut",
+        "type": "object"
+      },
+      "HoldingHistoryPage": {
+        "properties": {
+          "items": {
+            "description": "Ascending by seq",
+            "items": {
+              "$ref": "#/components/schemas/HoldingChangeOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as after_seq to get the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "HoldingHistoryPage",
+        "type": "object"
+      },
+      "HoldingsOut": {
+        "description": "The current positions and cash (the ``portfolio_state_current`` row).",
+        "properties": {
+          "cash": {
+            "anyOf": [
+              {
+                "description": "Decimal string, USD",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until the portfolio has run",
+            "title": "Cash"
+          },
+          "last_seq": {
+            "description": "The last event folded in; 0 before the first run",
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "last_session": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Session"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "positions": {
+            "description": "Open positions, by symbol",
+            "items": {
+              "$ref": "#/components/schemas/PositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "last_seq",
+          "last_session",
+          "cash",
+          "positions"
+        ],
+        "title": "HoldingsOut",
+        "type": "object"
+      },
+      "JobDurationsOut": {
+        "description": "Run time of the last finished jobs, from first claim (``started_at``) to\n``finished_at``, so retries are included (A-NFR-14).",
+        "properties": {
+          "count": {
+            "description": "How many finished jobs the figures cover (<= window)",
+            "title": "Count",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Seconds"
+          },
+          "p50_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 Seconds"
+          },
+          "p95_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Seconds"
+          },
+          "window": {
+            "description": "How many of the most recently finished jobs are asked for",
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window",
+          "count",
+          "p50_seconds",
+          "p95_seconds",
+          "max_seconds"
+        ],
+        "title": "JobDurationsOut",
+        "type": "object"
+      },
+      "JobQueueOut": {
+        "description": "Depth of the job queue for one job kind, by status (A-NFR-14).",
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "oldest_queued_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Age of the oldest queued job in seconds; null when none is queued",
+            "title": "Oldest Queued Seconds"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "oldest_queued_seconds"
+        ],
+        "title": "JobQueueOut",
+        "type": "object"
+      },
+      "LinearCostModel": {
+        "additionalProperties": false,
+        "description": "``fixed + per_share * quantity + pct * notional`` per fill (A-FR-08). Every\nparameter defaults to zero, so ``{}`` is a free broker.",
+        "properties": {
+          "fixed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "ge": 0,
+            "title": "Fixed"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "ge": 0,
+            "title": "Pct"
+          },
+          "per_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "ge": 0,
+            "title": "Per Share"
+          }
+        },
+        "title": "LinearCostModel",
+        "type": "object"
+      },
+      "MetricsOut": {
+        "description": "Run metrics. Trades, costs, sessions and the final value are computed from the\nprojections; the ratios come from the shared metrics library and are null, and named\nin ``pending``, until it is available.",
+        "properties": {
+          "final_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Hash"
+          },
+          "final_seq": {
+            "description": "The last event folded in; 0 before the first run",
+            "title": "Final Seq",
+            "type": "integer"
+          },
+          "final_value": {
+            "anyOf": [
+              {
+                "description": "Decimal string, USD",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Value at the last session; null before",
+            "title": "Final Value"
+          },
+          "initial_capital": {
+            "description": "Decimal string, USD",
+            "title": "Initial Capital",
+            "type": "string"
+          },
+          "max_drawdown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decimal string; null while pending",
+            "title": "Max Drawdown"
+          },
+          "pending": {
+            "description": "The metrics not computed yet",
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "sessions": {
+            "description": "Valued sessions",
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "sharpe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decimal string; null while pending",
+            "title": "Sharpe"
+          },
+          "total_costs": {
+            "description": "Sum of cost_total over the fills",
+            "title": "Total Costs",
+            "type": "string"
+          },
+          "total_return": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decimal string; null while pending",
+            "title": "Total Return"
+          },
+          "trades": {
+            "description": "Number of fills",
+            "title": "Trades",
+            "type": "integer"
+          },
+          "turnover": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decimal string; null while pending",
+            "title": "Turnover"
+          },
+          "volatility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decimal string; null while pending",
+            "title": "Volatility"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "final_seq",
+          "final_hash",
+          "sessions",
+          "initial_capital",
+          "final_value",
+          "trades",
+          "total_costs",
+          "total_return",
+          "volatility",
+          "sharpe",
+          "max_drawdown",
+          "turnover",
+          "pending"
+        ],
+        "title": "MetricsOut",
+        "type": "object"
+      },
+      "OpsMetricsOut": {
+        "description": "Operational figures of the service for admins and the DEV live check.",
+        "properties": {
+          "durations": {
+            "$ref": "#/components/schemas/JobDurationsOut"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "outbox": {
+            "$ref": "#/components/schemas/OutboxBacklogOut"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/JobQueueOut"
+          }
+        },
+        "required": [
+          "generated_at",
+          "queue",
+          "durations",
+          "outbox"
+        ],
+        "title": "OpsMetricsOut",
+        "type": "object"
+      },
+      "OutboxBacklogOut": {
+        "description": "Events written to the outbox and not yet published (A-NFR-14, NFR-OBS-003).",
+        "properties": {
+          "oldest_pending_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Age of the oldest unpublished event in seconds; null when none waits",
+            "title": "Oldest Pending Seconds"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending",
+          "oldest_pending_seconds"
+        ],
+        "title": "OutboxBacklogOut",
+        "type": "object"
+      },
+      "PortfolioCreate": {
+        "additionalProperties": false,
+        "description": "A portfolio bound to exactly one market environment: a replay environment\n(``replay_environment_id``) or one path of a simulation run (``simulation_run_id``\nplus ``path_index``).",
+        "properties": {
+          "cost_model": {
+            "$ref": "#/components/schemas/LinearCostModel"
+          },
+          "initial_capital": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "decimal_places": 2,
+            "description": "Decimal string (or whole number) in USD, at most 2 decimal places",
+            "gt": 0,
+            "max_digits": 20,
+            "title": "Initial Capital"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "path_index": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path Index"
+          },
+          "replay_environment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay Environment Id"
+          },
+          "simulation_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulation Run Id"
+          },
+          "slippage_model": {
+            "discriminator": {
+              "mapping": {
+                "fixed_bps": "#/components/schemas/FixedBpsSlippage",
+                "volume": "#/components/schemas/VolumeSlippage"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FixedBpsSlippage"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeSlippage"
+              }
+            ],
+            "title": "Slippage Model"
+          },
+          "strategy_id": {
+            "format": "uuid",
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "strategy_id",
+          "initial_capital"
+        ],
+        "title": "PortfolioCreate",
+        "type": "object"
+      },
+      "PortfolioOut": {
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "cost_model": {
+            "$ref": "#/components/schemas/CostModelOut"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "env_type": {
+            "enum": [
+              "replay",
+              "simulation"
+            ],
+            "title": "Env Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initial_capital": {
+            "description": "USD, 2 decimal places",
+            "title": "Initial Capital",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "path_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path Index"
+          },
+          "replay_environment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay Environment Id"
+          },
+          "simulation_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulation Run Id"
+          },
+          "slippage_model": {
+            "$ref": "#/components/schemas/SlippageModelOut"
+          },
+          "source_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Frozen by the first run; null until the portfolio has run",
+            "title": "Source Fingerprint"
+          },
+          "strategy_id": {
+            "format": "uuid",
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "strategy_kind": {
+            "title": "Strategy Kind",
+            "type": "string"
+          },
+          "strategy_name": {
+            "title": "Strategy Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "strategy_id",
+          "strategy_name",
+          "strategy_kind",
+          "owner_id",
+          "initial_capital",
+          "base_currency",
+          "cost_model",
+          "slippage_model",
+          "env_type",
+          "replay_environment_id",
+          "simulation_run_id",
+          "path_index",
+          "source_fingerprint",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PortfolioOut",
+        "type": "object"
+      },
+      "PositionOut": {
+        "properties": {
+          "cost_basis": {
+            "description": "Decimal string, USD",
+            "title": "Cost Basis",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "quantity",
+          "cost_basis"
+        ],
+        "title": "PositionOut",
+        "type": "object"
+      },
+      "RebuildOut": {
+        "properties": {
+          "applied": {
+            "description": "The rebuilt rows replaced the differing stored ones",
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/TableDifferenceOut"
+            },
+            "title": "Differences",
+            "type": "array"
+          },
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "final_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Hash"
+          },
+          "final_seq": {
+            "description": "0 for an empty log",
+            "title": "Final Seq",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "identical",
+              "differs"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "status",
+          "events",
+          "final_seq",
+          "final_hash",
+          "differences",
+          "applied"
+        ],
+        "title": "RebuildOut",
+        "type": "object"
+      },
+      "RunAccepted": {
+        "properties": {
+          "created": {
+            "description": "False when the idempotency key already had a job",
+            "title": "Created",
+            "type": "boolean"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "portfolio_id",
+          "status",
+          "created"
+        ],
+        "title": "RunAccepted",
+        "type": "object"
+      },
+      "RunOut": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "progress": {
+            "description": "Sessions committed / sessions in total",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Final seq, hash and value once the run has succeeded",
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "portfolio_id",
+          "status",
+          "progress",
+          "attempts",
+          "max_attempts",
+          "error",
+          "result",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "RunOut",
+        "type": "object"
+      },
+      "SlippageModelOut": {
+        "description": "A portfolio's stored slippage model: its kind and basis points as a decimal string.",
+        "properties": {
+          "bps": {
+            "title": "Bps",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "fixed_bps",
+              "volume"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "bps"
+        ],
+        "title": "SlippageModelOut",
+        "type": "object"
+      },
+      "StateOut": {
+        "description": "The portfolio right after the event at ``seq``, folded from the verified log.",
+        "properties": {
+          "cash": {
+            "description": "Decimal string, USD",
+            "title": "Cash",
+            "type": "string"
+          },
+          "hash": {
+            "title": "Hash",
+            "type": "string"
+          },
+          "initial_capital": {
+            "description": "Decimal string, USD",
+            "title": "Initial Capital",
+            "type": "string"
+          },
+          "last_value": {
+            "anyOf": [
+              {
+                "description": "Decimal string, USD",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest valuation at or before seq",
+            "title": "Last Value"
+          },
+          "last_valued_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Valued Seq"
+          },
+          "open_orders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Orders",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "format": "uuid",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/PositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "realised_pnl": {
+            "description": "Decimal string, USD",
+            "title": "Realised Pnl",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session"
+          },
+          "total_costs": {
+            "description": "Decimal string, USD",
+            "title": "Total Costs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "seq",
+          "hash",
+          "session",
+          "initial_capital",
+          "cash",
+          "positions",
+          "realised_pnl",
+          "total_costs",
+          "open_orders",
+          "last_value",
+          "last_valued_seq"
+        ],
+        "title": "StateOut",
+        "type": "object"
+      },
+      "StrategyIn": {
+        "additionalProperties": false,
+        "description": "Create or replace a strategy. ``params`` is checked against the parameter model of\n``kind``; a wrong value gives a 422 whose error location names the field.",
+        "properties": {
+          "kind": {
+            "description": "One of buy_and_hold, ma_crossover, momentum, mean_reversion",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Parameters of the kind; omitted ones take defaults",
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "StrategyIn",
+        "type": "object"
+      },
+      "StrategyOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Stored parameters, defaults filled in",
+            "title": "Params",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "params",
+          "owner_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StrategyOut",
+        "type": "object"
+      },
+      "TableDifferenceOut": {
+        "description": "How one stored table differs from the log; every entry names a row by its key.",
+        "properties": {
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          },
+          "unexpected": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unexpected",
+            "type": "array"
+          }
+        },
+        "required": [
+          "table",
+          "missing",
+          "unexpected",
+          "changed"
+        ],
+        "title": "TableDifferenceOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "ValuePointOut": {
+        "description": "One ``portfolio_value`` row: the portfolio marked at the close of ``session``.",
+        "properties": {
+          "cash": {
+            "description": "Decimal string, USD",
+            "title": "Cash",
+            "type": "string"
+          },
+          "market_value": {
+            "description": "Decimal string, USD",
+            "title": "Market Value",
+            "type": "string"
+          },
+          "realised_pnl": {
+            "description": "Decimal string, USD",
+            "title": "Realised Pnl",
+            "type": "string"
+          },
+          "seq": {
+            "description": "The VALUED event",
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session": {
+            "title": "Session",
+            "type": "integer"
+          },
+          "total_costs": {
+            "description": "Decimal string, USD",
+            "title": "Total Costs",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          },
+          "unrealised_pnl": {
+            "description": "Decimal string, USD",
+            "title": "Unrealised Pnl",
+            "type": "string"
+          },
+          "value": {
+            "description": "Decimal string, USD",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session",
+          "ts",
+          "seq",
+          "cash",
+          "market_value",
+          "value",
+          "realised_pnl",
+          "unrealised_pnl",
+          "total_costs"
+        ],
+        "title": "ValuePointOut",
+        "type": "object"
+      },
+      "VolumeSlippage": {
+        "additionalProperties": false,
+        "description": "``bps * min(quantity / volume, 1)`` against the trader; zero volume counts as 1.",
+        "properties": {
+          "bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "ge": 0,
+            "lt": 10000,
+            "title": "Bps"
+          },
+          "kind": {
+            "const": "volume",
+            "default": "volume",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "VolumeSlippage",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "QuantSim trading",
+    "version": "0.0.0-local"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/trading/demo-environments": {
+      "get": {
+        "operationId": "demo_environments_list_api_trading_demo_environments_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DemoEnvironmentOut"
+                  },
+                  "title": "Response Demo Environments List Api Trading Demo Environments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Environments List",
+        "tags": [
+          "environments"
+        ]
+      }
+    },
+    "/api/trading/health": {
+      "get": {
+        "operationId": "health_api_trading_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Api Trading Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/trading/ops/metrics": {
+      "get": {
+        "operationId": "get_ops_metrics_api_trading_ops_metrics_get",
+        "parameters": [
+          {
+            "description": "How many finished jobs the durations cover",
+            "in": "query",
+            "name": "recent",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "How many finished jobs the durations cover",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Recent",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpsMetricsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Ops Metrics",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/trading/portfolios": {
+      "get": {
+        "operationId": "list_portfolios_api_trading_portfolios_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortfolioOut"
+                  },
+                  "title": "Response List Portfolios Api Trading Portfolios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Portfolios",
+        "tags": [
+          "portfolios"
+        ]
+      },
+      "post": {
+        "operationId": "create_portfolio_api_trading_portfolios_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Portfolio",
+        "tags": [
+          "portfolios"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}": {
+      "get": {
+        "operationId": "get_portfolio_api_trading_portfolios__portfolio_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Portfolio",
+        "tags": [
+          "portfolios"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/events": {
+      "get": {
+        "operationId": "list_events_api_trading_portfolios__portfolio_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "next_cursor of the previous page; 0 for the start",
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "next_cursor of the previous page; 0 for the start",
+              "minimum": 0,
+              "title": "After Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Events",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/fills": {
+      "get": {
+        "operationId": "list_fills_api_trading_portfolios__portfolio_id__fills_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "next_cursor of the previous page; 0 for the start",
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "next_cursor of the previous page; 0 for the start",
+              "minimum": 0,
+              "title": "After Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FillPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Fills",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/holdings": {
+      "get": {
+        "operationId": "get_holdings_api_trading_portfolios__portfolio_id__holdings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Holdings",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/holdings/history": {
+      "get": {
+        "operationId": "list_holding_history_api_trading_portfolios__portfolio_id__holdings_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "next_cursor of the previous page; 0 for the start",
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "next_cursor of the previous page; 0 for the start",
+              "minimum": 0,
+              "title": "After Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingHistoryPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Holding History",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/metrics": {
+      "get": {
+        "operationId": "get_metrics_api_trading_portfolios__portfolio_id__metrics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Metrics",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/rebuild": {
+      "post": {
+        "operationId": "rebuild_projections_api_trading_portfolios__portfolio_id__rebuild_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Replace differing stored rows with the rebuilt ones",
+            "in": "query",
+            "name": "apply",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Replace differing stored rows with the rebuilt ones",
+              "title": "Apply",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Rebuild Projections",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/runs": {
+      "post": {
+        "operationId": "start_run_api_trading_portfolios__portfolio_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The same key always returns the same job",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The same key always returns the same job",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Start Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/runs/{job_id}": {
+      "get": {
+        "operationId": "get_run_api_trading_portfolios__portfolio_id__runs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/state": {
+      "get": {
+        "operationId": "get_state_api_trading_portfolios__portfolio_id__state_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "State after this seq; default the last",
+            "in": "query",
+            "name": "as_of_seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "State after this seq; default the last",
+              "title": "As Of Seq"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get State",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/value-series": {
+      "get": {
+        "operationId": "get_value_series_api_trading_portfolios__portfolio_id__value_series_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValuePointOut"
+                  },
+                  "title": "Response Get Value Series Api Trading Portfolios  Portfolio Id  Value Series Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Value Series",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/portfolios/{portfolio_id}/verify": {
+      "get": {
+        "operationId": "verify_log_api_trading_portfolios__portfolio_id__verify_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChainReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Log",
+        "tags": [
+          "projections"
+        ]
+      }
+    },
+    "/api/trading/ready": {
+      "get": {
+        "operationId": "ready_api_trading_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/trading/strategies": {
+      "get": {
+        "operationId": "list_strategies_api_trading_strategies_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StrategyOut"
+                  },
+                  "title": "Response List Strategies Api Trading Strategies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Strategies",
+        "tags": [
+          "strategies"
+        ]
+      },
+      "post": {
+        "operationId": "create_strategy_api_trading_strategies_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StrategyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Strategy",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
+    "/api/trading/strategies/{strategy_id}": {
+      "get": {
+        "operationId": "get_strategy_api_trading_strategies__strategy_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Strategy",
+        "tags": [
+          "strategies"
+        ]
+      },
+      "put": {
+        "operationId": "replace_strategy_api_trading_strategies__strategy_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StrategyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Replace Strategy",
+        "tags": [
+          "strategies"
+        ]
+      }
+    }
+  }
+}
