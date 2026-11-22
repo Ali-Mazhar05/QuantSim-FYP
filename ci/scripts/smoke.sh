@@ -13,6 +13,11 @@ release="${2:?usage: smoke.sh <env> <release-file>}"
 load_env "$env"
 load_release "$release"
 
+# deploy/env sets SMOKE_BASE_URL for the build agent (host.docker.internal), which a
+# Windows host cannot reach; SMOKE_BASE_URL_OVERRIDE points the checks elsewhere,
+# e.g. SMOKE_BASE_URL_OVERRIDE=http://localhost:8081
+SMOKE_BASE_URL="${SMOKE_BASE_URL_OVERRIDE:-${SMOKE_BASE_URL:-}}"
+
 # Cloudflare Pages needs a few minutes to issue the HTTPS certificate for a new site or
 # branch alias, so Pages targets get up to 5 minutes; local stacks answer within a minute.
 if [[ "$FRONTEND_TARGET" == "pages" ]]; then

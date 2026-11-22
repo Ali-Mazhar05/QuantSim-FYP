@@ -1,0 +1,17 @@
+{
+  "env_id": "a4d3c2b1-7e6f-4a5b-8c9d-0e1f2a3b4c5d",
+  "env_type": "synthetic",
+  "source_fingerprint": "xxh3:9d1e0c7b5a3f2e4d6c8b0a1f3e5d7c9b",
+  "seq": 1,
+  "session": 0,
+  "ts": "2021-01-04T21:00:00Z",
+  "instrument_id": "0b6d7f3a-1111-4a00-8000-000000000001",
+  "symbol": "AAPL",
+  "open": "132.4100000000",
+  "high": "132.4100000000",
+  "low": "132.4100000000",
+  "close": "132.4100000000",
+  "volume": "0.00000000",
+  "path_index": 0,
+  "scenario": null
+}

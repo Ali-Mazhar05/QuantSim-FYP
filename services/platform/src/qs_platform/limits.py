@@ -45,6 +45,19 @@ class RateLimiter:
             raise UNAVAILABLE from exc
         return ttl if ttl > 0 else window_seconds
 
+    async def blocked(self, key: str, limit: int) -> int | None:
+        """Without counting: the seconds to wait when ``key`` already reached ``limit``."""
+        name = f"{KEY_PREFIX}{key}"
+        try:
+            raw = await self._redis.get(name)
+            if raw is None or int(raw) < limit:
+                return None
+            ttl = int(await self._redis.ttl(name))
+        except RedisError as exc:
+            log.warning("rate limit store unavailable", error=str(exc))
+            raise UNAVAILABLE from exc
+        return ttl if ttl > 0 else 1
+
     async def close(self) -> None:
         await self._redis.aclose()
 
