@@ -20,15 +20,20 @@ Then run `uv lock` at the repository root.
 
 ```python
 from qs_quant.metrics import (
-    simple_returns, total_return, annualised_volatility, sharpe,
-    max_drawdown, turnover, var_cvar,
+    simple_returns,
+    total_return,
+    annualised_volatility,
+    sharpe,
+    max_drawdown,
+    turnover,
+    var_cvar,
 )
 
-values = [10_000, 9_900, 10_100, 10_300]      # floats, NumPy arrays or Decimals
+values = [10_000, 9_900, 10_100, 10_300]  # floats, NumPy arrays or Decimals
 r = simple_returns(values)
-total_return(values)                            # 0.03
-annualised_volatility(r)                        # None below 2 returns
-var95, cvar95 = var_cvar(path_returns, alpha=0.95)   # needs at least 20 returns
+total_return(values)  # 0.03
+annualised_volatility(r)  # None below 2 returns
+var95, cvar95 = var_cvar(path_returns, alpha=0.95)  # needs at least 20 returns
 ```
 
 | Function | Formula |
