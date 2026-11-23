@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import QueryProvider from './hooks/QueryProvider'
 import Instruments from './pages/market/Instruments'
 import MarketData from './pages/market/MarketData'
 import { clearSession } from './services/api/client'
@@ -76,7 +77,9 @@ function marketBackend(respond: Responder = () => undefined) {
 function renderMarketData() {
   return render(
     <MemoryRouter>
-      <MarketData />
+      <QueryProvider>
+        <MarketData />
+      </QueryProvider>
     </MemoryRouter>,
   )
 }
@@ -149,14 +152,17 @@ describe('the Market Data page', () => {
     expect(request.searchParams.get('interval')).toBe('daily')
   })
 
-  it('adds no control the prototype does not have', async () => {
+  it('adds only the controls ADR 06 allows: an interval selector and a date window (B02)', async () => {
     marketBackend()
     renderMarketData()
     await screen.findByText('Apple Inc. (AAPL)')
-    expect(screen.queryByRole('combobox')).toBeNull()
-    expect(document.querySelector('input')).toBeNull()
-    expect(screen.queryByText(/volatility|drawdown|period return/i)).toBeNull()
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['AAPL', 'NVDA'])
+    // one select (the interval) and two date inputs (the window), nothing else
+    expect(screen.getAllByRole('combobox').map((s) => (s as HTMLSelectElement).labels?.[0]?.textContent)).toEqual([
+      'Interval',
+    ])
+    expect(Array.from(document.querySelectorAll('input')).map((i) => i.type)).toEqual(['date', 'date'])
+    // the instrument buttons stay as they were, plus the reset for the window
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['AAPL', 'NVDA', 'Reset window'])
   })
 
   it('switches to another instrument from the symbol buttons', async () => {
