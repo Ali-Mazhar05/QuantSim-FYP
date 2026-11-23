@@ -325,3 +325,23 @@ describe('Results page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed')
   })
 })
+
+describe('an address that is not a run id (the prototype opens /simulation/run/1042)', () => {
+  it.each(['/simulation/run/1042', '/simulation/results/1042'])('%s says so calmly and asks for nothing', async (path) => {
+    let asked = 0
+    server.use(http.get(`${SIMULATION}/runs/:id`, () => ((asked += 1), HttpResponse.json({}))))
+    renderAt(path)
+    expect(await screen.findByText('Run not found')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Simulation #1042')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument() // the DEV smoke suite fails a page with an alert
+    expect(screen.queryByText(/Loading/)).not.toBeInTheDocument()
+    expect(asked).toBe(0)
+  })
+
+  it('Configure with no environment is a status, not an alert', async () => {
+    server.use(http.get(`${MARKET}/environments`, () => HttpResponse.json([])))
+    renderAt('/simulation/configure')
+    expect(await screen.findByRole('status')).toHaveTextContent('There is no market environment to simulate yet')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})

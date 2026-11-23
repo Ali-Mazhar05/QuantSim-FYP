@@ -5,13 +5,14 @@ import MonteCarloFanChart from '../../components/charts/MonteCarloFanChart'
 import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import EmptyState from '../../components/status/EmptyState'
 import ErrorNote from '../../components/status/ErrorNote'
 import StatusPill from '../../components/status/StatusPill'
 import DataTable, { type Column } from '../../components/tables/DataTable'
 import { useCan } from '../../demo/useCan'
 import { classifyError } from '../../hooks/apiError'
 import { useQuantiles, useRun, useRuns, useScenarios, useStressRun } from '../../hooks/useSimulation'
-import { type Run, fanOf } from '../../services/api/simulation'
+import { type Run, fanOf, isRunId } from '../../services/api/simulation'
 
 const MODEL_NAMES = { gbm: 'GBM', ou: 'Ornstein-Uhlenbeck', merton: 'Jump Diffusion' } as const
 type Statistic = Run['statistics'][number]
@@ -41,7 +42,8 @@ const columns: Column<Statistic>[] = [
 ]
 
 export default function SimulationResults() {
-  const { id } = useParams()
+  const { id: param } = useParams()
+  const id = isRunId(param) ? param : undefined
   const navigate = useNavigate()
   const canCreate = useCan('create_portfolios')
   const canLaunch = useCan('launch_simulations')
@@ -62,7 +64,7 @@ export default function SimulationResults() {
   const { quantiles: otherQuantiles } = useQuantiles(other?.id, Boolean(other))
   const fan = quantiles ? fanOf(quantiles) : null
   const otherFan = otherQuantiles ? fanOf(otherQuantiles, fan ? quantiles?.instruments[0]?.instrument_id : undefined) : null
-  const short = (id ?? '').slice(0, 8)
+  const short = (param ?? '').slice(0, 8)
 
   async function apply(code: string) {
     if (!run) return
@@ -98,7 +100,9 @@ export default function SimulationResults() {
         }
       />
 
-      {error ? (
+      {id === undefined ? (
+        <EmptyState title="Run not found" description="This address is not a run. Open one from Simulations." />
+      ) : error ? (
         <ErrorNote error={error} />
       ) : !run ? (
         <p className="text-sm text-[var(--color-text-muted)]">Loading the results…</p>
