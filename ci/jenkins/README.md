@@ -66,6 +66,11 @@ ci/jenkins/host.sh stop      # hand over: stop Jenkins here and upload its state
 - `start` also points the `quantsim-jenkins` GitHub App's webhook at the new link
   (`github-webhook.sh`, signed with `secrets/github_app_key`), so merges build at once.
   If the tunnel restarts on its own and gets a new link, run `host.sh webhook`.
+- **Tunnel watchdog.** `sudo ci/jenkins/install-tunnel-watchdog.sh` (once, on the machine
+  that hosts Jenkins) checks every 3 minutes that the public addresses of DEV, TEST, ACC,
+  PROD and Jenkins answer; it restarts a dead tunnel and republishes the new address to the
+  website, the GitHub webhook and Jenkins' build links (`tunnel-watchdog.sh`; logs with
+  `journalctl -u quantsim-tunnel-watchdog`).
   The app's webhook must be switched on once by hand (Active, events Push and Pull
   request); until then the script says so and builds wait for the branch scan.
 - Always `stop` before closing the laptop for the day, so the next person gets your
