@@ -15,6 +15,35 @@ repository or in Jenkins.
   (Lane A) and B16 Monte Carlo VaR/CVaR (Lane B). The trading, simulation and risk images
   now rebuild when the library changes (`ci/components.conf`).
 
+**Delivered (Iteration 2, contract K5, `feature/k-k5-calibration` into `develop`)**
+- **Calibration library (K5):** `qs_quant.calibration` 0.2.0 with GBM (closed-form MLE),
+  OU on log price (AR(1) OLS, refused unless the ADF test rejects a unit root at 5%) and
+  Merton jump-diffusion (bounded 3-start L-BFGS-B with log-sum-exp, numerical-Hessian
+  standard errors); `FitResult` with refusal codes instead of exceptions (Lane C guide
+  §7.1-7.4). GBM and OU match exact rational references to 1e-12; random walks refused
+  and OU series accepted in at least 90% of 50 seeds; all ten parameters pass the
+  50-replication recovery study (`docs/report/k5-recovery.md`); no input makes a fit
+  raise. SciPy and statsmodels come through the `qs-quant[calibration]` extra, so the
+  trading image stays NumPy-only. Consumer: B15 calibration (Lane B).
+
+**Delivered (Iteration 2, Lane B: replay, simulation and the frontend kit)**
+- **Into the lane:** #155 develop into the lane, #162 K4 review follow-ups and ADRs Accepted
+  (into `develop`), #78 B10 path generators, #177 B12 replay feed and activation, #179 B14
+  simulation database, #180 B13 replay sessions.
+- **Merged after Jenkins:** B15 calibration on the real K5 (#181), B16 Monte Carlo on K6 and the K3
+  service client (#186), B18 read API with lists, quantiles and path ticks (#187), B17 stress scenarios
+  (#188), and the pages on the typed client with the Create Portfolio run picker, the simulation diagram
+  and the queue depth route (#189). The Lane B demo spine is in `develop` (#183); Market Data controls
+  (B02) are in their own pull request.
+- **Verified:** market 601 tests with the recorded corpus (120 real-data), simulation 427, frontend 21
+  files and 194 tests; every migration applies, reverses and applies again.
+- **Found:** a single fixed seed gave z = -3.4 on a correct Merton generator, so statistical tests use
+  seed sweeps; the 1,260,000-row demo run costs 13.6 s per 252,000 rows in foreign-key checks (DL-041).
+- **Decided:** DL-042 (read API) and DL-043 (stress scenarios); DL-015 resolved by ADR 09 (service
+  tokens). Report chapter: `docs/report/lane-b.md`.
+- **Not yet:** the Lane B demo spine has not run on TEST (needs the simulation service deployed); the
+  real-data market tests passed locally (601 of 601 with the corpus).
+
 ## 2026-11-20
 
 **Delivered (Iteration 2, Lane A, through `lane/a-trading` into `develop` by #99 and #102)**

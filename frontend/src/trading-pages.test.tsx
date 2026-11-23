@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDemoStore } from './demo/demoState'
+import QueryProvider from './hooks/QueryProvider'
 import ConfigureStrategy from './pages/trading/ConfigureStrategy'
 import CreatePortfolio from './pages/trading/CreatePortfolio'
 import Portfolios from './pages/trading/Portfolios'
@@ -153,6 +154,7 @@ const DEFAULTS: Record<string, Handler> = {
   [`GET /portfolios/${P1}/value-series`]: () => json(200, VALUES),
   'GET /demo-environments': () => json(200, [DEMO_ENV]),
   'GET /api/market/environments': () => json(200, [MARKET_ENV]),
+  'GET /api/simulation/runs': () => json(200, { items: [], next_cursor: null }),
 }
 
 /** Every request is recorded; a route not given answers from DEFAULTS, else 404. */
@@ -175,6 +177,7 @@ function tradingBackend(routes: Record<string, Handler> = {}) {
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
+      <QueryProvider>
       <Routes>
         <Route path="/trading/strategies" element={<Strategies />} />
         <Route path="/trading/strategies/new" element={<ConfigureStrategy />} />
@@ -186,6 +189,7 @@ function renderAt(path: string) {
       </Routes>
       <LocationProbe />
       <GoTo />
+      </QueryProvider>
     </MemoryRouter>,
   )
 }
@@ -398,7 +402,7 @@ describe('the Portfolios page', () => {
 // ---- Create Portfolio ----
 
 describe('the Create Portfolio page', () => {
-  it('offers market, demo and (not yet available) simulation environments', async () => {
+  it('offers market, demo and simulation environments', async () => {
     tradingBackend()
     renderAt('/trading/portfolios/new')
     expect(screen.getByText('Loading strategies and environments…')).toBeInTheDocument()
@@ -407,7 +411,72 @@ describe('the Create Portfolio page', () => {
     expect(groups).toEqual(['Market replay environments', 'Demo environments', 'Simulation runs'])
     expect(within(picker).getByRole('option', { name: 'Tech 2024 (2024-01-02 – 2024-12-31)' })).toHaveValue(`replay:${ENV}`)
     expect(within(picker).getByRole('option', { name: 'A14 two-symbol fixture (10 sessions)' })).toHaveValue(`replay:${DEMO}`)
-    expect(within(picker).getByRole('option', { name: 'No simulation runs available yet' })).toBeDisabled()
+    expect(within(picker).getByRole('option', { name: 'No completed simulation runs yet' })).toBeDisabled()
+  })
+
+  it('lists the completed simulation runs and binds a portfolio to the median path of the one chosen', async () => {
+    const RUN = 'a4d3c2b1-7e6f-4a5b-8c9d-0e1f2a3b4c5d'
+    const { calls } = tradingBackend({
+      'GET /api/simulation/runs': (c) =>
+        c.query.get('status') === 'completed'
+          ? json(200, {
+              items: [
+                {
+                  id: RUN,
+                  status: 'completed',
+                  model: 'gbm',
+                  n_paths: 1000,
+                  n_steps: 252,
+                  symbols: ['AAPL', 'MSFT'],
+                  median_path_index: 417,
+                  parent_run_id: null,
+                  scenario: null,
+                  created_at: '2026-11-20T10:00:00Z',
+                },
+              ],
+              next_cursor: null,
+            })
+          : json(200, { items: [], next_cursor: null }),
+      'POST /portfolios': () => json(201, PORTFOLIO),
+    })
+    renderAt('/trading/portfolios/new')
+    fireEvent.change(await screen.findByTestId('portfolio-name'), { target: { value: 'On a run' } })
+    const picker = screen.getByTestId('portfolio-environment')
+    const option = await within(picker).findByRole('option', { name: '#a4d3c2b1 · AAPL, MSFT · 1,000 paths' })
+    expect(option).toHaveValue(`simulation:${RUN}`)
+    fireEvent.change(picker, { target: { value: `simulation:${RUN}` } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create Portfolio' }))
+    await screen.findByRole('button', { name: 'Run backtest' })
+    const body = calls.find((c) => c.method === 'POST' && c.path === '/portfolios')!.body
+    expect(body).toMatchObject({ simulation_run_id: RUN, path_index: 417 })
+    expect(body).not.toHaveProperty('replay_environment_id')
+  })
+
+  it('chooses the run it was opened for from the results page', async () => {
+    const RUN = 'a4d3c2b1-7e6f-4a5b-8c9d-0e1f2a3b4c5d'
+    tradingBackend({
+      'GET /api/simulation/runs': () =>
+        json(200, {
+          items: [
+            {
+              id: RUN,
+              status: 'completed',
+              model: 'gbm',
+              n_paths: 50,
+              n_steps: 10,
+              symbols: ['AAPL'],
+              median_path_index: 3,
+              parent_run_id: null,
+              scenario: 'flash_crash',
+              created_at: '2026-11-20T10:00:00Z',
+            },
+          ],
+          next_cursor: null,
+        }),
+    })
+    renderAt(`/trading/portfolios/new?run=${RUN}`)
+    const picker = await screen.findByTestId('portfolio-environment')
+    await waitFor(() => expect(picker).toHaveValue(`simulation:${RUN}`))
   })
 
   it('creates the portfolio, starts the backtest and polls it until it succeeds', async () => {

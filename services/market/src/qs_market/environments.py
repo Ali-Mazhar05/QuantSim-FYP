@@ -11,10 +11,10 @@ import uuid
 from datetime import date
 from typing import Any
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import Select, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from qs_market.models import bar, instrument, market_environment
+from qs_market.models import bar, environment_activation, instrument, market_environment
 from qs_template import ServiceError
 
 NOT_FOUND = ServiceError(
@@ -35,6 +35,21 @@ def _invalid_instruments(ids: list[str]) -> ServiceError:
     )
 
 
+def _with_activation() -> Select[Any]:
+    """An environment with the fingerprint frozen at activation (all null until activated)."""
+    return select(
+        market_environment,
+        environment_activation.c.source_fingerprint,
+        environment_activation.c.activated_at,
+        environment_activation.c.activated_by,
+    ).select_from(
+        market_environment.outerjoin(
+            environment_activation,
+            environment_activation.c.environment_id == market_environment.c.id,
+        )
+    )
+
+
 class EnvironmentService:
     def __init__(self, session: AsyncSession, *, actor_id: uuid.UUID | None = None) -> None:
         self._session = session
@@ -44,7 +59,7 @@ class EnvironmentService:
         self, *, env_type: str | None = None, owner: uuid.UUID | None = None
     ) -> list[dict[str, Any]]:
         """Newest first; optionally only one type and only the ones a user created."""
-        query = select(market_environment)
+        query = _with_activation()
         if env_type is not None:
             query = query.where(market_environment.c.type == env_type)
         if owner is not None:
@@ -57,7 +72,7 @@ class EnvironmentService:
     async def get(self, environment_id: uuid.UUID) -> dict[str, Any]:
         row = (
             await self._session.execute(
-                select(market_environment).where(market_environment.c.id == environment_id)
+                _with_activation().where(market_environment.c.id == environment_id)
             )
         ).first()
         if row is None:

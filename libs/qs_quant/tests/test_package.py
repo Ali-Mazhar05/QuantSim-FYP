@@ -41,3 +41,29 @@ def test_library_imports_nothing_that_does_io() -> None:
                 continue
             offenders += [f"{path.name}: {n}" for n in names if n.split(".")[0] not in ALLOWED]
     assert offenders == []
+
+
+def _imports(path: Path) -> set[str]:
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            found.add(node.module.split(".")[0])
+    return found
+
+
+def test_metrics_need_numpy_only() -> None:
+    # Trading depends on qs-quant without the calibration extra: K6 must never import
+    # SciPy or statsmodels, directly or through the shared input checks
+    package = ROOT / "src" / "qs_quant"
+    for path in [*sorted((package / "metrics").rglob("*.py")), package / "_validation.py"]:
+        assert _imports(path) & {"scipy", "statsmodels"} == set(), path.name
+        local = {
+            node.module
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+            if isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.startswith("qs_quant")
+        }
+        assert not any(m.startswith("qs_quant.calibration") for m in local), path.name
