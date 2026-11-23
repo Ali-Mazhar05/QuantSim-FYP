@@ -35,6 +35,10 @@ export QS_LIVE_QUANT_USERNAME="${QS_LIVE_QUANT_USERNAME-test.quant}"
 if [[ "${TRADING_DEMO_FEEDS:-false}" == true ]]; then
   export QS_LIVE_J2_HTTP_ENV_ID="${QS_LIVE_J2_HTTP_ENV_ID-c74eb808-acc6-5fc0-9400-7faa69480261}"
   export QS_LIVE_J2_FILE_ENV_ID="${QS_LIVE_J2_FILE_ENV_ID-5d0c6c1e-7a14-4a14-8a14-000000002020}"
+else
+  # The real market feed: a momentum portfolio on an active replay of the market service
+  # (QS_LIVE_REAL_ENV_ID, or the first whose ticks answer), run twice to the same hash
+  export QS_LIVE_REAL_FEED="${QS_LIVE_REAL_FEED-1}"
 fi
 export QS_LIVE_BENCHMARK_ENV_ID="${QS_LIVE_BENCHMARK_ENV_ID-5d0c6c1e-7a14-4a14-8a14-000000000040}"
 export QS_LIVE_TIMEOUT_SECONDS="${QS_LIVE_TIMEOUT_SECONDS:-180}"
@@ -52,6 +56,7 @@ log "trading live check on $env through $QS_LIVE_BASE_URL as $QS_LIVE_USERNAME"
 run_in_image "$UV_IMAGE" --add-host host.docker.internal:host-gateway \
   -e QS_LIVE_BASE_URL -e QS_LIVE_ENV_ID -e QS_LIVE_USERNAME -e QS_LIVE_VIEWER_USERNAME \
   -e QS_LIVE_QUANT_USERNAME -e QS_LIVE_J2_HTTP_ENV_ID -e QS_LIVE_J2_FILE_ENV_ID -e QS_LIVE_BENCHMARK_ENV_ID -e QS_LIVE_LOAD \
+  -e QS_LIVE_REAL_FEED -e QS_LIVE_REAL_ENV_ID \
   -e QS_LIVE_PASSWORD -e QS_LIVE_TIMEOUT_SECONDS -- \
   python -I -B -u ci/scripts/trading_live_check.py \
   || die "trading live check failed on $env"
