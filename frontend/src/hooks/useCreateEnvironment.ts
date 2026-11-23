@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createEnvironment } from '../services/api/market'
-import { marketKeys } from './queryKeys'
+import { marketKeys } from './keys/market'
 
 /** Create an environment; the list every page shows refreshes once it is saved. */
 export function useCreateEnvironment() {
