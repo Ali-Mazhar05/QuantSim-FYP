@@ -5,10 +5,7 @@
 
 import type { MarketEnvironment } from '../../types'
 import type { MarketComponents } from '../generated'
-import { apiRequest } from './client'
 import { apiGet, apiPost } from './typed'
-
-const BASE = '/api/market'
 
 export interface MarketInstrument {
   id: string
@@ -24,9 +21,33 @@ export interface MarketInstrument {
   assetClass: 'equity' | 'etf'
 }
 
+export type Interval = MarketComponents['schemas']['CandleSeries']['interval']
+/** The metrics of a window, as the API describes them (ratios as decimal strings). */
+export type Metrics = MarketComponents['schemas']['MetricsOut']
+
+export const INTERVALS: { value: Interval; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+]
+
+/** How many candles the default window shows, and what one candle is called. */
+export const DEFAULT_WINDOW: Record<Interval, { buckets: number; unit: string }> = {
+  daily: { buckets: 90, unit: 'sessions' },
+  weekly: { buckets: 104, unit: 'weeks' },
+  monthly: { buckets: 60, unit: 'months' },
+  yearly: { buckets: 20, unit: 'years' },
+}
+
+/** Calendar days one candle spans at most, with room for weekends and holidays. */
+const DAYS_PER_BUCKET: Record<Interval, number> = { daily: 1.6, weekly: 7.5, monthly: 31, yearly: 366 }
+
 export interface Candle {
-  /** The session the candle covers. */
+  /** The first session the candle covers (the session itself for a daily candle). */
   date: string
+  /** The last session the candle covers; with `date` it is the candle's exact window. */
+  lastSession?: string
   open: number
   high: number
   low: number
@@ -34,30 +55,10 @@ export interface Candle {
   volume: number
 }
 
-interface ApiInstrument {
-  id: string
-  symbol: string
-  name: string
-  sector: string
-  price: string | null
-  change_pct: string | null
-  status: 'active' | 'retired'
-  exchange: string
-  asset_class: 'equity' | 'etf'
-}
-
-interface ApiCandle {
-  session_date: string
-  open: string
-  high: string
-  low: string
-  close: string
-  volume: string
-}
+type ApiCandle = MarketComponents['schemas']['CandleOut']
 
 export async function listInstruments(status: 'active' | 'retired' | null = 'active'): Promise<MarketInstrument[]> {
-  const suffix = status ? `?status=${status}` : ''
-  const rows = await apiRequest<ApiInstrument[]>(`${BASE}/instruments${suffix}`)
+  const rows = await apiGet('/api/market/instruments', { query: { status } })
   return rows.map((row) => ({
     id: row.id,
     symbol: row.symbol,
@@ -76,18 +77,49 @@ export async function listInstruments(status: 'active' | 'retired' | null = 'act
  * far enough to hold that many sessions (weekends and holidays) and, only when that holds
  * nothing because the data is older, asks for the whole history. */
 export async function getRecentCandles(instrumentId: string, sessions: number): Promise<Candle[]> {
-  const path = `${BASE}/instruments/${instrumentId}/candles`
+  return getRecentSeries(instrumentId, 'daily', sessions)
+}
+
+/** The latest `buckets` candles of an interval, with the same reach-back rule as above. */
+export async function getRecentSeries(
+  instrumentId: string,
+  interval: Interval,
+  buckets: number = DEFAULT_WINDOW[interval].buckets,
+): Promise<Candle[]> {
   const from = new Date()
-  from.setUTCDate(from.getUTCDate() - Math.ceil(sessions * 1.6) - 10)
-  const recent = new URLSearchParams({ interval: 'daily', from: from.toISOString().slice(0, 10) })
-  let body = await apiRequest<{ items: ApiCandle[] }>(`${path}?${recent}`)
-  if (body.items.length === 0) body = await apiRequest<{ items: ApiCandle[] }>(`${path}?interval=daily`)
-  return body.items.slice(-sessions).map(toCandle)
+  from.setUTCDate(from.getUTCDate() - Math.ceil(buckets * DAYS_PER_BUCKET[interval]) - 10)
+  let candles = await getCandleSeries(instrumentId, { interval, from: from.toISOString().slice(0, 10) })
+  if (candles.length === 0) candles = await getCandleSeries(instrumentId, { interval })
+  return candles.slice(-buckets)
+}
+
+export interface CandleWindow {
+  interval: Interval
+  from?: string
+  to?: string
+}
+
+/** Candles of one interval over an optional date window, oldest first. */
+export async function getCandleSeries(instrumentId: string, window: CandleWindow): Promise<Candle[]> {
+  const body = await apiGet('/api/market/instruments/{instrument_id}/candles', {
+    path: { instrument_id: instrumentId },
+    query: { interval: window.interval, from: window.from, to: window.to },
+  })
+  return body.items.map(toCandle)
+}
+
+/** Period return, volatility and drawdown over the same kind of window. */
+export function getMetrics(instrumentId: string, window: CandleWindow): Promise<Metrics> {
+  return apiGet('/api/market/instruments/{instrument_id}/metrics', {
+    path: { instrument_id: instrumentId },
+    query: { interval: window.interval, from: window.from, to: window.to },
+  })
 }
 
 function toCandle(c: ApiCandle): Candle {
   return {
-    date: c.session_date,
+    date: c.period_start ?? c.session_date,
+    lastSession: c.session_date,
     open: Number(c.open),
     high: Number(c.high),
     low: Number(c.low),
@@ -173,7 +205,5 @@ export async function createEnvironment(input: {
 
 /** Daily candles of an instrument over a window, oldest first. */
 export async function getCandles(instrumentId: string, from: string, to: string): Promise<Candle[]> {
-  const query = new URLSearchParams({ interval: 'daily', from, to })
-  const body = await apiRequest<{ items: ApiCandle[] }>(`${BASE}/instruments/${instrumentId}/candles?${query}`)
-  return body.items.map(toCandle)
+  return getCandleSeries(instrumentId, { interval: 'daily', from, to })
 }
