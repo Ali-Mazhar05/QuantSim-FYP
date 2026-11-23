@@ -705,6 +705,12 @@ services:
       # DEV only: runs portfolios over the demo market data bundled in the image
       # (TRADING_DEMO_ENVIRONMENTS in deploy/env); refused outside local and dev
       QS_TRADING_DEMO_ENVIRONMENTS: ${TRADING_DEMO_ENVIRONMENTS:-}
+      # DEV only: the stand-in for Lane B's feeds at /demo-feeds (TRADING_DEMO_FEEDS), and
+      # the feed addresses the worker reads replays and simulation paths from. Empty until
+      # the market and simulation services serve their feeds (B12)
+      QS_TRADING_DEMO_FEEDS: ${TRADING_DEMO_FEEDS:-false}
+      QS_TRADING_MARKET_URL: ${TRADING_MARKET_URL:-}
+      QS_TRADING_SIMULATION_URL: ${TRADING_SIMULATION_URL:-}
       # Service tokens for calls to other services (ADR 09), from the Platform service
       QS_SERVICE_TOKEN_URL: http://platform:8000/api/platform/service-tokens
       QS_SERVICE_CLIENT_SECRET: ${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}

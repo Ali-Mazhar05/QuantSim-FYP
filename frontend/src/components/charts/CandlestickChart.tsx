@@ -46,6 +46,7 @@ export default function CandlestickChart({
   count = 90,
   height = 260,
   candles: given,
+  interval = 'Daily',
 }: {
   seed?: number
   start?: number
@@ -53,6 +54,8 @@ export default function CandlestickChart({
   count?: number
   height?: number
   candles?: ChartCandle[]
+  /** What one candle covers, for the chart's accessible name: Daily, Weekly, Monthly or Yearly. */
+  interval?: string
 }) {
   const generated = useMemo(
     () => (given ? [] : generateCandles({ seed, count, start, vol })),
@@ -128,7 +131,7 @@ export default function CandlestickChart({
             tabIndex={0}
             role="group"
             aria-roledescription="chart"
-            aria-label={`Daily candles, ${candles[0]?.date ?? ''} to ${candles[n - 1]?.date ?? ''}. Use the arrow keys to read each session.`}
+            aria-label={`${interval} candles, ${candles[0]?.date ?? ''} to ${candles[n - 1]?.date ?? ''}. Use the arrow keys to read each candle.`}
             onMouseMove={pick}
             onMouseLeave={() => setActive(null)}
             onFocus={() => setActive((i) => i ?? n - 1)}

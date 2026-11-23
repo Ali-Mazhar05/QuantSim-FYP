@@ -30,6 +30,11 @@ export default defineConfig({
     actionTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // No QUIC (HTTP/3 over UDP) from the Jenkins agent's container. HTTP/2 stays on: forcing
+    // HTTP/1.1 made every browser request to the API tunnel hang (develop build 112), so the
+    // occasional sign-in hang is most likely a connection that fell back to HTTP/1.1; the
+    // sign-in probe in support.ts reports each one
+    launchOptions: { args: ['--disable-quic'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 })
