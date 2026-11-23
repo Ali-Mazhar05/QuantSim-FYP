@@ -188,7 +188,14 @@ pipeline {
                   }
                 }
               }
-              parallel checks
+              // Each check starts its own Docker network, about a dozen per build, and the
+              // host's address pools hold about 30 next to the DEV/TEST/ACC/PROD stacks. Since
+              // the webhook starts a push's branch build and its pull request build at once,
+              // builds take turns here instead of running out of networks ("all predefined
+              // address pools have been fully subnetted", PR-167)
+              lock(resource: 'backend-ci-networks') {
+                parallel checks
+              }
             }
           }
           post {

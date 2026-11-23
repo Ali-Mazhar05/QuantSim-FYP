@@ -9,6 +9,7 @@ from api_support import API, FakeStore, as_role, client_for, fake_app
 
 from qs_template.auth import Role
 from qs_trading.api_environments import demo_directory, list_demo_environments
+from qs_trading.demo.feeds import FILE_COPY_ID
 from qs_trading.jobs import BUNDLED_DEMO_ENVIRONMENTS
 
 DEMO_ID = "5d0c6c1e-7a14-4a14-8a14-000000000001"
@@ -20,7 +21,8 @@ async def test_lists_the_bundled_demo_environments_when_set() -> None:
         response = await http.get(f"{API}/demo-environments", headers=as_role(Role.VIEWER))
     assert response.status_code == 200, response.text
     by_id = {e["id"]: e for e in response.json()}
-    assert set(by_id) == {DEMO_ID, BENCHMARK_ID}
+    # FILE_COPY_ID: the recorded 2020 replay as a file, for the DEV J2 check
+    assert set(by_id) == {DEMO_ID, BENCHMARK_ID, FILE_COPY_ID}
     assert by_id[DEMO_ID] == {
         "id": DEMO_ID,
         "name": "A14 two-symbol fixture",
@@ -30,6 +32,7 @@ async def test_lists_the_bundled_demo_environments_when_set() -> None:
         "end_date": "2026-01-16",
     }
     assert by_id[BENCHMARK_ID]["sessions"] == 252
+    assert by_id[FILE_COPY_ID]["sessions"] == 253
 
 
 async def test_is_empty_without_the_setting() -> None:

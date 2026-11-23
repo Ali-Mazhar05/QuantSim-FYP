@@ -8,6 +8,7 @@
 #   ci/jenkins/host.sh status            who hosts Jenkins now, and its link
 #   ci/jenkins/host.sh start [--force]   take over: fetch the latest state, start Jenkins
 #   ci/jenkins/host.sh stop              hand back: stop Jenkins, upload its state
+#   ci/jenkins/host.sh webhook           point GitHub's webhook at the current public link
 #
 # Needs: Docker, ci/jenkins/init-env.sh run once on this machine, and the secret files
 # r2_access_key_id and r2_secret_access_key (see secrets/README.md).
@@ -215,9 +216,29 @@ start() {
   "${compose[@]}" up -d --build
   printf 'host=%s\nat=%s\nurl=%s\n' "$host_id" "$(date +%s)" "$url" | r2 -- "rclone rcat $remote/lease.env"
 
+  point_webhook "$url"
   redeploy_environments
   republish_sites
   log "Jenkins is hosted here: $url (sign in as admin)"
+}
+
+# GitHub's webhook must follow the quick tunnel's new address, or pushes only build at the
+# next branch scan. A failure here is a warning: the scan still picks every push up.
+point_webhook() {
+  local url="$1"
+  [[ "$url" == https://* ]] || { log "no public link, so the GitHub webhook is left as it is"; return 0; }
+  "$here/github-webhook.sh" "$url" \
+    || log "WARNING: could not point the GitHub webhook at $url; builds start at the next branch scan. Retry with: ci/jenkins/host.sh webhook"
+}
+
+# Points the webhook at the tunnel's current address (after the tunnel restarted on its own)
+webhook() {
+  local url
+  url="$(dk run --rm --network "${project}_default" --entrypoint sh "$rclone_image" \
+    -c 'wget -qO- http://tunnel:2000/quicktunnel 2>/dev/null' \
+    | sed -n 's/.*"hostname":"\([^"]*\)".*/https:\/\/\1\//p' || true)"
+  [[ -n "$url" ]] || die "the tunnel has no public address; is Jenkins hosted on this machine?"
+  point_webhook "$url"
 }
 
 stop() {
@@ -241,5 +262,6 @@ case "${1:-}" in
   status) status ;;
   start)  start "${2:-}" ;;
   stop)   stop ;;
-  *)      sed -n '2,15p' "$0"; exit 1 ;;
+  webhook) webhook ;;
+  *)      sed -n '2,16p' "$0"; exit 1 ;;
 esac

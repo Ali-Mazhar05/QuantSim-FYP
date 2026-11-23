@@ -16,7 +16,10 @@ only. Through the gateway it:
     run result's ``final_hash`` and ``final_seq``;
  7. checks the projections against the log, and GET /ops/metrics (A-NFR-14): the admin
     sees queue depth, job durations and outbox backlog, the viewer is refused (403);
- 8. A-NFR-01: runs the 40 x 252 benchmark in under 60 s (QS_LIVE_BENCHMARK_ENV_ID);
+ 8. J2 (QS_LIVE_J2_HTTP_ENV_ID and QS_LIVE_J2_FILE_ENV_ID): the same momentum strategy on
+    a replay read over HTTP and on the same data from a demo file agrees on the
+    fingerprint, the final value and every event apart from the environment it names;
+    then A-NFR-01: runs the 40 x 252 benchmark in under 60 s (QS_LIVE_BENCHMARK_ENV_ID);
  9. last, the load step (QS_LIVE_LOAD): logs the queue depth, then finds (or, the first
     time, creates) the strategy "live check load" and the 100 portfolios "live check load
     001" to "100" on the demo environment, and submits one run for each, one after the
@@ -33,6 +36,8 @@ Settings, from the environment (the passwords are never printed):
   QS_LIVE_PASSWORD
   QS_LIVE_VIEWER_USERNAME   optional: a viewer account for step 4 (same password)
   QS_LIVE_TIMEOUT_SECONDS   how long the run may take (default 180)
+  QS_LIVE_J2_HTTP_ENV_ID    optional, with the next: a replay the worker reads over HTTP
+  QS_LIVE_J2_FILE_ENV_ID    the demo environment holding the same data as a file
   QS_LIVE_BENCHMARK_ENV_ID  optional: the benchmark environment of step 8
   QS_LIVE_LOAD              optional: non-empty runs the load step (step 9)
 
@@ -452,6 +457,96 @@ def run_benchmark(api: Api, token: str, env_id: str, name: str) -> None:
     )
 
 
+# An order id is derived from the portfolio id and the seq (engine/core.py order_id_for), so
+# it differs between two portfolios; the events are compared position by position anyway
+ENVIRONMENT_KEYS = frozenset({"spec", "environment", "env_id", "portfolio_id", "order_id"})
+
+
+def without_environment(value: Any) -> Any:
+    """An event payload without what names its environment or portfolio, so two runs of the
+    same strategy on the same data can be compared although they are bound apart.
+
+    >>> without_environment({"env_id": "a", "bars": [{"env_id": "a", "close": "1"}]})
+    {'bars': [{'close': '1'}]}
+    >>> without_environment({"order_id": "p1-43", "side": "buy"})
+    {'side': 'buy'}
+    """
+    if isinstance(value, Mapping):
+        return {k: without_environment(v) for k, v in value.items() if k not in ENVIRONMENT_KEYS}
+    if isinstance(value, list):
+        return [without_environment(v) for v in value]
+    return value
+
+
+def check_j2(api: Api, token: str, http_env_id: str, file_env_id: str, name: str) -> None:
+    """J2 on the deployed worker: one strategy, two portfolios with the same assumptions,
+    one bound to a replay the worker reads over HTTP (the feed), one to the same data as a
+    demo file. Both must succeed with intact chains and agree on the source fingerprint,
+    the final value and every event apart from the environment it names; their final hashes
+    differ only because each spec names its own environment."""
+    strategy = api.expect(
+        201,
+        "POST",
+        f"{TRADING}/strategies",
+        token=token,
+        body={
+            "name": f"{name} j2",
+            "kind": "momentum",
+            "params": {"lookback": 20, "top_n": 2, "rebalance_every": 5, "max_position": "0.5"},
+        },
+    )
+    runs: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
+    for label, env_id in (("http", http_env_id), ("file", file_env_id)):
+        portfolio = api.expect(
+            201,
+            "POST",
+            f"{TRADING}/portfolios",
+            token=token,
+            body={
+                "name": f"{name} j2 {label}",
+                "strategy_id": strategy["id"],
+                "initial_capital": "100000",
+                "cost_model": {"fixed": "1.00", "per_share": "0", "pct": "0.0005"},
+                "slippage_model": {"kind": "fixed_bps", "bps": "10"},
+                "replay_environment_id": env_id,
+            },
+        )
+        base = f"{TRADING}/portfolios/{portfolio['id']}"
+        submitted = api.expect(
+            202,
+            "POST",
+            f"{base}/runs",
+            token=token,
+            headers={"Idempotency-Key": f"live-j2-{uuid.uuid4()}"},
+        )
+        run = wait_for_run(api, token, f"{base}/runs/{submitted['job_id']}", 180.0)
+        result = run.get("result") or {}
+        events = all_events(api, token, f"{base}/events")
+        check_chain(events, result.get("final_hash", ""), result.get("final_seq", -1))
+        runs[label] = (result, events)
+    (over_http, http_events), (over_file, file_events) = runs["http"], runs["file"]
+    for field in ("source_fingerprint", "sessions", "final_seq", "final_value"):
+        if over_http.get(field) != over_file.get(field):
+            raise LiveCheckFailed(
+                f"J2: the {field} over HTTP ({over_http.get(field)}) is not the one from the "
+                f"file ({over_file.get(field)})"
+            )
+    for position, (a, b) in enumerate(zip(http_events, file_events, strict=True), start=1):
+        if a.get("type") != b.get("type") or without_environment(
+            a.get("payload")
+        ) != without_environment(b.get("payload")):
+            raise LiveCheckFailed(
+                f"J2: event {position} differs: {a.get('type')} over HTTP, "
+                f"{b.get('type')} from the file"
+            )
+    log(
+        f"J2 on the deployed worker: {over_http.get('sessions')} sessions, "
+        f"{len(http_events)} events read over HTTP equal the file run apart from the "
+        f"environment; fingerprint {over_http.get('source_fingerprint')}, final value "
+        f"{over_http.get('final_value')}"
+    )
+
+
 def percentile(values: Sequence[float], share: float) -> float:
     """Nearest-rank percentile: the smallest value with at least ``share`` of the values at
     or below it.
@@ -777,6 +872,12 @@ def live_check() -> None:
         )
     check_projections(api, token, base, events, result)
     check_ops_metrics(api, token, viewer_token)
+    j2_http, j2_file = (
+        os.environ.get("QS_LIVE_J2_HTTP_ENV_ID", ""),
+        os.environ.get("QS_LIVE_J2_FILE_ENV_ID", ""),
+    )
+    if j2_http and j2_file:
+        check_j2(api, token, j2_http, j2_file, name)
     benchmark = os.environ.get("QS_LIVE_BENCHMARK_ENV_ID", "")
     if benchmark:
         run_benchmark(api, token, benchmark, name)

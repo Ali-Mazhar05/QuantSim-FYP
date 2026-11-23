@@ -204,7 +204,7 @@ def environment_factory(
     :func:`service_tokens`). A kind with no URL falls back to the demo fixtures when
     ``QS_TRADING_DEMO_ENVIRONMENTS`` is set, otherwise to none. A configured directory that
     does not exist, or a feed URL without a service token configured, stops the worker from
-    starting."""
+    starting. A demo environment is always read from its file, feed or not."""
     local = _local_factory(settings)
 
     def client(base_url: str) -> FeedClient:
@@ -220,8 +220,18 @@ def environment_factory(
     if market is None and simulation is None:
         return local
     ttl = settings.trading_fingerprint_cache_seconds
+    configured = settings.trading_demo_environments
+    demo = (
+        None
+        if not configured
+        else (BUNDLED_DEMO_ENVIRONMENTS if configured == "bundled" else Path(configured))
+    )
 
     def open_environment(ref: EnvironmentRef) -> MarketEnvironment:
+        # A bundled demo environment (LOCAL and DEV) is read from its file even when a feed
+        # is configured, so DEV can run both the demo and a feed side by side
+        if demo is not None and (demo / f"{ref.env_id}.json").is_file():
+            return local(ref)
         if ref.env_type == "replay" and market is not None:
             return ReplayFeed(market, ref.env_id, fingerprint_ttl_seconds=ttl)
         if ref.env_type == "simulation" and simulation is not None and ref.path_index is not None:
