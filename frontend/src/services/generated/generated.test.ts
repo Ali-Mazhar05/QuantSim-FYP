@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 // The committed types must be exactly what the committed OpenAPI document generates. If a service's
 // spec changed and `npm run gen:api` was not run, this fails and says which service.
-const SERVICES = ['market', 'trading']
+const SERVICES = ['market', 'trading', 'simulation']
 const eol = (text: string) => text.replace(/\r\n/g, '\n')
 
 describe('generated API types', () => {

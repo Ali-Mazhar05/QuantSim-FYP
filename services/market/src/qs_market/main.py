@@ -12,7 +12,9 @@ from qs_market.api_correlation import build_correlation_routers
 from qs_market.api_data import build_data_routers
 from qs_market.api_environments import build_environment_routers
 from qs_market.api_feeds import build_feed_routers
+from qs_market.api_replay import build_replay_routers
 from qs_market.api_runs import build_routers as build_run_routers
+from qs_market.replay_sessions import Clock, utc_now
 from qs_market.settings import MarketSettings
 from qs_market.symbol_directory import DirectorySource
 from qs_template import Database, ReadinessCheck, create_app
@@ -26,6 +28,7 @@ def build_app(
     database: Database | None = None,
     revocations: RevocationList | None = None,
     authenticator: Authenticator | None = None,
+    clock: Clock = utc_now,
 ) -> FastAPI:
     database = database or Database(settings)
     revocations = revocations or RevocationList.from_url(settings.redis_url.get_secret_value())
@@ -46,6 +49,7 @@ def build_app(
             *build_run_routers(auth=auth, database=database, vendor=settings.vendor),
             *build_environment_routers(auth=auth, database=database),
             *build_feed_routers(auth=auth, database=database),
+            *build_replay_routers(auth=auth, database=database, clock=clock),
             *build_audit_routers(auth=auth, database=database),
         ],
         readiness_checks=[ReadinessCheck("redis", revocations.ping)],

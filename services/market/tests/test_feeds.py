@@ -122,6 +122,17 @@ def test_the_fingerprint_changes_when_a_bar_is_added_or_removed() -> None:
     assert fp([*data, bar("AAPL", date(2020, 1, 7))]) != fp(data)
 
 
+def test_a_fingerprint_of_blocks_equals_the_fingerprint_of_lines() -> None:
+    # the replay service gets one text per session from the database; the bytes hashed are the same
+    lines = [feeds.canonical_line(r) for r in feeds.ordered(rows())]
+    by_session = [
+        "\n".join(feeds.canonical_line(r) for r in feeds.ordered(rows()) if r.session_date == day)
+        for day in sorted({r.session_date for r in rows()})
+    ]
+    assert feeds.fingerprint_of_blocks(by_session) == feeds.fingerprint_of_lines(lines)
+    assert feeds.fingerprint_of_blocks(by_session) == fp(rows())
+
+
 def test_the_fingerprint_names_its_algorithm_and_is_stable() -> None:
     value = fp(rows())
     assert value.startswith("xxh3:") and len(value) == len("xxh3:") + 32
