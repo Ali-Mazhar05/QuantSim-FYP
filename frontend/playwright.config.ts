@@ -34,7 +34,14 @@ export default defineConfig({
     // HTTP/1.1 made every browser request to the API tunnel hang (develop build 112), so the
     // occasional sign-in hang is most likely a connection that fell back to HTTP/1.1; the
     // sign-in probe in support.ts reports each one
-    launchOptions: { args: ['--disable-quic'] },
+    // QS_E2E_HOST_RULES (set by playwright-gate.sh) pins the API host to an address this
+    // network can reach, when one of Cloudflare's does not answer
+    launchOptions: {
+      args: [
+        '--disable-quic',
+        ...(process.env.QS_E2E_HOST_RULES ? [`--host-resolver-rules=${process.env.QS_E2E_HOST_RULES}`] : []),
+      ],
+    },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 })
