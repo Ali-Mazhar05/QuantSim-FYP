@@ -103,7 +103,7 @@ export default function ConfigureSimulation() {
 
       {environmentError && <ErrorNote error={environmentError} />}
       {environments !== null && !active && (
-        <p role="alert" className="text-sm text-[var(--color-text-secondary)]">
+        <p role="status" className="text-sm text-[var(--color-text-secondary)]">
           There is no market environment to simulate yet. Create one first.
         </p>
       )}

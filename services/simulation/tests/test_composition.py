@@ -85,3 +85,19 @@ def test_the_same_body_gets_the_same_key_and_another_body_another() -> None:
     assert idempotency_key("/x", body) == idempotency_key("/x", {"a": [1, 2], "b": 1})
     assert idempotency_key("/x", body) != idempotency_key("/x", {"a": [1, 3], "b": 1})
     assert idempotency_key("/x", body) != idempotency_key("/y", body)
+
+
+def test_a_market_url_without_usable_credentials_degrades_instead_of_crashing() -> None:
+    bare = SimulationSettings(
+        database_url=SecretStr("postgresql+asyncpg://unused"),
+        redis_url=SecretStr("redis://unused"),
+        auth_jwks_url="http://127.0.0.1:1/jwks.json",
+        content_hash="test-hash",
+        environment="local",
+        simulation_market_url="http://market:8000",
+    )  # no service token and no client secret
+    deps = default_dependencies(bare)
+    assert deps.price_source is None and deps.correlation_source is None
+    assert (
+        not deps.can_calibrate and not deps.can_run
+    )  # the routes answer 503; the service stays up

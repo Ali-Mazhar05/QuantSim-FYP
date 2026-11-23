@@ -4,11 +4,12 @@ import MonteCarloFanChart from '../../components/charts/MonteCarloFanChart'
 import Button from '../../components/forms/Button'
 import Panel from '../../components/layout/Panel'
 import PageHeader from '../../components/layout/PageHeader'
+import EmptyState from '../../components/status/EmptyState'
 import ErrorNote from '../../components/status/ErrorNote'
 import ProgressBar from '../../components/status/ProgressBar'
 import StatusPill from '../../components/status/StatusPill'
 import { useQuantiles, useRun } from '../../hooks/useSimulation'
-import { type Run, fanOf } from '../../services/api/simulation'
+import { type Run, fanOf, isRunId } from '../../services/api/simulation'
 
 const MODEL_NAMES = { gbm: 'GBM', ou: 'Ornstein-Uhlenbeck', merton: 'Jump Diffusion' } as const
 const LABEL = { queued: 'Queued', running: 'Running', completed: 'Complete', failed: 'Failed' } as const
@@ -27,12 +28,13 @@ function events(run: Run): string[] {
 }
 
 export default function RunSimulation() {
-  const { id } = useParams()
+  const { id: param } = useParams()
+  const id = isRunId(param) ? param : undefined
   const navigate = useNavigate()
   const { run, error } = useRun(id)
   const { quantiles } = useQuantiles(id, run?.status === 'completed')
   const fan = quantiles ? fanOf(quantiles) : null
-  const short = (id ?? '').slice(0, 8)
+  const short = (param ?? '').slice(0, 8)
 
   const pct = run ? Math.round((run.status === 'completed' ? 1 : run.progress) * 100) : 0
   const done = run ? Math.round(run.n_paths * (pct / 100)) : 0
@@ -53,7 +55,9 @@ export default function RunSimulation() {
         }
       />
 
-      {error ? (
+      {id === undefined ? (
+        <EmptyState title="Run not found" description="This address is not a run. Open one from Simulations." />
+      ) : error ? (
         <ErrorNote error={error} />
       ) : !run ? (
         <p className="text-sm text-[var(--color-text-muted)]">Loading the run…</p>

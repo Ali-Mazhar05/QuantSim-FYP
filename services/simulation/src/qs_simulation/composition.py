@@ -30,7 +30,10 @@ from qs_simulation.stress import KIND as STRESS
 from qs_simulation.stress import make_handler as make_stress_handler
 from qs_template import Database
 from qs_template.jobs import Handler
+from qs_template.logging import get_logger
 from qs_template.service_client import ServiceClient, service_tokens_from_settings
+
+log = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -66,10 +69,22 @@ def market_sources(
 
 def default_dependencies(settings: SimulationSettings) -> Dependencies:
     """What this deployment runs with: the fits and risk code that are installed, and the market
-    sources when ``QS_SIMULATION_MARKET_URL`` is set."""
-    prices, correlations = (
-        market_sources(settings) if settings.simulation_market_url else (None, None)
-    )
+    sources when ``QS_SIMULATION_MARKET_URL`` is set.
+
+    A market URL without service credentials is a configuration mistake, but it must not take the
+    whole service down (its health, its lists and its replays of stored runs still work): it is
+    logged and the calibration and run routes answer 503 until the credentials are set."""
+    prices: PriceWindowSource | None = None
+    correlations: CorrelationSource | None = None
+    if settings.simulation_market_url:
+        try:
+            prices, correlations = market_sources(settings)
+        except ValueError as error:
+            log.error(
+                "the market URL is set but the service credentials are not usable: "
+                "calibration and runs are unavailable",
+                reason=str(error),
+            )
     return Dependencies(
         price_source=prices,
         correlation_source=correlations,

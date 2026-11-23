@@ -152,3 +152,7 @@ export async function ensureCalibrations(options: EnsureOptions): Promise<string
     }),
   )
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** A run id is a UUID; anything else (the prototype's `1042`) names no run, so no request is made. */
+export const isRunId = (id: string | undefined): id is string => id !== undefined && UUID.test(id)
