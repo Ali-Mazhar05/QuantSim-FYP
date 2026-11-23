@@ -62,6 +62,7 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
 | DL-041 | What the demo-size run costs, and why | Adopted | team |
 | DL-042 | The read API: ticks, dates, fingerprint, lists, quantiles | Adopted | team |
 | DL-043 | Stress scenarios: what they change and how a stressed run is made | Adopted | team |
+| DL-044 | The live feed is held equal to the synthetic fixture in shape, not in prices | Adopted | team |
 
 ---
 
@@ -645,3 +646,10 @@ plan and lane guides (**Plan**), the ingestion plan (`docs/ingestion-plan.md`), 
   fingerprint include the scenario), Lane A's stressed portfolio (demo step 4).
 - **If changed:** a new type is a new `type` value, a Pydantic model, a CHECK in the database and an overlay
   function; the API and the tick feed do not change.
+
+### DL-044 The live feed is held equal to the synthetic fixture in shape, not in prices
+
+- **Asked:** tracker I-16 wanted the live `GET /runs/{id}/ticks` held equal to `synthetic_ticks.json`, as the live replay feed is held equal to the replay fixture. Should the fixture be regenerated from the real generator?
+- **Decided:** no. The fixture stays as it is, and a test (`test_fixture_shape`) runs the real pipeline over the fixture's three names and holds the live ticks equal to it in everything except the random prices and the run's identity: field names and order, `seq`, `session`, `ts` (the real NYSE closes after 2020-12-31), symbols and their order, flat bars, zero volume, path index, price scale, fingerprint form.
+- **Why:** other lanes read the fixture's numbers. Lane A copies it into his demo feed and his tests; Lane C's K5 end-to-end test fits its prices. Changing the numbers would change their tests for no gain: what a consumer depends on is the shape, and the fixture says it is illustrative, seeded and not a recorded run. The replay fixture is different: its prices are recorded data, so the live feed equals it exactly.
+- **If changed:** regenerating the fixture from the real generator is additive for Lane A (his copy is a file) but would need Lane C's end-to-end test and Lane A's bundled copy updated in the same change.
