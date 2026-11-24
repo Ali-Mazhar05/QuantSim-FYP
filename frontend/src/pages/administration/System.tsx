@@ -10,7 +10,7 @@ import { type ServiceHealth, serviceHealth } from '../../services/api/system'
 const SERVICES: { name: string; check: string | 'gateway' | null }[] = [
   { name: 'API Gateway', check: 'gateway' },
   { name: 'Market Data', check: 'market' },
-  { name: 'Simulation', check: null },
+  { name: 'Simulation', check: 'simulation' },
   { name: 'Trading', check: null },
   { name: 'ML', check: null },
   { name: 'Risk / TDA', check: null },
@@ -26,7 +26,7 @@ function siteEnvironment(): string {
   return SITE_ENVIRONMENTS[host.split('.')[0]] ?? 'PROD'
 }
 
-type Checks = Record<'platform' | 'market', ServiceHealth>
+type Checks = Record<'platform' | 'market' | 'simulation', ServiceHealth>
 
 function cardStatus(check: string | null, checks: Checks | null): { label: string; tone: 'success' | 'danger' | 'neutral' } {
   if (check === null) return { label: 'Not deployed', tone: 'neutral' }
@@ -40,8 +40,8 @@ export default function System() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([serviceHealth('platform'), serviceHealth('market')]).then(
-      ([platform, market]) => !cancelled && setChecks({ platform, market }),
+    Promise.all([serviceHealth('platform'), serviceHealth('market'), serviceHealth('simulation')]).then(
+      ([platform, market, simulation]) => !cancelled && setChecks({ platform, market, simulation }),
     )
     return () => {
       cancelled = true
