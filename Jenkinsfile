@@ -267,50 +267,54 @@ pipeline {
       environment {
         DOCKER_CONFIG = "${WORKSPACE}/.ci/docker"
       }
-      options { timeout(time: 20, unit: 'MINUTES') }
       steps {
-        script { qsCheckout() }
-        lock(resource: "env-${env.QS_ENV}") {
-          script {
-            ghcrLogin()
-            withCredentials([
-              file(credentialsId: 'sops-age-key', variable: 'SOPS_AGE_KEY_FILE'),
-              string(credentialsId: 'cloudflare-api-token', variable: 'CLOUDFLARE_API_TOKEN'),
-              string(credentialsId: 'cloudflare-account-id', variable: 'CLOUDFLARE_ACCOUNT_ID'),
-            ]) {
-              if (env.QS_ENV == 'prod') {
-                for (c in env.QS_COMPONENTS.tokenize(' ')) {
-                  sh "ci/scripts/promote.sh '${c}' prod"
-                }
-              }
-              sh 'ci/scripts/make-release.sh "$QS_ENV" .ci/release.env'
-              try {
-                sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
-                sh 'ci/scripts/smoke.sh "$QS_ENV" .ci/release.env'
-                // Playwright gates: a red run fails the deploy, so the environment's
-                // verified status (required on the next promotion PR) is never set. They
-                // sign in as test.admin, whose password the gate decrypts from the
-                // environment's secrets with the sops-age-key bound above
-                def gates = [dev: 'dev-smoke', test: 'demo-spine']
-                if (gates[env.QS_ENV]) {
-                  sh "ci/scripts/playwright-gate.sh '${env.QS_ENV}' '${gates[env.QS_ENV]}'"
-                }
-                // DEV only, last: runs a portfolio through the trading API and engine on
-                // the bundled demo market data and checks its event chain. A failure
-                // fails the deploy, so DEV is not verified
-                if (env.QS_ENV == 'dev') {
-                  sh 'ci/scripts/trading-live-check.sh dev'
-                }
-              } catch (err) {
-                if (env.QS_ENV in ['acc', 'prod']) {
-                  echo "Deploy to ${env.QS_ENV} failed, rolling back to the last known-good release"
-                  catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    sh 'ci/scripts/rollback.sh "$QS_ENV" current'
+        // The limit starts once an executor runs the stage, not while it waits for one:
+        // build 128 waited 14 minutes for one and then ran out of time mid-gate.
+        // 35 minutes, as the DEV gate also calibrates and runs a Monte Carlo simulation
+        timeout(time: 35, unit: 'MINUTES') {
+          script { qsCheckout() }
+          lock(resource: "env-${env.QS_ENV}") {
+            script {
+              ghcrLogin()
+              withCredentials([
+                file(credentialsId: 'sops-age-key', variable: 'SOPS_AGE_KEY_FILE'),
+                string(credentialsId: 'cloudflare-api-token', variable: 'CLOUDFLARE_API_TOKEN'),
+                string(credentialsId: 'cloudflare-account-id', variable: 'CLOUDFLARE_ACCOUNT_ID'),
+              ]) {
+                if (env.QS_ENV == 'prod') {
+                  for (c in env.QS_COMPONENTS.tokenize(' ')) {
+                    sh "ci/scripts/promote.sh '${c}' prod"
                   }
                 }
-                error("Deploy to ${env.QS_ENV} failed: ${err.message}")
+                sh 'ci/scripts/make-release.sh "$QS_ENV" .ci/release.env'
+                try {
+                  sh 'ci/scripts/deploy.sh "$QS_ENV" .ci/release.env'
+                  sh 'ci/scripts/smoke.sh "$QS_ENV" .ci/release.env'
+                  // Playwright gates: a red run fails the deploy, so the environment's
+                  // verified status (required on the next promotion PR) is never set. They
+                  // sign in as test.admin, whose password the gate decrypts from the
+                  // environment's secrets with the sops-age-key bound above
+                  def gates = [dev: 'dev-smoke', test: 'demo-spine']
+                  if (gates[env.QS_ENV]) {
+                    sh "ci/scripts/playwright-gate.sh '${env.QS_ENV}' '${gates[env.QS_ENV]}'"
+                  }
+                  // DEV only, last: runs a portfolio through the trading API and engine on
+                  // the bundled demo market data and checks its event chain. A failure
+                  // fails the deploy, so DEV is not verified
+                  if (env.QS_ENV == 'dev') {
+                    sh 'ci/scripts/trading-live-check.sh dev'
+                  }
+                } catch (err) {
+                  if (env.QS_ENV in ['acc', 'prod']) {
+                    echo "Deploy to ${env.QS_ENV} failed, rolling back to the last known-good release"
+                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                      sh 'ci/scripts/rollback.sh "$QS_ENV" current'
+                    }
+                  }
+                  error("Deploy to ${env.QS_ENV} failed: ${err.message}")
+                }
+                sh 'ci/scripts/record-release.sh "$QS_ENV" .ci/release.env'
               }
-              sh 'ci/scripts/record-release.sh "$QS_ENV" .ci/release.env'
             }
           }
         }

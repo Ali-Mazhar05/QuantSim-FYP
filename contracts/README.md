@@ -74,15 +74,20 @@ a restart resumes where it stopped. Nothing is pushed.
 ## 3. C2: endpoints
 
 All paths are behind the gateway. Errors are `application/problem+json` with `type`, `title`,
-`status` and `detail`. **Today** the replay feed, activation and the three simulation routes answer
-**501** (`type: urn:quantsim:problem:not-implemented`); their paths, parameters, models and the other
-errors below are final and tested. The environment list filters are live.
+`status` and `detail`. **Today** the market routes are live: the environment list filters, the replay
+feed and activation (B12). The three simulation routes answer **501**
+(`type: urn:quantsim:problem:not-implemented`) until the Monte Carlo and read API tasks build them;
+their paths, parameters, models and the other errors below are final and tested.
 
 | Method and path | Who | Answers |
 |---|---|---|
 | `GET /api/market/environments?type=&owner=` | any signed-in role | Environments, newest first. `type`: `historical_replay` or `synthetic`. `owner`: the creator's user id. 422 for a bad value. Each carries `source_fingerprint`, `activated_at` and `activated_by`, null until activated, so a read-only caller can read the frozen fingerprint (also on `GET /api/market/environments/{id}`) |
 | `GET /api/market/environments/{id}/ticks?after_seq=0&limit=500` | any signed-in role | A page of ticks; header `X-Source-Fingerprint`. `limit` 1 to 2000, default 500 |
 | `POST /api/market/environments/{id}/activate` | quant, admin | Freezes the fingerprint: `{environment_id, status: "active", source_fingerprint, missing_session_count, activated_by, activated_at}` |
+| `GET/POST /api/market/replay-sessions`, `GET /replay-sessions/{id}`, `POST /replay-sessions/{id}/control` | read: all roles; create and control: quant, admin | A server-side clock over an activated environment: `position` and `session_date` computed at `server_time`, `state`, `speed`, `finished`, the pinned and current fingerprints. Control body `{action: play|pause|speed|seek, speed?, index?}` (DL-032 to DL-034) |
+| `POST /api/simulation/runs` | quant, admin | Queue a Monte Carlo run (`model`, `instruments` with a calibration each, `n_paths`, `n_steps`, `seed?`, `correlation_window?`); answers 202 with the run and a `Location`; `Idempotency-Key` returns the same run, 409 when the key was used for a different request; 422 for the limits and calibrations; 503 with no price or correlation source (DL-038 to DL-041) |
+| `POST /api/simulation/calibrations` | quant, admin | Queue a calibration (`instrument_id`, `model`, `window_start`, `window_end`); answers 202 with the id and a `Location`; `Idempotency-Key` returns the same calibration; 501 for a model with no fitting code, 503 with no price source (DL-035 to DL-037) |
+| `GET /api/simulation/calibrations/{id}` | any signed-in role | One answer from queued to stored: `status` queued, running, succeeded (`calibration`), refused (`refusal` with code and reason, 422 inside) or failed (`error`) |
 | `GET /api/simulation/runs?status=&instrument=` | any signed-in role | Completed or other runs for a picker: id, status, model, sizes, symbols, `median_path_index`, `parent_run_id`, `scenario` |
 | `GET /api/simulation/runs/{id}` | any signed-in role | The run with progress, seed, storage mode and per-instrument statistics |
 | `GET /api/simulation/runs/{id}/ticks?path=&after_seq=0&limit=500` | any signed-in role | A page of one path's ticks, from the stored values or regenerated from the seed. `path` is required (0 to `n_paths - 1`); without it 422, outside the run 404 |
@@ -102,9 +107,25 @@ GET /api/market/environments/6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01/ticks?after_se
 environment or run does not exist. 422 a bad parameter, or an environment that cannot be replayed:
 `urn:quantsim:problem:unsupported-frequency` for an hourly or tick environment,
 `urn:quantsim:problem:not-a-replay-environment` for a synthetic one,
-`urn:quantsim:problem:missing-adjusted-prices` for a window with a bar that has no adjusted value (on
-the feed and on activation; `missing` counts those bars per symbol). 404 for a `path` the run does not
-have (`path >= n_paths`): `urn:quantsim:problem:not-found`, as for an unknown run. 501 not built yet.
+`urn:quantsim:problem:environment-not-ready` for an environment some of whose instruments have no data
+yet, and `urn:quantsim:problem:missing-adjusted-prices` (with `missing`: bars per symbol) when a bar has
+no adjusted value. 404 also for a `path` the run does not have (`path >= n_paths`):
+`urn:quantsim:problem:not-found`, as for an unknown run. 501 on the simulation routes until they are built.
+
+**Activation** moves a ready environment to `active` and freezes the fingerprint; doing it again after
+the data moved freezes the new value, and the environment keeps one frozen value. Reading ticks needs a
+ready or active environment; every page is served from one database snapshot, so its fingerprint always
+describes the rows on it.
+
+**Activating twice.** It is idempotent in effect: the second call answers 200 with the same body when the
+data has not moved, and re-freezes the new fingerprint (a new `activated_at`) when it has. There is still
+one frozen value per environment.
+
+**Ticks of an environment that is not active.** A `ready` environment (never activated) is served: the
+`X-Source-Fingerprint` header carries the live fingerprint and there is no frozen value to compare with
+(`source_fingerprint` is null on the environment). A `draft` one answers 422
+`environment-not-ready`. There is no 409: no state of the environment makes a read conflict with
+anything. A consumer that needs the frozen value activates first.
 
 ```
 POST /api/market/environments/6f1c2a4e-3b8d-4f7a-9c21-0a5e7d9b1c01/activate

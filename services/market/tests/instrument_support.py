@@ -82,6 +82,9 @@ async def database(migrated_database_url: str) -> AsyncIterator[Database]:
     try:
         yield db
     finally:
+        # leave nothing behind: a test that counts rows must not see another test's data
+        async with db.transaction() as session:
+            await session.execute(text(f"TRUNCATE {ALL_TABLES} CASCADE"))
         await db.close()
 
 

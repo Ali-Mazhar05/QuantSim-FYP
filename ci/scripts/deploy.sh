@@ -60,6 +60,11 @@ if [[ "$COMPOSE_TARGET" != "none" ]]; then
 
   "${compose[@]}" config --quiet || die "the compose configuration for $env is invalid"
 
+  # The database first, on its current configuration (a changed setting such as
+  # max_connections restarts it here, before the migrations connect; unchanged, a no-op)
+  "${compose[@]}" up -d --wait --wait-timeout 180 postgres \
+    || die "the database of $QS_PROJECT did not become healthy"
+
   # Each backend service may define a one-off <name>-migrate container in the
   # "migrate" profile; it runs to completion before the new version starts.
   mapfile -t migrators < <("${compose[@]}" --profile migrate config --services | grep -- '-migrate$' || true)

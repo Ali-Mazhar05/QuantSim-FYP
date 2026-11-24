@@ -3,6 +3,7 @@
 export const marketKeys = {
   all: ['market'] as const,
   environments: () => [...marketKeys.all, 'environments'] as const,
+  session: (environmentId: string) => [...marketKeys.all, 'replay-session', environmentId] as const,
   instruments: (status: string | null) => [...marketKeys.all, 'instruments', status] as const,
   candles: (id: string, interval: string, from: string, to: string) =>
     [...marketKeys.all, 'candles', id, interval, from, to] as const,

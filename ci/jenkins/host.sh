@@ -166,7 +166,9 @@ republish_sites() {
     release="$here/.state/$env-release.env"
     dk exec "$project-agent-1" cat "/home/jenkins/agent/releases/$env/current.env" \
       > "$release" 2>/dev/null || { rm -f "$release"; continue; }
-    if QS_LOCAL=1 \
+    # Its own cache volume: qs-ci-cache belongs to the Jenkins agent's user, and npm refused
+    # to write to it as this account (23 Nov)
+    if QS_LOCAL=1 CI_CACHE_VOLUME=qs-ci-cache-host \
       CLOUDFLARE_API_TOKEN="$(tr -d '\r\n' < "$secrets/cloudflare_api_token")" \
       CLOUDFLARE_ACCOUNT_ID="$(tr -d '\r\n' < "$secrets/cloudflare_account_id")" \
       "$here/../scripts/pages-deploy.sh" "$env" "$release"; then
