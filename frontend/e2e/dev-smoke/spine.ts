@@ -133,7 +133,16 @@ export async function laneASpine(page: Page, request: APIRequestContext, environ
     portfolioId = page.url().split('/').pop() ?? ''
     await main.getByTestId('replay-speed-20').click()
     await main.getByTestId('replay-play').click()
-    await expect(main.getByTestId('replay-status')).toHaveAttribute('data-status', 'Complete', { timeout: 60_000 })
+    // It plays, then seeks to the end: a real replay holds thousands of events, more than
+    // 20x plays through in a minute (TEST build 38, on a 2019 to 2026 replay)
+    const status = main.getByTestId('replay-status')
+    await expect(status).toHaveAttribute('data-status', /^(Running|Complete)$/)
+    await expect(main.getByTestId('replay-position')).not.toHaveText(/^0 \//, { timeout: 30_000 })
+    const seek = main.getByTestId('replay-seek')
+    await expect(main.getByTestId('replay-position')).not.toContainText('+', { timeout: 60_000 }) // every page loaded
+    await seek.focus()
+    await seek.press('End')
+    await expect(status).toHaveAttribute('data-status', 'Complete', { timeout: 60_000 })
     const rows = main.getByTestId('replay-events').locator('tbody tr')
     for (const type of ['TICK', 'ORDER_PLACED', 'ORDER_FILLED']) {
       await expect(rows.filter({ hasText: type }).first(), `${type} is replayed`).toBeVisible()
