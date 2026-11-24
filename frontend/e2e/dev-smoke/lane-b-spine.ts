@@ -112,6 +112,7 @@ export async function laneBSpine(page: Page, request: APIRequestContext): Promis
     await expect(position).not.toContainText('Session 1 /', { timeout: 30_000 }) // the position moved
     await toggle.click()
     await expect(toggle).toHaveText('Play')
+    await expect(main.getByTestId('replay-seek')).toBeEnabled() // it is disabled while the pause is in flight
     await main.getByTestId('replay-seek').focus()
     await main.getByTestId('replay-seek').press('End') // seek to the last session
     const count = /\/ (\d+)/.exec(await position.innerText())?.[1]
