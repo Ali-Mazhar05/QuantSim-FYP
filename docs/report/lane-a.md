@@ -1,11 +1,11 @@
 # Lane A: Trading Engine and Platform
 
 Chapter, Iteration 2 (window 16 Nov to 23 Dec 2026). State of the code: `develop` at
-`a20a460` (after #215: the trading worker reads Lane B's real market and simulation feeds,
-with live checks on both), 25 Nov 2026; `v0.1.7` is on DEV and TEST and `v0.1.6` on ACC and
-PROD. Two items still depend on the release path and are marked **partial** with the reason:
-the ACC gate's spine on a real replay on TEST (it first ran in TEST build 38 and needs #218)
-and the `v0.2.0` release (23 Dec). The run metrics'
+`b716842` (after #221), 25 Nov 2026: the trading worker reads Lane B's real market and
+simulation feeds with live checks on both, and both lanes' spines pass on a real replay on
+TEST (build 39). `v0.1.7` is on DEV and TEST and `v0.1.6` on ACC and PROD. Every Lane A
+requirement is implemented except one part held for the release date: A-FR-22's `v0.2.0`
+promotion to `main` (23 Dec), marked **partial**. The run metrics'
 risk ratios use the K6 metrics library (`qs_quant.metrics`) since 22 Nov.
 
 Lane A owns module M3, the event-sourced trading engine, from `trading_db` to the trading
@@ -264,7 +264,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR-19 | Workers call other services without a user token | Implemented (#129, #131): platform-issued service tokens in every deployed environment | `libs/qs_template/tests/test_service_tokens.py::test_a_job_calling_thirty_minutes_later_gets_a_valid_token`, `::test_refuses_a_forged_service_token`, `::test_refuses_bad_service_tokens`, `::test_factory_prefers_real_tokens`; `unit/test_http_environment.py::test_with_a_client_secret_the_tokens_come_from_the_platform` |
 | A-FR-20 | Playwright DEV smoke gates promotion to TEST | Implemented | `frontend/e2e/dev-smoke/` (`smoke.spec.ts`, `trading-flow.spec.ts`, `lane-a-spine.spec.ts`); `ci/scripts/playwright-gate.sh`; `quantsim/dev-verified` required on the `develop -> test` PR |
 | A-FR-21 | pr.sh lane support; Jenkins runs both Playwright gates | Implemented; the TEST `demo-spine` gate is wired and switches on with real replay environments on TEST | pr.sh (A22, #84), verified by use; Jenkinsfile Deploy stage, `ci/scripts/playwright-gate.sh` |
-| A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: content-hash builds used for `v0.1.2`, `v0.1.3`, `v0.1.4` and `v0.1.5` (#94, #95, #98, #149 to #152); `v0.2.0` release on 23 Dec (A19) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh`; tags `v0.1.2` to `v0.1.4` on `main` |
+| A-FR-22 | CI builds only changed services; v0.2.0 promoted to main | Partial: building only changed services is implemented (content-hashed images: an unchanged service is promoted, not rebuilt) and released `v0.1.2` to `v0.1.6` through DEV, TEST, ACC and PROD (#94, #95, #98, #149 to #152, #172); `v0.1.7` is on DEV and TEST. Not done: the `v0.2.0` promotion to `main`, held for the 23 Dec release (A19) | `ci/components.conf`, `ci/scripts/plan.sh`, `ci/scripts/image-exists.sh`; tags `v0.1.2` to `v0.1.6` on `main` |
 
 ### 4.2 Non-functional requirements
 
@@ -285,7 +285,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-NFR-13 | Services start from env vars only; missing config fails at start-up | Implemented | `libs/qs_template/tests/test_config.py::test_refuses_to_start_without_required_settings`; `unit/test_demo_environments.py::test_a_missing_directory_stops_the_worker_from_starting` |
 | A-NFR-14 | Structured logs; job duration, queue depth, outbox backlog exposed | Implemented: JSON logs with request ids; `GET /ops/metrics` (admin) gives queue depth, p95 duration and outbox backlog | `api/test_ops_api.py::test_an_admin_gets_queue_depth_durations_and_outbox_backlog`, `::test_other_roles_are_refused`; `api/test_ops_db.py::test_ops_metrics_follow_a_worker_run`; DEV live check |
 | A-NFR-15 | Memory limits, `OMP_NUM_THREADS=1`, relay in-process on DEV, disk headroom | Implemented: compose limits, embedded relay, and a Jenkins disk check that warns under 20 GB free | `deploy/compose/docker-compose.yml`; `test_service.py::test_embedded_mode_runs_the_worker_and_relay_in_process`; `ci/scripts/disk-check.sh` |
-| A-NFR-16 | No TEST without green Playwright smoke; no ACC without B's spine | Partial: TEST gate active, including Lane A's spine on DEV; the ACC gate runs Lane A's spine on TEST (#160) on the first active replay whose ticks answer, and skips with the reason until there is one. TEST has had both feeds since `v0.1.7` (#216). TEST build 38 ran both spines on a real replay for the first time: Lane B's passed; Lane A's reached Trade Replay and timed out playing a 2019 to 2026 log at 20x, fixed by seeking to the end (#218). A manual run of the same flow on TEST passed (section 5.4) | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh`; `frontend/e2e/demo-spine/lane-a-spine.spec.ts` |
+| A-NFR-16 | No TEST without green Playwright smoke; no ACC without B's spine | Implemented: the DEV gate (smoke, trading flow, both lanes' spines) must pass before DEV is verified, which the develop to test promotion requires; the TEST gate runs both lanes' spines on a real replay and must pass before TEST is verified, which the test to acceptance promotion requires. TEST build 38 ran both spines on a real replay for the first time and stopped Lane A's at Trade Replay (a 2019 to 2026 log at 20x outlasted its minute; fixed by seeking to the end, #218); TEST build 39 (24 Nov): both passed, none skipped | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh`; `frontend/e2e/demo-spine/lane-a-spine.spec.ts`, `lane-b-spine.spec.ts`; TEST build 39 | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh`; `frontend/e2e/demo-spine/lane-a-spine.spec.ts` |
 | A-NFR-17 | Every trading page has loading, empty, error and 403 states | Implemented (#130) | `frontend/src/trading-pages.test.tsx` (`shows the empty, error and 403 states` for each page; `shows the loading, empty, error, not-found and 403 states`) |
 
 ### 4.3 Summary
@@ -293,10 +293,11 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | | Implemented | Partial | Pending | Total |
 |---|---|---|---|---|
 | A-FR | 21 | 1 | 0 | 22 |
-| A-NFR | 16 | 1 | 0 | 17 |
+| A-NFR | 17 | 0 | 0 | 17 |
 
-Still partial: A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (the test runs on
-TEST's real replay; it passes in the gate once #218 reaches TEST).
+Still partial: only A-FR-22's second half, the `v0.2.0` promotion to `main`, which is the
+Iteration 2 release itself and is held for 23 Dec. Everything it needs is in place and has
+released `v0.1.2` to `v0.1.6` the same way.
 
 ## 5. Test results
 
@@ -466,7 +467,7 @@ Lane A rows, from the merged pull requests (to be confirmed by Ali before submis
 |---|---|---|
 | Platform kit | Job queue (K1), service scaffold and the three new services (K2), service client and platform service tokens (K3), instrument projection, commit before response, problem-details contract | #73, #74, #76, #85, #112, #129, #131, #138, #139 |
 | Trading engine | Accounting core, execution, strategies, `trading_db`, engine job, projections and rebuild, trading API, HTTP feed adapters | #75, #87, #88, #89, #92, #96, #97, #100, #128 |
-| Trading pages | Five trading pages on the generated API client | #130 |
+| Trading pages | Five trading pages on the generated API client; the System page checks the trading service live | #130, #221 |
 | Quality | Trading live check, Playwright DEV gate and Lane A spine, TEST spine, DEV stand-in feed and live J2, live checks on the real market and simulation feeds, contract tests, coverage | #91, #101, #106, #110, #137, #139, #141, #142, #156, #159, #160, #163, #165, #192, #204, #208, #218 |
 | Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, webhook that follows the tunnel, CI network lock and test-container names, tunnel watchdog, service secrets, deploy timeout after the queue, Postgres connection limit, releases `v0.1.2` to `v0.1.7` | #84, #93, #94, #95, #98, #111, #126, #127, #149 to #152, #157, #164, #169, #172, #175, #182, #199, #206, #210, #212, #214 |
 

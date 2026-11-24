@@ -264,10 +264,12 @@ describe('Audit Log', () => {
 })
 
 describe('System', () => {
-  it('shows live health for the deployed services and Not deployed for the rest', async () => {
+  it('shows live health for the deployed services (gateway, market, simulation, trading) and Not deployed for the rest', async () => {
     fakeBackend({
       'GET /health': () => json(200, { status: 'ok', service: 'platform', version: '0.3.0', content_hash: 'abc' }),
       'GET /api/market/health': () => json(503, { status: 'down' }),
+      'GET /api/simulation/health': () => json(200, { status: 'ok', service: 'simulation', version: '0.1.6' }),
+      'GET /api/trading/health': () => json(200, { status: 'ok', service: 'trading', version: '0.1.7' }),
       'GET /api/market/environments': () => json(200, []),
     })
     useDemoStore.getState().startSession(account('Admin'))
@@ -281,7 +283,9 @@ describe('System', () => {
         .find((el): el is HTMLElement => el instanceof HTMLElement && el.querySelector('[class*="rounded"]') !== null)!
     await waitFor(() => expect(within(card('API Gateway')).getByText('Operational')).toBeInTheDocument())
     expect(within(card('Market Data')).getByText('Unavailable')).toBeInTheDocument()
-    expect(within(card('Simulation')).getByText('Not deployed')).toBeInTheDocument()
+    expect(within(card('Simulation')).getByText('Operational')).toBeInTheDocument()
+    expect(within(card('Trading')).getByText('Operational')).toBeInTheDocument()
+    expect(within(card('ML')).getByText('Not deployed')).toBeInTheDocument()
     expect(within(card('Event Backbone')).getByText('Not deployed')).toBeInTheDocument()
     expect(screen.getByText('0.3.0')).toBeInTheDocument()
     expect(screen.getByText('Live')).toBeInTheDocument()
