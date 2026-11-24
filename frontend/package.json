@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml",
     "preview": "vite preview",
-    "gen:api": "openapi-typescript src/services/generated/market/openapi.json -o src/services/generated/market/schema.d.ts && openapi-typescript src/services/generated/trading/openapi.json -o src/services/generated/trading/schema.d.ts"
+    "gen:api": "openapi-typescript src/services/generated/market/openapi.json -o src/services/generated/market/schema.d.ts && openapi-typescript src/services/generated/trading/openapi.json -o src/services/generated/trading/schema.d.ts && openapi-typescript src/services/generated/simulation/openapi.json -o src/services/generated/simulation/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.108.0",

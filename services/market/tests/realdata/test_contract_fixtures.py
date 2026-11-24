@@ -14,6 +14,7 @@ the committed files everywhere."""
 import json
 import os
 import uuid
+from collections import Counter
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -26,7 +27,8 @@ import xxhash
 from sqlalchemy import insert, select
 
 from qs_market import calendars, feeds
-from qs_market.models import bar, instrument
+from qs_market.api_data import MAX_LIMIT
+from qs_market.models import bar, instrument, market_environment
 from qs_template import Database
 from qs_template.auth import Role
 from tests import instrument_support as support
@@ -312,8 +314,63 @@ async def test_the_committed_fixtures_are_what_the_recorded_corpus_makes(
         ]:
             assert tick_problems(tick) == [], tick
 
+    await verify_live_feed(client, database, ids, made["replay_ticks_2020.json"])
     stale = settle(made)
     assert not stale, f"stale or missing fixtures {stale}; run {REGENERATE}"
+
+
+async def verify_live_feed(
+    client: httpx.AsyncClient,
+    database: Database,
+    ids: dict[str, uuid.UUID],
+    document: dict[str, Any],
+) -> None:
+    """The real endpoint serves, byte for byte in meaning, what the fixture records (B-FR-01).
+
+    The environment gets the fixture's own id; its ticks are read page by page and activated, and
+    the pages, the fingerprint and the missing-session count must equal the fixture's.
+    """
+    environment = document["environment"]
+    async with database.transaction() as session:
+        await session.execute(
+            insert(market_environment).values(
+                id=uuid.UUID(environment["id"]),
+                name=environment["name"],
+                type="historical_replay",
+                universe="Big five",
+                instrument_ids=[str(ids[s]) for s in REPLAY_SYMBOLS],
+                start_date=REPLAY_WINDOW[0],
+                end_date=REPLAY_WINDOW[1],
+                frequency="daily",
+                status="ready",
+                created_by=CREATOR,
+            )
+        )
+    served: list[dict[str, Any]] = []
+    fingerprints: set[str] = set()
+    cursor: int | None = 0
+    while cursor is not None:
+        response = await client.get(
+            f"{API}/environments/{environment['id']}/ticks",
+            params={"after_seq": cursor, "limit": MAX_LIMIT},
+            headers=bearer(make_token(Role.VIEWER)),
+        )
+        assert response.status_code == 200, response.text
+        fingerprints.add(response.headers["X-Source-Fingerprint"])
+        served += response.json()["items"]
+        cursor = response.json()["next_after_seq"]
+    assert served == document["items"]
+    assert fingerprints == {environment["source_fingerprint"]}
+    activation = await client.post(
+        f"{API}/environments/{environment['id']}/activate",
+        headers=bearer(make_token(Role.QUANT)),
+    )
+    assert activation.status_code == 200, activation.text
+    per_session = Counter(t["session"] for t in document["items"])
+    assert activation.json()["source_fingerprint"] == environment["source_fingerprint"]
+    assert activation.json()["missing_session_count"] == sum(
+        1 for n in per_session.values() if n < len(REPLAY_SYMBOLS)
+    )
 
 
 def settle(made: dict[str, dict[str, Any]]) -> list[str]:

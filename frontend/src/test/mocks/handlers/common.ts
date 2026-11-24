@@ -2,6 +2,7 @@ import { HttpResponse } from 'msw'
 
 // Any origin, so the tests do not depend on the configured API address
 export const MARKET = '*/api/market'
+export const SIMULATION = '*/api/simulation'
 
 export function problem(status: number, detail: string, type = 'about:blank') {
   return HttpResponse.json(

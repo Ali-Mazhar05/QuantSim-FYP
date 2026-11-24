@@ -104,6 +104,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD comes from the environment's secrets}
       POSTGRES_DB: postgres
       TIMESCALEDB_TELEMETRY: "off"
+    # The image's tuning picks max_connections from the memory limit when the database is
+    # first created (25 for 1 GB), less than the services' idle pools (5 each) plus
+    # TimescaleDB's workers and a deploy's migrations; set it explicitly instead
+    command: ["postgres", "-c", "max_connections=100"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -118,7 +122,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 2g
 
   # Creates each service's database and role, and keeps their passwords in step with the
   # secrets. Idempotent; runs before every service's migrations.
@@ -243,7 +247,8 @@ services:
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
       # Services that may get service tokens (ADR 09): name=secret pairs, one secret per
       # calling service in the environment's encrypted secrets
-      QS_SERVICE_CLIENT_SECRETS: trading=${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}
+      # trading always; simulation as soon as SIMULATION_SERVICE_CLIENT_SECRET is in the secrets
+      QS_SERVICE_CLIENT_SECRETS: trading=${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}${SIMULATION_SERVICE_CLIENT_SECRET:+,simulation=${SIMULATION_SERVICE_CLIENT_SECRET}}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
       # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
@@ -490,6 +495,14 @@ services:
       QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
+      # Where calibration and runs read the market, and the service token they send it (ADR 09).
+      # Both stay empty until the simulation client secret exists in the environment's secrets:
+      # the calibration and run routes then answer 503 and the rest of the service stays up.
+      QS_SIMULATION_MARKET_URL: ${SIMULATION_MARKET_URL:-${SIMULATION_SERVICE_CLIENT_SECRET:+http://market:8000}}
+      QS_SERVICE_TOKEN_URL: http://platform:8000/api/platform/service-tokens
+      QS_SERVICE_CLIENT_SECRET: ${SIMULATION_SERVICE_CLIENT_SECRET:-}
+      # A run holds its paths in memory: 20 million prices is about 160 MB, three copies fit the limit
+      QS_MAX_RUN_VALUES: "20000000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -513,7 +526,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1g
 
   simulation-worker:
     <<: *defaults
@@ -537,7 +550,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1g
 
   simulation-relay:
     <<: *defaults
@@ -705,12 +718,12 @@ services:
       # DEV only: runs portfolios over the demo market data bundled in the image
       # (TRADING_DEMO_ENVIRONMENTS in deploy/env); refused outside local and dev
       QS_TRADING_DEMO_ENVIRONMENTS: ${TRADING_DEMO_ENVIRONMENTS:-}
-      # DEV only: the stand-in for Lane B's feeds at /demo-feeds (TRADING_DEMO_FEEDS), and
-      # the feed addresses the worker reads replays and simulation paths from. Empty until
-      # the market and simulation services serve their feeds (B12)
+      # Where the worker reads replays and simulation paths from (contract C2): the market
+      # and simulation services of the same stack unless deploy/env points elsewhere.
+      # TRADING_DEMO_FEEDS (local and dev only) mounts the recorded stand-in at /demo-feeds
       QS_TRADING_DEMO_FEEDS: ${TRADING_DEMO_FEEDS:-false}
-      QS_TRADING_MARKET_URL: ${TRADING_MARKET_URL:-}
-      QS_TRADING_SIMULATION_URL: ${TRADING_SIMULATION_URL:-}
+      QS_TRADING_MARKET_URL: ${TRADING_MARKET_URL:-http://market:8000}
+      QS_TRADING_SIMULATION_URL: ${TRADING_SIMULATION_URL:-http://simulation:8000}
       # Service tokens for calls to other services (ADR 09), from the Platform service
       QS_SERVICE_TOKEN_URL: http://platform:8000/api/platform/service-tokens
       QS_SERVICE_CLIENT_SECRET: ${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}

@@ -1252,7 +1252,11 @@ version = "0.1.0"
 source = { editable = "services/simulation" }
 dependencies = [
     { name = "alembic" },
+    { name = "exchange-calendars" },
+    { name = "numpy" },
+    { name = "qs-quant", extra = ["calibration"] },
     { name = "qs-template" },
+    { name = "xxhash" },
 ]
 
 [package.dev-dependencies]
@@ -1270,7 +1274,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
+    { name = "exchange-calendars", specifier = ">=4.5" },
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "qs-quant", extras = ["calibration"], editable = "libs/qs_quant" },
     { name = "qs-template", editable = "libs/qs_template" },
+    { name = "xxhash", specifier = ">=3.4" },
 ]
 
 [package.metadata.requires-dev]

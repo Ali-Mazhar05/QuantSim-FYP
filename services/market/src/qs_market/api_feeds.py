@@ -3,33 +3,28 @@
 Signed-in users (``view_market_data``):          GET  /environments/{id}/ticks
 Quants and admins (``create_market_environments``): POST /environments/{id}/activate
 
-Both answer for real wherever the answer needs no feed: an unknown environment is 404, and an
-environment that is not a daily replay is 422. Reading ticks and activating an environment are built
-by task B12; until it lands they answer 501 with a problem body. The contract (paths, parameters,
-models and errors) is therefore fixed and testable now, and B12 only replaces the 501
-(ADR 01, ADR 08).
+Ticks are the adjusted daily bars of the environment's instruments in its window, ordered by
+(session, symbol) with a gap-free ``seq`` and read by ``after_seq`` (ADR 01); every page carries the
+fingerprint of the data served, and activation freezes it (ADR 08). An unknown environment is 404;
+that is not a daily replay, is not ready, or has a bar without adjusted prices is 422.
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from qs_market.api_data import DEFAULT_LIMIT, MAX_LIMIT
-from qs_market.environments import EnvironmentService
+from qs_market.replay import ReplayService
 from qs_template import Database
+from qs_template.audit import set_audit_context
 from qs_template.auth import Authenticator, Capability, Principal
-from qs_template.errors import ServiceError
 
-NOT_IMPLEMENTED = "urn:quantsim:problem:not-implemented"
-UNSUPPORTED_FREQUENCY = "urn:quantsim:problem:unsupported-frequency"
-NOT_A_REPLAY = "urn:quantsim:problem:not-a-replay-environment"
-
-# the market service pages every list the same way (api_data.py), so the feed does too
-DEFAULT_PAGE = DEFAULT_LIMIT
+DEFAULT_PAGE = DEFAULT_LIMIT  # the market service pages every list the same way (api_data.py)
 MAX_PAGE = MAX_LIMIT
 
 TICK_EXAMPLE: dict[str, Any] = {
@@ -112,39 +107,53 @@ class ActivationOut(BaseModel):
     activated_at: datetime
 
 
-def _replayable(environment: dict[str, Any]) -> None:
-    """Only a daily, historical environment has a replay feed (B-FR-03)."""
-    if environment["type"] != "historical_replay":
-        raise ServiceError(
-            422,
-            "Not a replay environment",
-            "Only a historical environment has a replay feed; a synthetic market is read from "
-            "its simulation run.",
-            type_=NOT_A_REPLAY,
-        )
-    if environment["frequency"] != "daily":
-        raise ServiceError(
-            422,
-            "Only daily environments can be replayed",
-            f"This environment is {environment['frequency']}; replay needs daily bars.",
-            type_=UNSUPPORTED_FREQUENCY,
-        )
+def problem_response(
+    description: str, status_code: int, type_: str, title: str, detail: str, **extra: Any
+) -> dict[str, Any]:
+    """An error answer with a worked example, in the shape every service returns."""
+    body = {"type": f"urn:quantsim:problem:{type_}", "title": title, "status": status_code}
+    body |= {"detail": detail, **extra}
+    return {
+        "description": description,
+        "content": {"application/problem+json": {"example": body}},
+    }
 
 
-def _not_built(what: str) -> ServiceError:
-    return ServiceError(
-        501,
-        "Not implemented yet",
-        f"{what} is part of the replay feed task (B12); the contract is final.",
-        type_=NOT_IMPLEMENTED,
+NOT_AUTHENTICATED = problem_response(
+    "No token, or a bad or expired one",
+    401,
+    "not-authenticated",
+    "Not authenticated",
+    "A valid access token is required.",
+)
+NOT_FOUND = problem_response(
+    "The environment does not exist",
+    404,
+    "not-found",
+    "Market environment not found",
+    "No market environment has this id.",
+)
+NOT_READY = problem_response(
+    "The environment cannot be replayed (a bad parameter is also a 422): "
+    "unsupported-frequency, not-a-replay-environment, environment-not-ready, or "
+    "missing-adjusted-prices with the bar count per symbol in `missing`",
+    422,
+    "missing-adjusted-prices",
+    "Missing adjusted prices",
+    "bars without adjusted prices: AAPL (3), KO (1)",
+    missing={"AAPL": 3, "KO": 1},
+)
+
+
+def forbidden(what: str) -> dict[str, Any]:
+    return problem_response(
+        f"The role may not {what}",
+        403,
+        "forbidden",
+        "Forbidden",
+        "Your role may not do this.",
     )
 
-
-NOT_REPLAYABLE = {
-    "description": "A bad parameter, or an environment that cannot be replayed: "
-    "unsupported-frequency, not-a-replay-environment, or missing-adjusted-prices with the bar "
-    "count per symbol in `missing`"
-}
 
 FINGERPRINT_HEADER = {
     "X-Source-Fingerprint": {
@@ -164,22 +173,35 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
     ]
     Session = Annotated[AsyncSession, Depends(database.session, scope="function")]
 
+    async def writer(
+        request: Request, actor: Creator
+    ) -> AsyncIterator[tuple[AsyncSession, Principal]]:
+        async with database.transaction() as session:
+            await set_audit_context(
+                session,
+                user_id=actor.user_id,
+                request_id=getattr(request.state, "request_id", None),
+            )
+            yield session, actor
+
+    Writer = Annotated[tuple[AsyncSession, Principal], Depends(writer, scope="function")]
+
     @router.get(
         "/{environment_id}/ticks",
         response_model=TickPage,
         responses={
             200: {"headers": FINGERPRINT_HEADER},
-            401: {},
-            403: {},
-            404: {},
-            422: NOT_REPLAYABLE,
-            501: {},
+            401: NOT_AUTHENTICATED,
+            403: forbidden("read the market"),
+            404: NOT_FOUND,
+            422: NOT_READY,
         },
     )
     async def read_ticks(
         environment_id: uuid.UUID,
         _: Viewer,
         session: Session,
+        response: Response,
         after_seq: Annotated[
             int, Query(ge=0, description="Return the ticks after this seq; 0 starts at the first")
         ] = 0,
@@ -187,19 +209,28 @@ def build_feed_routers(*, auth: Authenticator, database: Database) -> list[APIRo
             int, Query(ge=1, le=MAX_PAGE, description="Ticks per page")
         ] = DEFAULT_PAGE,
     ) -> TickPage:
-        _replayable(await EnvironmentService(session).get(environment_id))
-        raise _not_built("Reading ticks")
+        items, next_after_seq, fingerprint = await ReplayService(session).ticks(
+            environment_id, after_seq, limit
+        )
+        response.headers["X-Source-Fingerprint"] = fingerprint
+        return TickPage(
+            items=[Tick.model_validate(item) for item in items], next_after_seq=next_after_seq
+        )
 
     @router.post(
         "/{environment_id}/activate",
         response_model=ActivationOut,
         status_code=status.HTTP_200_OK,
-        responses={401: {}, 403: {}, 404: {}, 422: NOT_REPLAYABLE, 501: {}},
+        responses={
+            401: NOT_AUTHENTICATED,
+            403: forbidden("activate an environment"),
+            404: NOT_FOUND,
+            422: NOT_READY,
+        },
     )
-    async def activate_environment(
-        environment_id: uuid.UUID, _: Creator, session: Session
-    ) -> ActivationOut:
-        _replayable(await EnvironmentService(session).get(environment_id))
-        raise _not_built("Activating an environment")
+    async def activate_environment(environment_id: uuid.UUID, scope: Writer) -> ActivationOut:
+        session, actor = scope
+        frozen = await ReplayService(session, actor_id=actor.user_id).activate(environment_id)
+        return ActivationOut.model_validate(frozen)
 
     return [router]
