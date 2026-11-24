@@ -104,6 +104,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD comes from the environment's secrets}
       POSTGRES_DB: postgres
       TIMESCALEDB_TELEMETRY: "off"
+    # The image's tuning picks max_connections from the memory limit when the database is
+    # first created (25 for 1 GB), less than the services' idle pools (5 each) plus
+    # TimescaleDB's workers and a deploy's migrations; set it explicitly instead
+    command: ["postgres", "-c", "max_connections=100"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -118,7 +122,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 2g
 
   # Creates each service's database and role, and keeps their passwords in step with the
   # secrets. Idempotent; runs before every service's migrations.
