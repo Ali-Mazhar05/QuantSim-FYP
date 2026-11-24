@@ -1,11 +1,11 @@
 # Lane A: Trading Engine and Platform
 
 Chapter, Iteration 2 (window 16 Nov to 23 Dec 2026). State of the code: `develop` at
-`8534091` (after #205 and #206: the trading worker reads Lane B's real market and simulation
-feeds, and the simulation service's client secret), 24 Nov 2026; `v0.1.6` is the release on
+`a20a460` (after #215: the trading worker reads Lane B's real market and simulation feeds,
+with live checks on both), 25 Nov 2026; `v0.1.7` is on DEV and TEST and `v0.1.6` on ACC and
 PROD. Two items still depend on the release path and are marked **partial** with the reason:
-the ACC gate's spine on a real replay on TEST (it runs once the real feeds are promoted to
-TEST) and the `v0.2.0` release (23 Dec). The run metrics'
+the ACC gate's spine on a real replay on TEST (it first ran in TEST build 38 and needs #218)
+and the `v0.2.0` release (23 Dec). The run metrics'
 risk ratios use the K6 metrics library (`qs_quant.metrics`) since 22 Nov.
 
 Lane A owns module M3, the event-sourced trading engine, from `trading_db` to the trading
@@ -285,7 +285,7 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-NFR-13 | Services start from env vars only; missing config fails at start-up | Implemented | `libs/qs_template/tests/test_config.py::test_refuses_to_start_without_required_settings`; `unit/test_demo_environments.py::test_a_missing_directory_stops_the_worker_from_starting` |
 | A-NFR-14 | Structured logs; job duration, queue depth, outbox backlog exposed | Implemented: JSON logs with request ids; `GET /ops/metrics` (admin) gives queue depth, p95 duration and outbox backlog | `api/test_ops_api.py::test_an_admin_gets_queue_depth_durations_and_outbox_backlog`, `::test_other_roles_are_refused`; `api/test_ops_db.py::test_ops_metrics_follow_a_worker_run`; DEV live check |
 | A-NFR-15 | Memory limits, `OMP_NUM_THREADS=1`, relay in-process on DEV, disk headroom | Implemented: compose limits, embedded relay, and a Jenkins disk check that warns under 20 GB free | `deploy/compose/docker-compose.yml`; `test_service.py::test_embedded_mode_runs_the_worker_and_relay_in_process`; `ci/scripts/disk-check.sh` |
-| A-NFR-16 | No TEST without green Playwright smoke; no ACC without B's spine | Partial: TEST gate active, including Lane A's spine on DEV; the ACC gate runs Lane A's spine on TEST (#160) on the first active replay whose ticks answer, and skips with the reason until there is one. Lane B's feed serves ticks on DEV since #203 and trading reads it since #205; TEST receives both with the next promotion | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh`; `frontend/e2e/demo-spine/lane-a-spine.spec.ts` |
+| A-NFR-16 | No TEST without green Playwright smoke; no ACC without B's spine | Partial: TEST gate active, including Lane A's spine on DEV; the ACC gate runs Lane A's spine on TEST (#160) on the first active replay whose ticks answer, and skips with the reason until there is one. TEST has had both feeds since `v0.1.7` (#216). TEST build 38 ran both spines on a real replay for the first time: Lane B's passed; Lane A's reached Trade Replay and timed out playing a 2019 to 2026 log at 20x, fixed by seeking to the end (#218). A manual run of the same flow on TEST passed (section 5.4) | Jenkinsfile Deploy stage; `ci/scripts/playwright-gate.sh`; `frontend/e2e/demo-spine/lane-a-spine.spec.ts` |
 | A-NFR-17 | Every trading page has loading, empty, error and 403 states | Implemented (#130) | `frontend/src/trading-pages.test.tsx` (`shows the empty, error and 403 states` for each page; `shows the loading, empty, error, not-found and 403 states`) |
 
 ### 4.3 Summary
@@ -295,8 +295,8 @@ are under `services/trading/tests/` unless stated; `::name` is the test function
 | A-FR | 21 | 1 | 0 | 22 |
 | A-NFR | 16 | 1 | 0 | 17 |
 
-Still partial: A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (the test is in
-place; it runs on TEST once the real feeds are promoted there and a replay is active).
+Still partial: A-FR-22's `v0.2.0` release (23 Dec) and A-NFR-16's ACC gate (the test runs on
+TEST's real replay; it passes in the gate once #218 reaches TEST).
 
 ## 5. Test results
 
@@ -393,8 +393,21 @@ both runs must verify and agree on the fingerprint, the sessions, the final valu
 final hash. Develop build 127 (23 Nov), on a 2025-01-01 to 2026-06-30 replay of eight names
 (the US Technology Basket): 373 sessions, 1,217 events read over HTTP from the market service, chain
 intact, rerun to the same hash, fingerprint `xxh3:a85df37eb61fdc98917cf8c25f38d2c4`, final
-value 186,685.88. The same step on one path of a completed Monte Carlo run of the simulation
-service (#208) is skipped, with the reason in the log, until such a run exists on DEV.
+value 186,685.88. Develop build 131 (24 Nov) repeated it with the identical fingerprint and
+final value, and ran the same step on one path of a completed Monte Carlo run of the
+simulation service (#208): a GBM run on nine names, median path 618, 252 sessions, 802 events
+read over HTTP from the simulation service, chain intact, rerun to the same hash, fingerprint
+`xxh3:b45ea875054d64bc74d1b9e0f1333e49`, final value 171,098.01.
+
+**On TEST, through the pages (24 Nov).** With `v0.1.7` on TEST, the whole flow was run on
+the TEST website as an admin, by a script that drives the pages: a historical replay created
+and activated (AAPL and MSFT, 2025-01-01 to 2026-06-30), a momentum strategy (lookback 20, top
+2, weekly), and two portfolios with $1,000,000, $1 + 5 bps per fill and 10 bps slippage, one
+on that replay and one on the median path of a completed simulation run. Both backtests
+succeeded and replayed in Trade Replay; through the API every fill carried exactly that cost
+and slippage (175 and 146 fills), both chains verified (1,098 and 798 events), both rebuilds
+were identical, and a second run of each ended on the same final hash (373 and 252
+sessions; final values 1,059,155.37 and 1,064,995.86).
 
 ### 5.5 Known limits
 
@@ -454,8 +467,8 @@ Lane A rows, from the merged pull requests (to be confirmed by Ali before submis
 | Platform kit | Job queue (K1), service scaffold and the three new services (K2), service client and platform service tokens (K3), instrument projection, commit before response, problem-details contract | #73, #74, #76, #85, #112, #129, #131, #138, #139 |
 | Trading engine | Accounting core, execution, strategies, `trading_db`, engine job, projections and rebuild, trading API, HTTP feed adapters | #75, #87, #88, #89, #92, #96, #97, #100, #128 |
 | Trading pages | Five trading pages on the generated API client | #130 |
-| Quality | Trading live check, Playwright DEV gate and Lane A spine, TEST spine, DEV stand-in feed and live J2, live checks on the real market and simulation feeds, contract tests, coverage | #91, #101, #106, #110, #137, #139, #141, #142, #156, #159, #160, #163, #165, #192, #204, #208 |
-| Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, webhook that follows the tunnel, CI network lock and test-container names, tunnel watchdog, service secrets, releases `v0.1.2` to `v0.1.6` | #84, #93, #94, #95, #98, #111, #126, #127, #149 to #152, #157, #164, #169, #172, #175, #182, #199, #206 |
+| Quality | Trading live check, Playwright DEV gate and Lane A spine, TEST spine, DEV stand-in feed and live J2, live checks on the real market and simulation feeds, contract tests, coverage | #91, #101, #106, #110, #137, #139, #141, #142, #156, #159, #160, #163, #165, #192, #204, #208, #218 |
+| Delivery | Jenkins on the lab PC, content-hashed builds, deploy retries, database lock-down, webhook that follows the tunnel, CI network lock and test-container names, tunnel watchdog, service secrets, deploy timeout after the queue, Postgres connection limit, releases `v0.1.2` to `v0.1.7` | #84, #93, #94, #95, #98, #111, #126, #127, #149 to #152, #157, #164, #169, #172, #175, #182, #199, #206, #210, #212, #214 |
 
 ## 8. Tool use disclosure
 
