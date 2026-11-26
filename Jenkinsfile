@@ -143,6 +143,15 @@ pipeline {
           }
         }
 
+        // Pull requests only: the commits a PR adds must hold no secret (C-NFR-12). Branch
+        // builds come from merged PRs, which were scanned already
+        stage('Secret scan') {
+          when { changeRequest() }
+          steps {
+            sh "ci/scripts/secret-scan.sh '${env.CHANGE_TARGET}'"
+          }
+        }
+
         stage('Frontend CI') {
           steps {
             sh 'ci/scripts/frontend-ci.sh'
@@ -303,6 +312,11 @@ pipeline {
                   // fails the deploy, so DEV is not verified
                   if (env.QS_ENV == 'dev') {
                     sh 'ci/scripts/trading-live-check.sh dev'
+                    // Lane C: a small TDA analysis through the risk API, its artifacts and
+                    // read timings; runs once ci/scripts/risk-live-check.sh exists
+                    if (fileExists('ci/scripts/risk-live-check.sh')) {
+                      sh 'ci/scripts/risk-live-check.sh dev'
+                    }
                   }
                 } catch (err) {
                   if (env.QS_ENV in ['acc', 'prod']) {

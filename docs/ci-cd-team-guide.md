@@ -106,6 +106,7 @@ our free plan, so it is up to us.
 | Check | What it does | Runs when |
 |---|---|---|
 | Pipeline scripts | ShellCheck on `ci/scripts/` | every build |
+| Secret scan | gitleaks on the commits a pull request adds (`ci/scripts/secret-scan.sh`) | pull requests |
 | Frontend CI | `npm ci`, oxlint, TypeScript, Vitest with coverage, Vite build | every build |
 | Backend CI | per service and library: ruff, formatting, mypy, pytest | when `services/` or `libs/` exist |
 | Migration check | each service's database migrations up, down and up again on an empty database | services with migrations |

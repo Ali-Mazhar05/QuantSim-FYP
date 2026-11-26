@@ -39,6 +39,7 @@ of 2026-10-12; see [Moving ACC and PROD to a server](#moving-acc-and-prod-to-a-s
 |---|---|---|
 | Prepare | every build | Works out the environment and mode for the branch, computes each component's content hash, checks which images already exist (`plan.sh`). On `main`, fails early if `VERSION` is already released |
 | Pipeline scripts | every build | ShellCheck on `ci/scripts/` |
+| Secret scan | pull requests | gitleaks on the commits the pull request adds (`ci/scripts/secret-scan.sh`) |
 | Frontend CI | every build | `npm ci`, `oxlint`, `tsc`, Vitest with coverage, `vite build`. Test and coverage reports are published in Jenkins |
 | Backend CI | every build with services | For each `services/<name>`, in parallel: `ruff`, `ruff format --check`, `mypy`, `pytest`, then the migration check: upgrade to head, downgrade to base, upgrade again, on an empty PostgreSQL + TimescaleDB |
 | Build images | `develop`, `hotfix/*` | Builds and pushes only the components whose content hash is new |
