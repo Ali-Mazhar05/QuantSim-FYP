@@ -247,8 +247,8 @@ services:
       QS_SIGNING_KEY_ID: ${PLATFORM_SIGNING_KEY_ID:?}
       # Services that may get service tokens (ADR 09): name=secret pairs, one secret per
       # calling service in the environment's encrypted secrets
-      # trading always; simulation as soon as SIMULATION_SERVICE_CLIENT_SECRET is in the secrets
-      QS_SERVICE_CLIENT_SECRETS: trading=${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}${SIMULATION_SERVICE_CLIENT_SECRET:+,simulation=${SIMULATION_SERVICE_CLIENT_SECRET}}
+      # trading always; simulation and risk as soon as their client secrets are in the secrets
+      QS_SERVICE_CLIENT_SECRETS: trading=${TRADING_SERVICE_CLIENT_SECRET:?TRADING_SERVICE_CLIENT_SECRET comes from the environment's secrets}${SIMULATION_SERVICE_CLIENT_SECRET:+,simulation=${SIMULATION_SERVICE_CLIENT_SECRET}}${RISK_SERVICE_CLIENT_SECRET:+,risk=${RISK_SERVICE_CLIENT_SECRET}}
       QS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Accounts: sign-up switch, the site emailed links point to, and outgoing mail
       # (Gmail as alimazhar3005+QuantSim@gmail.com in every environment)
@@ -610,6 +610,12 @@ services:
       QS_EMBEDDED_WORKERS: ${EMBEDDED_WORKERS:-false}
       # Parallel NumPy work runs in separate jobs, not threads (keeps memory predictable)
       OMP_NUM_THREADS: "1"
+      # Where the TDA job reads correlations (C4), and the service token it sends (ADR 09).
+      # Both stay empty until the risk client secret exists in the environment's secrets:
+      # starting an analysis then answers 503 and the rest of the service stays up.
+      QS_RISK_MARKET_URL: ${RISK_MARKET_URL:-${RISK_SERVICE_CLIENT_SECRET:+http://market:8000}}
+      QS_SERVICE_TOKEN_URL: http://platform:8000/api/platform/service-tokens
+      QS_SERVICE_CLIENT_SECRET: ${RISK_SERVICE_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -631,9 +637,10 @@ services:
     cap_drop:
       - ALL
     deploy:
+      # The TDA job (NumPy, SciPy, giotto-ph) holds one window at a time; on DEV the API also runs it
       resources:
         limits:
-          memory: 256M
+          memory: 768M
 
   risk-worker:
     <<: *defaults
@@ -657,7 +664,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 768M
 
   risk-relay:
     <<: *defaults
